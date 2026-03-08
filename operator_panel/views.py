@@ -1,6 +1,6 @@
 """Operator overview dashboard — aggregate metrics across all resellers."""
-from django.shortcuts import render
-from django.contrib.admin.views.decorators import staff_member_required
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from accounts.models import Reseller, Subscriber
@@ -9,7 +9,8 @@ from billing.models import Payment
 from routers.models import Router
 
 
-@staff_member_required
+@login_required(login_url='/login/')
+@user_passes_test(lambda u: u.is_staff, login_url='/login/')
 def operator_overview(request):
     """Platform-wide metrics dashboard for the operator."""
     now = timezone.now()

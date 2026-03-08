@@ -11,7 +11,7 @@
     <!-- Portal Branding -->
     <div class="bg-white rounded-xl border border-border p-5">
         <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Portal Branding</h2>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="section" value="branding">
 
@@ -72,6 +72,32 @@
                 </div>
             </div>
 
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Logo (optional)</label>
+                <input type="file" name="logo" accept="image/png,image/jpeg"
+                       class="w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-border file:text-sm file:bg-white file:text-text-primary hover:file:bg-gray-50">
+                <p class="text-xs text-text-secondary mt-1">Max 50KB, PNG or JPG</p>
+                {% if reseller.branding.logo %}
+                <div class="flex items-center gap-2 mt-2 text-sm">
+                    <span class="text-text-secondary">Current: {{ reseller.branding.logo|cut:"/media/resellers/" }}</span>
+                    <label class="text-danger cursor-pointer text-xs"><input type="checkbox" name="remove_logo" value="1" class="mr-1">Remove</label>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Background Image (Bold template)</label>
+                <input type="file" name="bg_image" accept="image/png,image/jpeg"
+                       class="w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-border file:text-sm file:bg-white file:text-text-primary hover:file:bg-gray-50">
+                <p class="text-xs text-text-secondary mt-1">Max 200KB, JPG or PNG. Used by Bold template only.</p>
+                {% if reseller.branding.bg_image %}
+                <div class="flex items-center gap-2 mt-2 text-sm">
+                    <span class="text-text-secondary">Current: {{ reseller.branding.bg_image|cut:"/media/resellers/" }}</span>
+                    <label class="text-danger cursor-pointer text-xs"><input type="checkbox" name="remove_bg" value="1" class="mr-1">Remove</label>
+                </div>
+                {% endif %}
+            </div>
+
             <button type="submit"
                     class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
                 Save Branding
@@ -123,16 +149,134 @@
             <p class="font-medium">{{ reseller.bank_name }} - {{ reseller.account_number }}</p>
             <p>{{ reseller.account_name }}</p>
             <p class="text-accent flex items-center gap-1">✅ Verified</p>
+            <button onclick="document.getElementById('bank-change-form').style.display='block'; this.style.display='none';"
+                    class="mt-2 text-sm text-primary hover:underline">Change Bank</button>
         </div>
+        <div id="bank-change-form" style="display:none;" class="mt-4"></div>
         {% else %}
-        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p class="text-sm text-amber-800 mb-2">
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+            <p class="text-sm text-amber-800">
                 Add your bank account to enable paid plans and get paid directly.
             </p>
-            <p class="text-xs text-amber-600">
-                Bank setup with account verification — coming in Phase 2.
-            </p>
         </div>
+        {% endif %}
+
+        {% if not reseller.payment_verified %}
+        <div id="bank-setup">
+            <div class="mb-3">
+                <label class="block text-sm font-medium mb-1">Select your bank</label>
+                <select id="bank-select" class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="">Loading banks...</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm font-medium mb-1">Account number</label>
+                <input type="text" id="account-number" maxlength="10" placeholder="0123456789"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+
+            <div id="resolve-result" style="display:none;" class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
+                <p class="text-sm text-green-800">✅ Account found:</p>
+                <p class="font-semibold text-green-900" id="resolved-name"></p>
+                <p class="text-xs text-green-700" id="resolved-bank"></p>
+                <p class="text-sm text-green-800 mt-2">Is this your account?</p>
+            </div>
+
+            <div id="resolve-error" style="display:none;" class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-800"></div>
+
+            <button id="btn-resolve" onclick="resolveAccount()"
+                    class="w-full bg-white border border-border text-text-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition mb-2">
+                Verify Account
+            </button>
+
+            <button id="btn-save-bank" onclick="saveBankAccount()" style="display:none;"
+                    class="w-full bg-accent text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-green-600 transition">
+                Yes, Save Bank Account
+            </button>
+        </div>
+
+        <script>
+        let resolvedData = {};
+
+        // Load banks on page load
+        (function loadBanks() {
+            fetch('/api/banks/', {headers: {'X-CSRFToken': '{{ csrf_token }}'}})
+                .then(r => r.json())
+                .then(data => {
+                    const sel = document.getElementById('bank-select');
+                    sel.innerHTML = '<option value="">Select bank...</option>';
+                    if (data.banks) {
+                        data.banks.forEach(b => {
+                            sel.innerHTML += `<option value="${b.code}" data-name="${b.name}">${b.name}</option>`;
+                        });
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('bank-select').innerHTML = '<option>Could not load banks</option>';
+                });
+        })();
+
+        function resolveAccount() {
+            const bankCode = document.getElementById('bank-select').value;
+            const bankName = document.getElementById('bank-select').selectedOptions[0]?.dataset?.name || '';
+            const accNum = document.getElementById('account-number').value.trim();
+
+            document.getElementById('resolve-result').style.display = 'none';
+            document.getElementById('resolve-error').style.display = 'none';
+            document.getElementById('btn-save-bank').style.display = 'none';
+
+            if (!bankCode) { showError('Please select a bank.'); return; }
+            if (accNum.length !== 10) { showError('Please enter a valid 10-digit account number.'); return; }
+
+            document.getElementById('btn-resolve').textContent = 'Verifying...';
+
+            fetch('/api/banks/resolve/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify({account_number: accNum, bank_code: bankCode})
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('btn-resolve').textContent = 'Verify Account';
+                if (data.account_name) {
+                    resolvedData = {account_number: accNum, bank_code: bankCode, bank_name: bankName, account_name: data.account_name};
+                    document.getElementById('resolved-name').textContent = data.account_name;
+                    document.getElementById('resolved-bank').textContent = bankName + ' - ' + accNum;
+                    document.getElementById('resolve-result').style.display = 'block';
+                    document.getElementById('btn-save-bank').style.display = 'block';
+                } else {
+                    showError(data.error || 'Could not verify account.');
+                }
+            })
+            .catch(() => { document.getElementById('btn-resolve').textContent = 'Verify Account'; showError('Network error.'); });
+        }
+
+        function saveBankAccount() {
+            document.getElementById('btn-save-bank').textContent = 'Saving...';
+            fetch('/api/banks/setup/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: JSON.stringify(resolvedData)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.message) {
+                    window.location.reload();
+                } else {
+                    showError(data.error || 'Could not save bank account.');
+                    document.getElementById('btn-save-bank').textContent = 'Yes, Save Bank Account';
+                }
+            })
+            .catch(() => { showError('Network error.'); document.getElementById('btn-save-bank').textContent = 'Yes, Save Bank Account'; });
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('resolve-error');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+        </script>
         {% endif %}
     </div>
 
