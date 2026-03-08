@@ -1,0 +1,9 @@
+Creating test database for alias 'default'...
+
+Got an error creating the test database: database "test_sabiwifi" already exists
+
+
+Destroying old test database for alias 'default'...
+
+Found 122 test(s).
+System check identified no issues (0 silenced).

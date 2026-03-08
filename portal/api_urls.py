@@ -9,4 +9,9 @@ urlpatterns = [
     path('login/', views.portal_login_api, name='api-portal-login'),
     path('plans/', views.portal_plans, name='api-portal-plans'),
     path('account/', views.portal_account, name='api-portal-account'),
+    path('change-pin/', views.portal_change_pin, name='api-portal-change-pin'),
+    path('reset-pin/', views.portal_reset_pin_request, name='api-portal-reset-pin'),
+    path('reset-pin/confirm/', views.portal_reset_pin_confirm, name='api-portal-reset-pin-confirm'),
+    path('account/change-plan/', views.portal_change_plan, name='api-portal-change-plan'),
+    path('disconnect/', views.portal_disconnect, name='api-portal-disconnect'),
 ]

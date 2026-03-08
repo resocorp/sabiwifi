@@ -393,9 +393,51 @@ def settings_page(request):
             branding['welcome_text'] = request.POST.get('welcome_text', branding.get('welcome_text', ''))
             branding['primary_color'] = request.POST.get('primary_color', branding.get('primary_color', '#0052CC'))
             branding['template'] = request.POST.get('template', branding.get('template', 'modern'))
+
+            # Logo upload (max 50KB)
+            logo_file = request.FILES.get('logo')
+            if logo_file:
+                if logo_file.size > 50 * 1024:
+                    errors['logo'] = ['Logo must be under 50KB.']
+                else:
+                    import os
+                    from django.conf import settings as django_settings
+                    upload_dir = os.path.join(django_settings.MEDIA_ROOT, 'resellers', reseller.slug)
+                    os.makedirs(upload_dir, exist_ok=True)
+                    logo_path = os.path.join(upload_dir, 'logo.png')
+                    with open(logo_path, 'wb') as f:
+                        for chunk in logo_file.chunks():
+                            f.write(chunk)
+                    branding['logo'] = f'/media/resellers/{reseller.slug}/logo.png'
+
+            # Remove logo
+            if request.POST.get('remove_logo') == '1':
+                branding['logo'] = ''
+
+            # Background image upload (max 200KB, bold template only)
+            bg_file = request.FILES.get('bg_image')
+            if bg_file:
+                if bg_file.size > 200 * 1024:
+                    errors['bg_image'] = ['Background image must be under 200KB.']
+                else:
+                    import os
+                    from django.conf import settings as django_settings
+                    upload_dir = os.path.join(django_settings.MEDIA_ROOT, 'resellers', reseller.slug)
+                    os.makedirs(upload_dir, exist_ok=True)
+                    bg_path = os.path.join(upload_dir, 'bg.jpg')
+                    with open(bg_path, 'wb') as f:
+                        for chunk in bg_file.chunks():
+                            f.write(chunk)
+                    branding['bg_image'] = f'/media/resellers/{reseller.slug}/bg.jpg'
+
+            # Remove background
+            if request.POST.get('remove_bg') == '1':
+                branding['bg_image'] = ''
+
             reseller.branding = branding
             reseller.save()
-            messages.success(request, 'Branding updated!')
+            if not errors:
+                messages.success(request, 'Branding updated!')
 
         elif section == 'account':
             reseller.name = request.POST.get('business_name', reseller.name).strip()

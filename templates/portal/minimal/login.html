@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#222;min-height:100vh;padding:24px 16px}
+        .container{max-width:320px;margin:0 auto}
+        h1{font-size:18px;font-weight:600;margin-bottom:4px}
+        .subtitle{font-size:13px;color:#666;margin-bottom:24px}
+        label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:4px;margin-top:16px}
+        input[type="tel"],input[type="password"]{width:100%;padding:10px 0;border:none;border-bottom:2px solid #ddd;font-size:16px;outline:none;background:transparent}
+        input:focus{border-bottom-color:#222}
+        .btn{display:block;width:100%;padding:12px;border:2px solid #222;border-radius:0;font-size:14px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;margin-top:24px;background:#222;color:#fff}
+        .btn-outline{background:transparent;color:#222;margin-top:8px}
+        .link{color:#666;text-decoration:underline;font-size:12px}
+        .divider{text-align:center;color:#999;font-size:11px;margin:20px 0;text-transform:uppercase;letter-spacing:1px}
+        .error{color:#E53935;font-size:13px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #fcc}
+        .text-center{text-align:center}
+        .mt-3{margin-top:12px}
+        hr{border:none;border-top:1px solid #eee;margin:20px 0}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
+        <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected.{% endif %}</p>
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="{% url 'api-portal-login' %}">
+            <label>Phone</label>
+            <input type="tel" name="phone" placeholder="+234" required>
+            <label>PIN</label>
+            <input type="password" name="pin" placeholder="••••" maxlength="4" required>
+            <input type="hidden" name="serial" value="{{ serial }}">
+            <input type="hidden" name="link_login" value="{{ link_login }}">
+            <input type="hidden" name="link_orig" value="{{ link_orig }}">
+            <input type="hidden" name="mac" value="{{ mac }}">
+            <button type="submit" class="btn">Log In</button>
+        </form>
+
+        <p class="text-center mt-3"><a href="#" class="link">Forgot PIN?</a></p>
+        <hr>
+        <a href="{% url 'api-portal-signup' %}?r={{ serial }}" class="btn btn-outline">New? Sign Up</a>
+    </div>
+</body>
+</html>
