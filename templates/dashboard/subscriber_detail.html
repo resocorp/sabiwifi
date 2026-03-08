@@ -1,0 +1,61 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ subscriber.phone }} — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='subscribers' %}
+
+<div class="mb-6">
+    <a href="{% url 'dashboard-subscribers' %}" class="text-sm text-text-secondary hover:text-primary">← Subscribers</a>
+    <h1 class="text-xl font-heading font-bold mt-2 font-mono">{{ subscriber.phone }}</h1>
+    <p class="text-sm text-text-secondary">Joined {{ subscriber.created_at|date:"M j, Y" }}</p>
+</div>
+
+<!-- Current Plan -->
+<div class="bg-white rounded-xl border border-border p-4 mb-4">
+    <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Current Plan</h2>
+    {% if current_subscription %}
+    <div class="flex items-start justify-between mb-2">
+        <h3 class="font-heading font-semibold">{{ current_subscription.plan.name }}</h3>
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">Active</span>
+    </div>
+    <p class="text-sm text-text-secondary">{{ current_subscription.plan.speed_display }}</p>
+    <p class="text-sm text-text-secondary">Expires {{ current_subscription.expiry_date|date:"M j, Y" }}</p>
+    <div class="mt-3">
+        <p class="text-sm text-text-secondary">Devices: {{ current_subscription.plan.max_devices }}</p>
+    </div>
+    {% else %}
+    <p class="text-text-secondary text-sm">No active plan</p>
+    {% endif %}
+</div>
+
+<!-- Payment History -->
+<div class="bg-white rounded-xl border border-border">
+    <div class="p-4 border-b border-border">
+        <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Payment History</h2>
+    </div>
+    <div class="divide-y divide-border">
+        {% for payment in payments %}
+        <div class="px-4 py-3 flex items-center justify-between text-sm">
+            <div>
+                <span class="text-text-secondary">{{ payment.created_at|date:"M j" }}</span>
+                <span class="ml-2">{{ payment.plan.name|default:"—" }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="font-mono font-medium">{% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% else %}Free{% endif %}</span>
+                {% if payment.paystack_status == 'success' %}
+                <span class="text-accent text-xs">✓ Paid</span>
+                {% elif payment.paystack_status == 'failed' %}
+                <span class="text-danger text-xs">✗ Failed</span>
+                {% else %}
+                <span class="text-text-secondary text-xs">Pending</span>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="px-4 py-6 text-center text-text-secondary text-sm">No payments yet.</div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endwith %}
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{% if is_edit %}Edit Plan{% else %}Create Plan{% endif %} — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='plans' %}
+
+<div class="mb-6">
+    <a href="{% url 'dashboard-plans' %}" class="text-sm text-text-secondary hover:text-primary">← Plans</a>
+    <h1 class="text-xl font-heading font-bold mt-2">{% if is_edit %}Edit Plan{% else %}Create New Plan{% endif %}</h1>
+</div>
+
+<form method="post" class="max-w-lg">
+    {% csrf_token %}
+
+    {% if errors.non_field_errors %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">
+        {% for error in errors.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Plan Name -->
+    <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Plan Name</label>
+        <input type="text" name="name" value="{{ form_data.name|default:'' }}" placeholder="e.g. Monthly Basic"
+               class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+        {% if errors.name %}<p class="text-xs text-danger mt-1">{{ errors.name.0 }}</p>{% endif %}
+    </div>
+
+    <!-- Speed -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <div>
+            <label class="block text-sm font-medium mb-1">Download Speed</label>
+            <div class="flex items-center gap-2">
+                <select name="download_mbps" class="flex-1 px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    {% for speed in "1,2,3,5,10,15,20,30"|make_list %}
+                    {% endfor %}
+                    <option value="1" {% if form_data.download_mbps == 1 %}selected{% endif %}>1</option>
+                    <option value="2" {% if form_data.download_mbps == 2 %}selected{% endif %}>2</option>
+                    <option value="3" {% if form_data.download_mbps == 3 %}selected{% endif %}>3</option>
+                    <option value="5" {% if form_data.download_mbps == 5 or not form_data.download_mbps %}selected{% endif %}>5</option>
+                    <option value="10" {% if form_data.download_mbps == 10 %}selected{% endif %}>10</option>
+                    <option value="15" {% if form_data.download_mbps == 15 %}selected{% endif %}>15</option>
+                    <option value="20" {% if form_data.download_mbps == 20 %}selected{% endif %}>20</option>
+                    <option value="30" {% if form_data.download_mbps == 30 %}selected{% endif %}>30</option>
+                </select>
+                <span class="text-sm text-text-secondary">Mbps</span>
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">Upload Speed</label>
+            <div class="flex items-center gap-2">
+                <select name="upload_mbps" class="flex-1 px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="1" {% if form_data.upload_mbps == 1 %}selected{% endif %}>1</option>
+                    <option value="2" {% if form_data.upload_mbps == 2 %}selected{% endif %}>2</option>
+                    <option value="3" {% if form_data.upload_mbps == 3 %}selected{% endif %}>3</option>
+                    <option value="5" {% if form_data.upload_mbps == 5 or not form_data.upload_mbps %}selected{% endif %}>5</option>
+                    <option value="10" {% if form_data.upload_mbps == 10 %}selected{% endif %}>10</option>
+                    <option value="15" {% if form_data.upload_mbps == 15 %}selected{% endif %}>15</option>
+                    <option value="20" {% if form_data.upload_mbps == 20 %}selected{% endif %}>20</option>
+                    <option value="30" {% if form_data.upload_mbps == 30 %}selected{% endif %}>30</option>
+                </select>
+                <span class="text-sm text-text-secondary">Mbps</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duration -->
+    <div class="grid grid-cols-2 gap-3 mb-4">
+        <div>
+            <label class="block text-sm font-medium mb-1">Duration (days)</label>
+            <input type="number" name="duration_days" value="{{ form_data.duration_days|default:'30' }}" min="0"
+                   class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">Duration (hours)</label>
+            <input type="number" name="duration_hours" value="{{ form_data.duration_hours|default:'0' }}" min="0" step="0.25"
+                   class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <p class="text-xs text-text-secondary mt-1">Use hours for short plans (e.g. 0.5 = 30 min)</p>
+        </div>
+    </div>
+
+    <!-- Data Cap -->
+    <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Data Cap (GB)</label>
+        <input type="number" name="data_cap_gb" value="{{ form_data.data_cap_gb|default:'' }}" min="0" step="0.1"
+               placeholder="Leave empty for unlimited"
+               class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+        <p class="text-xs text-text-secondary mt-1">Leave empty for unlimited data</p>
+    </div>
+
+    <!-- Max Devices -->
+    <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Max Devices</label>
+        <select name="max_devices" class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            <option value="1" {% if form_data.max_devices == 1 or not form_data.max_devices %}selected{% endif %}>1</option>
+            <option value="2" {% if form_data.max_devices == 2 %}selected{% endif %}>2</option>
+            <option value="3" {% if form_data.max_devices == 3 %}selected{% endif %}>3</option>
+            <option value="5" {% if form_data.max_devices == 5 %}selected{% endif %}>5</option>
+        </select>
+    </div>
+
+    <!-- Price -->
+    <div class="mb-6">
+        <label class="block text-sm font-medium mb-1">Price</label>
+        <div class="flex items-center gap-2">
+            <span class="text-sm font-medium">₦</span>
+            <input type="number" name="price_ngn" value="{{ form_data.price_ngn|default:'0' }}" min="0" step="50"
+                   class="flex-1 px-3 py-2.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30">
+        </div>
+        {% if errors.price_ngn %}
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-2 text-sm text-amber-800">
+            ⚠ {{ errors.price_ngn.0 }}
+            <a href="{% url 'dashboard-settings' %}" class="text-primary hover:underline ml-1">Add Bank Account →</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <button type="submit"
+            class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+        {% if is_edit %}Save Changes{% else %}Create Plan{% endif %}
+    </button>
+</form>
+
+{% endwith %}
+{% endblock %}

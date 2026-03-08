@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .container { width: 100%; max-width: 360px; }
+        .card { background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .logo { text-align: center; margin-bottom: 16px; }
+        .logo img { max-width: 120px; max-height: 60px; }
+        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+        .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 24px; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+        input[type="tel"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
+        input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
+        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
+        .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; margin-top: 8px; }
+        .link { color: {{ branding.primary_color|default:"#0052CC" }}; text-decoration: none; font-size: 13px; }
+        .divider { text-align: center; color: #6B7280; font-size: 12px; margin: 16px 0; position: relative; }
+        .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 1px; background: #E5E7EB; }
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .text-center { text-align: center; }
+        .mt-3 { margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            {% if branding.logo %}
+            <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
+            {% endif %}
+
+            <h1>Welcome to<br>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
+            <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected in seconds.{% endif %}</p>
+
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" action="{% url 'api-portal-login' %}">
+                <label>Phone Number</label>
+                <input type="tel" name="phone" placeholder="+234" required>
+
+                <label>WiFi PIN</label>
+                <input type="password" name="pin" placeholder="••••" maxlength="4" required>
+
+                <input type="hidden" name="serial" value="{{ serial }}">
+                <input type="hidden" name="link_login" value="{{ link_login }}">
+                <input type="hidden" name="link_orig" value="{{ link_orig }}">
+                <input type="hidden" name="mac" value="{{ mac }}">
+
+                <button type="submit" class="btn btn-primary">Log In</button>
+            </form>
+
+            <p class="text-center mt-3"><a href="#" class="link">Forgot PIN?</a></p>
+
+            <div class="divider">or</div>
+
+            <p class="text-center" style="font-size:14px;">New here?</p>
+            <a href="{% url 'api-portal-signup' %}?r={{ serial }}" class="btn btn-outline">Sign Up for Free</a>
+        </div>
+    </div>
+</body>
+</html>

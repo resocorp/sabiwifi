@@ -1,0 +1,70 @@
+from django.db import models
+from simple_history.models import HistoricalRecords
+
+
+class PlatformSettings(models.Model):
+    """
+    Singleton model for platform-wide configuration.
+    Only one row should exist — enforced by the save() method.
+    """
+    # Commission & Billing defaults
+    default_commission_pct = models.DecimalField(
+        max_digits=5, decimal_places=2, default=15.00,
+        help_text="Default platform commission percentage (e.g. 15.00)"
+    )
+    default_fee_bearer = models.CharField(
+        max_length=20, default='subaccount',
+        choices=[('account', 'Platform'), ('subaccount', 'Reseller')],
+        help_text="Who bears the Paystack transaction fee by default"
+    )
+    default_free_subscriber_limit = models.PositiveIntegerField(
+        default=5,
+        help_text="Max active subscribers on free plans before bank verification required"
+    )
+
+    # Payment gateway keys
+    paystack_secret_key = models.CharField(max_length=255, blank=True, default='')
+    paystack_public_key = models.CharField(max_length=255, blank=True, default='')
+
+    # SMS provider
+    termii_api_key = models.CharField(max_length=255, blank=True, default='')
+    termii_sender_id = models.CharField(max_length=20, default='SabiWiFi')
+
+    # Platform identity
+    platform_name = models.CharField(max_length=100, default='SabiWiFi')
+    platform_domain = models.CharField(max_length=255, default='sabiwifi.ng')
+
+    # Server infrastructure
+    server_ip = models.GenericIPAddressField(default='127.0.0.1')
+    server_wg_public_key = models.CharField(max_length=255, blank=True, default='')
+
+    # Operator notifications
+    notification_phones = models.JSONField(
+        default=list, blank=True,
+        help_text='JSON list of phone numbers, e.g. ["+2348012345678"]'
+    )
+    notify_on_new_reseller = models.BooleanField(default=True)
+    notify_on_router_offline = models.BooleanField(default=True)
+    notify_on_payment_failure = models.BooleanField(default=True)
+    notify_daily_summary = models.BooleanField(default=True)
+
+    history = HistoricalRecords()
+
+    class Meta:
+        verbose_name = 'Platform Settings'
+        verbose_name_plural = 'Platform Settings'
+
+    def __str__(self):
+        return self.platform_name
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # Prevent deletion of singleton
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

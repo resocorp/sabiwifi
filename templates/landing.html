@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}SabiWiFi — Turn Your Internet Into a Business{% endblock %}
+
+{% block body %}
+<!-- Sticky Header -->
+<header class="sticky top-0 z-50 bg-white border-b border-border">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+        <span class="text-primary font-heading font-bold text-lg">SabiWiFi</span>
+        <a href="{% url 'login' %}" class="text-sm text-primary font-medium hover:underline">Log in →</a>
+    </div>
+</header>
+
+<div class="max-w-3xl mx-auto px-4">
+
+    <!-- Hero -->
+    <section class="py-12 md:py-16 text-center">
+        <h1 class="font-heading font-bold text-3xl md:text-4xl leading-tight mb-4">
+            Turn Your Internet<br>Into a Business
+        </h1>
+        <p class="text-text-secondary text-lg mb-8 max-w-md mx-auto">
+            Sell WiFi to your tenants, customers, and neighbors. We handle the tech.
+        </p>
+        <a href="{% url 'signup' %}"
+           class="inline-block bg-accent text-white px-8 py-3.5 rounded-lg text-base font-semibold hover:bg-green-600 transition shadow-sm">
+            Get Started — It's Free
+        </a>
+        <p class="text-sm text-text-secondary mt-3">
+            Already a reseller? <a href="{% url 'login' %}" class="text-primary hover:underline">Login</a>
+        </p>
+    </section>
+
+    <!-- How It Works -->
+    <section class="py-10 border-t border-border">
+        <h2 class="font-heading font-bold text-sm uppercase tracking-wider text-text-secondary mb-8 text-center">How It Works</h2>
+        <div class="space-y-8">
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-heading font-bold">1</div>
+                <div>
+                    <h3 class="font-heading font-semibold mb-1">Sign up online</h3>
+                    <p class="text-sm text-text-secondary">We send you a pre-configured router.</p>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-heading font-bold">2</div>
+                <div>
+                    <h3 class="font-heading font-semibold mb-1">Plug it in</h3>
+                    <p class="text-sm text-text-secondary">Connect to your internet and power. That's it.</p>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-heading font-bold">3</div>
+                <div>
+                    <h3 class="font-heading font-semibold mb-1">Set your prices</h3>
+                    <p class="text-sm text-text-secondary">Create plans from your dashboard. You choose the speed and price.</p>
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-heading font-bold">4</div>
+                <div>
+                    <h3 class="font-heading font-semibold mb-1">Start earning</h3>
+                    <p class="text-sm text-text-secondary">Customers connect, pay, and you earn. We handle payments and billing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- What You Earn -->
+    <section class="py-10 border-t border-border">
+        <h2 class="font-heading font-bold text-sm uppercase tracking-wider text-text-secondary mb-6 text-center">What You Earn</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white rounded-xl border border-border p-5">
+                <p class="text-sm text-text-secondary mb-2">Example: 20 customers · Monthly Basic ₦2,000</p>
+                <p class="text-text-secondary text-sm">Monthly revenue:</p>
+                <p class="font-mono font-bold text-2xl mb-2">₦40,000</p>
+                <p class="text-accent font-semibold">Your share (85%): <span class="font-mono">₦34,000/month</span></p>
+            </div>
+            <div class="bg-white rounded-xl border border-border p-5">
+                <p class="text-sm text-text-secondary mb-2">Example: 50 customers · Mix of plans</p>
+                <p class="text-text-secondary text-sm">Monthly revenue:</p>
+                <p class="font-mono font-bold text-2xl mb-2">₦125,000</p>
+                <p class="text-accent font-semibold">Your share (85%): <span class="font-mono">₦106,250/month</span></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- What You Get -->
+    <section class="py-10 border-t border-border">
+        <h2 class="font-heading font-bold text-sm uppercase tracking-wider text-text-secondary mb-6 text-center">What You Get</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-md mx-auto">
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> Pre-configured router</div>
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> Automatic payments</div>
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> Customer management</div>
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> Your own branded WiFi</div>
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> Real-time dashboard</div>
+            <div class="flex items-center gap-2 text-sm"><span class="text-accent">✓</span> No technical knowledge needed</div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="py-10 border-t border-border">
+        <h2 class="font-heading font-bold text-sm uppercase tracking-wider text-text-secondary mb-6 text-center">Pricing</h2>
+        <div class="bg-white rounded-xl border border-border p-5 text-center max-w-sm mx-auto">
+            <p class="text-sm text-text-secondary mb-1">Router: <span class="font-mono font-bold">₦XX,000</span> (one-time)</p>
+            <p class="text-sm text-text-secondary mb-2">Platform: <span class="font-semibold">15% of customer payments.</span></p>
+            <p class="text-sm text-text-secondary">Nothing else. No monthly fees.</p>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="py-12 border-t border-border text-center">
+        <h2 class="font-heading font-bold text-xl mb-4">Ready to Start?</h2>
+        <a href="{% url 'signup' %}"
+           class="inline-block bg-accent text-white px-8 py-3.5 rounded-lg text-base font-semibold hover:bg-green-600 transition shadow-sm">
+            Get Started — It's Free
+        </a>
+        <p class="text-sm text-text-secondary mt-4">
+            Questions? WhatsApp us:<br>
+            <a href="https://wa.me/234XXXXXXXXXX" class="text-primary font-medium hover:underline">+234 XXX XXXX XXX</a>
+        </p>
+    </section>
+
+</div>
+
+<!-- Footer -->
+<footer class="border-t border-border py-6 mt-8">
+    <div class="max-w-3xl mx-auto px-4 text-center text-xs text-text-secondary">
+        <p>&copy; 2026 SabiWiFi — Powered by PHSWEB LTD</p>
+        <p class="mt-1">
+            <a href="#" class="hover:underline">Terms</a> ·
+            <a href="#" class="hover:underline">Privacy</a> ·
+            <a href="#" class="hover:underline">Contact</a>
+        </p>
+    </div>
+</footer>
+{% endblock %}

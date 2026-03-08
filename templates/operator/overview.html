@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Operator Overview — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-heading font-bold">Platform Overview</h1>
+        <a href="/admin/" class="text-sm text-primary hover:underline">Django Admin →</a>
+    </div>
+
+    <!-- Top-Level Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="bg-white rounded-xl border border-border p-4">
+            <p class="font-mono font-bold text-2xl">{{ active_resellers }}</p>
+            <p class="text-text-secondary text-xs mt-1">Active resellers</p>
+            <p class="text-text-secondary text-[10px]">{{ total_resellers }} total</p>
+        </div>
+        <div class="bg-white rounded-xl border border-border p-4">
+            <p class="font-mono font-bold text-2xl">{{ active_subscriptions }}</p>
+            <p class="text-text-secondary text-xs mt-1">Active subscriptions</p>
+            <p class="text-text-secondary text-[10px]">{{ total_subscribers }} subscribers</p>
+        </div>
+        <div class="bg-white rounded-xl border border-border p-4">
+            <p class="font-mono font-bold text-2xl">{{ online_routers }}/{{ total_routers }}</p>
+            <p class="text-text-secondary text-xs mt-1">Routers online</p>
+            {% if offline_routers > 0 %}
+            <p class="text-danger text-[10px]">{{ offline_routers }} offline</p>
+            {% endif %}
+        </div>
+        <div class="bg-white rounded-xl border border-border p-4">
+            <p class="font-mono font-bold text-2xl">₦{{ monthly_revenue|floatformat:0 }}</p>
+            <p class="text-text-secondary text-xs mt-1">Revenue this month</p>
+            <p class="text-accent text-[10px]">₦{{ monthly_platform_revenue|floatformat:0 }} platform</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Today -->
+        <div class="bg-white rounded-xl border border-border p-4">
+            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Today</h2>
+            <p class="font-mono font-bold text-xl">₦{{ today_revenue|floatformat:0 }}</p>
+            <p class="text-text-secondary text-xs">Revenue today</p>
+        </div>
+
+        <!-- Alerts -->
+        <div class="bg-white rounded-xl border border-border p-4">
+            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Alerts</h2>
+            {% for alert in alerts %}
+            <div class="flex items-start gap-2 text-sm mb-2">
+                <span class="text-warning">⚠</span>
+                <div>
+                    <p>{{ alert.message }}</p>
+                    {% if alert.time %}<p class="text-xs text-text-secondary">Last seen: {{ alert.time|timesince }} ago</p>{% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-sm text-text-secondary">No alerts.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Top Resellers -->
+    {% if top_resellers %}
+    <div class="bg-white rounded-xl border border-border mt-6">
+        <div class="p-4 border-b border-border">
+            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Top Resellers This Month</h2>
+        </div>
+        <div class="divide-y divide-border">
+            {% for r in top_resellers %}
+            <div class="px-4 py-3 flex items-center justify-between text-sm">
+                <div>
+                    <span class="font-medium">{{ r.name }}</span>
+                    <span class="text-text-secondary ml-2">{{ r.owner_name }}</span>
+                </div>
+                <span class="font-mono font-medium">₦{{ r.month_revenue|floatformat:0 }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+"""
+SabiWiFi URL Configuration.
+"""
+from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+
+    # Reseller auth (server-rendered pages)
+    path('', include('accounts.urls')),
+
+    # Reseller dashboard (server-rendered)
+    path('dashboard/', include('dashboard.urls')),
+
+    # API — Reseller endpoints
+    path('api/resellers/', include('accounts.api_urls')),
+
+    # API — Plans
+    path('api/resellers/plans/', include('plans.api_urls')),
+
+    # API — Routers
+    path('api/routers/', include('routers.api_urls')),
+
+    # API — Billing
+    path('api/billing/', include('billing.api_urls')),
+
+    # API — Portal (subscriber-facing)
+    path('api/portal/', include('portal.api_urls')),
+
+    # API — Banks
+    path('api/banks/', include('billing.bank_urls')),
+
+    # Portal (captive portal + subscriber self-service)
+    path('portal/', include('portal.urls')),
+    path('account/', include('portal.account_urls')),
+
+    # Operator
+    path('operator/', include('operator_panel.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

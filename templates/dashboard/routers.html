@@ -1,0 +1,44 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Routers — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='routers' %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-heading font-bold">Routers</h1>
+    <a href="{% url 'dashboard-router-add' %}"
+       class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+        + Add Router
+    </a>
+</div>
+
+<div class="space-y-3">
+    {% for router in routers %}
+    <div class="bg-white rounded-xl border border-border p-4">
+        <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2">
+                <span class="text-lg">📡</span>
+                <h3 class="font-heading font-semibold">{{ router.location_name|default:"Router" }}</h3>
+            </div>
+            <span class="inline-flex items-center gap-1 text-xs font-medium {% if router.status == 'online' %}text-accent{% elif router.status == 'offline' %}text-danger{% elif router.status == 'pending_provision' %}text-warning{% else %}text-text-secondary{% endif %}">
+                <span class="w-1.5 h-1.5 rounded-full {% if router.status == 'online' %}bg-accent{% elif router.status == 'offline' %}bg-danger{% elif router.status == 'pending_provision' %}bg-warning{% else %}bg-gray-300{% endif %}"></span>
+                {{ router.get_status_display }}
+            </span>
+        </div>
+        <p class="text-sm text-text-secondary font-mono">Serial: {{ router.serial_number }}</p>
+        {% if router.last_seen %}
+        <p class="text-sm text-text-secondary">Last seen: {{ router.last_seen|timesince }} ago</p>
+        {% endif %}
+    </div>
+    {% empty %}
+    <div class="bg-white rounded-xl border border-border p-8 text-center">
+        <p class="text-text-secondary mb-4">No routers added yet.</p>
+        <a href="{% url 'dashboard-router-add' %}" class="inline-block bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+            Add Your First Router
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+{% endwith %}
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Settings — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='settings' %}
+
+<h1 class="text-xl font-heading font-bold mb-6">Settings</h1>
+
+<div class="max-w-lg space-y-6">
+
+    <!-- Portal Branding -->
+    <div class="bg-white rounded-xl border border-border p-5">
+        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Portal Branding</h2>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="section" value="branding">
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">WiFi Network Name (SSID)</label>
+                <input type="text" name="ssid" value="{{ reseller.branding.ssid|default:reseller.name }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <p class="text-xs text-text-secondary mt-1">This is what customers see on their phone</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Template</label>
+                <div class="grid grid-cols-3 gap-2">
+                    {% for template in "modern,bold,minimal"|make_list %}{% endfor %}
+                    <label class="cursor-pointer">
+                        <input type="radio" name="template" value="modern" class="sr-only peer"
+                               {% if reseller.branding.template == 'modern' or not reseller.branding.template %}checked{% endif %}>
+                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
+                            Modern<br><span class="text-xs text-text-secondary">Clean &amp; cards</span>
+                            <span class="block text-primary text-xs mt-1 peer-checked:visible invisible">✅</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="template" value="bold" class="sr-only peer"
+                               {% if reseller.branding.template == 'bold' %}checked{% endif %}>
+                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
+                            Bold<br><span class="text-xs text-text-secondary">Dark overlay</span>
+                        </div>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="template" value="minimal" class="sr-only peer"
+                               {% if reseller.branding.template == 'minimal' %}checked{% endif %}>
+                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
+                            Minimal<br><span class="text-xs text-text-secondary">Text-only</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Portal Title</label>
+                <input type="text" name="portal_title" value="{{ reseller.branding.portal_title|default:'' }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Welcome Message</label>
+                <input type="text" name="welcome_text" value="{{ reseller.branding.welcome_text|default:'' }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Primary Color</label>
+                <div class="flex items-center gap-2">
+                    <input type="color" name="primary_color" value="{{ reseller.branding.primary_color|default:'#0052CC' }}"
+                           class="w-10 h-10 border border-border rounded cursor-pointer">
+                    <span class="text-sm text-text-secondary font-mono">{{ reseller.branding.primary_color|default:'#0052CC' }}</span>
+                </div>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+                Save Branding
+            </button>
+        </form>
+    </div>
+
+    <!-- Account Settings -->
+    <div class="bg-white rounded-xl border border-border p-5">
+        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Account</h2>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="section" value="account">
+
+            <div class="mb-3">
+                <label class="block text-sm font-medium mb-1">Business Name</label>
+                <input type="text" name="business_name" value="{{ reseller.name }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm font-medium mb-1">Email</label>
+                <input type="email" name="email" value="{{ reseller.email }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm font-medium mb-1">Phone</label>
+                <input type="tel" name="phone" value="{{ reseller.phone }}"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Location</label>
+                <input type="text" name="location" value="{{ reseller.location }}" placeholder="e.g. Lagos, Lekki"
+                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+                Save Account
+            </button>
+        </form>
+    </div>
+
+    <!-- Bank Account -->
+    <div class="bg-white rounded-xl border border-border p-5">
+        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Bank Account</h2>
+
+        {% if reseller.payment_verified %}
+        <div class="space-y-2 text-sm">
+            <p class="font-medium">{{ reseller.bank_name }} - {{ reseller.account_number }}</p>
+            <p>{{ reseller.account_name }}</p>
+            <p class="text-accent flex items-center gap-1">✅ Verified</p>
+        </div>
+        {% else %}
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p class="text-sm text-amber-800 mb-2">
+                Add your bank account to enable paid plans and get paid directly.
+            </p>
+            <p class="text-xs text-amber-600">
+                Bank setup with account verification — coming in Phase 2.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% endwith %}
+{% endblock %}

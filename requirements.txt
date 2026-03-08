@@ -1,0 +1,28 @@
+# SabiWiFi - Requirements
+# Django & Core
+Django==5.1.6
+djangorestframework==3.15.2
+psycopg2-binary==2.9.10
+python-decouple==3.8
+gunicorn==23.0.0
+
+# Auth & Security
+djangorestframework-simplejwt==5.4.0
+
+# History & Audit
+django-simple-history==3.7.0
+
+# Image handling
+Pillow==11.1.0
+
+# RADIUS CoA
+pyrad==2.4
+
+# RouterOS API
+routeros_api==0.17.0
+
+# SMS (Termii)
+requests==2.32.3
+
+# CORS
+django-cors-headers==4.6.0
