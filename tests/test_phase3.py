@@ -572,3 +572,58 @@ class ResellerNewSignupAlertTest(TestCase):
         self.assertTrue(ps.notify_on_payment_failure)
         self.assertTrue(ps.notify_daily_summary)
         self.assertIsInstance(ps.notification_phones, list)
+
+
+# ──────────────────────────────────────────────
+#  ADMIN BOOTSTRAP DOWNLOAD BUTTON TESTS
+# ──────────────────────────────────────────────
+
+class AdminBootstrapDownloadTest(TestCase):
+    """Test the 'Download Bootstrap .rsc' button in Django Admin."""
+
+    def setUp(self):
+        self.staff_user = User.objects.create_superuser(
+            username='admin', email='admin@test.com', password='admin1234',
+        )
+        self.client = Client()
+        self.client.login(username='admin', password='admin1234')
+        self.router = Router.objects.create(
+            serial_number='BOOT001', status='available',
+        )
+
+    def test_download_bootstrap_returns_rsc_file(self):
+        url = reverse('admin:routers_router_download_bootstrap', args=[self.router.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/plain')
+        self.assertIn('bootstrap-BOOT001.rsc', resp['Content-Disposition'])
+        content = resp.content.decode()
+        self.assertIn('BOOT001', content)
+        self.assertIn('sabiwifi-phonehome', content)
+        self.assertIn('/api/routers/provision/BOOT001/', content)
+
+    def test_download_bootstrap_nonexistent_router(self):
+        url = reverse('admin:routers_router_download_bootstrap', args=[9999])
+        resp = self.client.get(url)
+        # Should redirect back to changelist with error
+        self.assertEqual(resp.status_code, 302)
+
+    def test_download_bootstrap_requires_staff(self):
+        self.client.logout()
+        url = reverse('admin:routers_router_download_bootstrap', args=[self.router.pk])
+        resp = self.client.get(url)
+        # Should redirect to admin login
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('login', resp.url)
+
+    def test_bootstrap_link_in_list_view(self):
+        url = reverse('admin:routers_router_changelist')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Download .rsc')
+
+    def test_bootstrap_button_in_change_view(self):
+        url = reverse('admin:routers_router_change', args=[self.router.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Download Bootstrap .rsc')

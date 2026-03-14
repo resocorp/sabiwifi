@@ -1,15 +1,24 @@
 import secrets
 import logging
+from django.conf import settings
 from django.http import HttpResponse
 from rest_framework import status, permissions
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from routers.models import Router
 from routers.serializers import RouterAddSerializer, RouterSerializer, RouterSSIDSerializer
 from routers.provision import generate_provision_rsc
+from routers.bootstrap import generate_bootstrap_rsc
+from routers.wg_utils import generate_keypair, add_peer, remove_peer, WireGuardError
 
 logger = logging.getLogger(__name__)
+
+
+class ProvisionRateThrottle(AnonRateThrottle):
+    """Aggressive rate limit for the unauthenticated provision endpoint."""
+    rate = '10/hour'
 
 
 def _allocate_tunnel_ip():
@@ -31,11 +40,8 @@ def _allocate_tunnel_ip():
 
 
 def _generate_credentials(router):
-    """Generate WireGuard keys, NAS secret, and API credentials for a router."""
-    # WireGuard keys — in production, use actual WG key generation
-    # For now, generate placeholder keys (real implementation needs wg genkey)
-    wg_private_key = secrets.token_urlsafe(32)
-    wg_public_key = secrets.token_urlsafe(32)  # Derived from private in production
+    """Generate real WireGuard keys, NAS secret, and API credentials for a router."""
+    wg_private_key, wg_public_key = generate_keypair()
 
     router.wg_public_key = wg_public_key
     router.wg_tunnel_ip = _allocate_tunnel_ip()
@@ -56,7 +62,7 @@ def router_add(request):
     router = Router.objects.get(serial_number=serial)
     reseller = request.user.reseller
 
-    # Generate credentials
+    # Generate credentials (real WireGuard keys)
     wg_private_key = _generate_credentials(router)
 
     # Assign to reseller
@@ -76,8 +82,19 @@ def router_add(request):
         }
     )
 
-    # Store the private key temporarily in the session for provision endpoint
-    # In production, this would be stored encrypted and short-lived
+    # Add WireGuard peer on the server
+    try:
+        add_peer(router.wg_public_key, router.wg_tunnel_ip)
+    except WireGuardError as e:
+        logger.error(f"Failed to add WG peer for router {serial}: {e}")
+        router.status = 'failed'
+        router.save(update_fields=['status'])
+        return Response(
+            {'error': 'Router claimed but WireGuard setup failed. Contact support.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Store the private key temporarily for provision endpoint
     from django.core.cache import cache
     cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
 
@@ -91,10 +108,11 @@ def router_add(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@throttle_classes([ProvisionRateThrottle])
 def router_provision(request, serial):
     """
     Phone-home endpoint: router requests its config.
-    Serial-only auth. Returns .rsc file.
+    Serial-only auth with rate limiting. Returns .rsc file.
     """
     serial = serial.strip().upper()
 
@@ -111,8 +129,23 @@ def router_provision(request, serial):
     wg_private_key = cache.get(f'wg_privkey_{router.serial_number}')
     if not wg_private_key:
         # Regenerate if cache expired (factory reset scenario)
+        # Remove old WG peer before regenerating keys
+        old_public_key = router.wg_public_key
+        try:
+            if old_public_key:
+                remove_peer(old_public_key)
+        except WireGuardError as e:
+            logger.warning(f"Failed to remove old WG peer for {serial}: {e}")
+
         wg_private_key = _generate_credentials(router)
         router.save()
+
+        # Add new WG peer
+        try:
+            add_peer(router.wg_public_key, router.wg_tunnel_ip)
+        except WireGuardError as e:
+            logger.error(f"Failed to add new WG peer for {serial}: {e}")
+
         cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
 
     # Generate provision script
@@ -126,6 +159,28 @@ def router_provision(request, serial):
     logger.info(f"Provision script delivered for router {serial} (count: {router.provision_count})")
 
     return HttpResponse(rsc_content, content_type='text/plain')
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def router_bootstrap(request, serial):
+    """
+    Generate and download a bootstrap .rsc script for a router.
+    Staff-only. The bootstrap is the minimal config flashed via Netinstall/USB.
+    """
+    serial = serial.strip().upper()
+
+    try:
+        router = Router.objects.get(serial_number=serial)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    platform_domain = settings.PLATFORM_DOMAIN
+    rsc_content = generate_bootstrap_rsc(serial, platform_domain)
+
+    response = HttpResponse(rsc_content, content_type='text/plain')
+    response['Content-Disposition'] = f'attachment; filename="bootstrap-{serial}.rsc"'
+    return response
 
 
 @api_view(['GET'])
@@ -167,9 +222,17 @@ def router_ssid(request, pk):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # TODO: Implement actual RouterOS API call over WireGuard
-    # For now, return success placeholder
     new_ssid = serializer.validated_data['ssid']
-    logger.info(f"SSID change requested for router {router.serial_number}: {new_ssid}")
 
+    from routers.routeros_utils import set_ssid, RouterOSError
+    try:
+        set_ssid(router, new_ssid)
+    except RouterOSError as e:
+        logger.error(f"SSID change failed for router {router.serial_number}: {e}")
+        return Response(
+            {'error': f'Failed to update SSID: {e}'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    logger.info(f"SSID updated for router {router.serial_number}: {new_ssid}")
     return Response({'status': f'SSID updated to "{new_ssid}".'})

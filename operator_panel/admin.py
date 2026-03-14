@@ -1,11 +1,23 @@
 """Django admin registrations for all SabiWiFi models."""
+import csv
+import io
+import logging
+
+from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import render
+from django.urls import path, reverse
+from django.utils.html import format_html
 from simple_history.admin import SimpleHistoryAdmin
 from operator_panel.models import PlatformSettings
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
 from routers.models import Router
+from routers.bootstrap import generate_bootstrap_rsc
+
+logger = logging.getLogger(__name__)
 
 
 # --- PlatformSettings (Singleton) ---
@@ -146,25 +158,172 @@ class PaymentAdmin(SimpleHistoryAdmin):
 
 @admin.register(Router)
 class RouterAdmin(SimpleHistoryAdmin):
-    list_display = ['serial_number', 'reseller', 'status', 'location_name', 'last_seen', 'created_at']
+    list_display = ['serial_number', 'reseller', 'status', 'location_name', 'last_seen', 'bootstrap_link', 'created_at']
     list_filter = ['status', 'reseller', 'created_at']
     search_fields = ['serial_number', 'reseller__name', 'location_name']
     readonly_fields = [
         'wg_public_key', 'wg_tunnel_ip', 'nas_secret',
         'api_username', 'api_password', 'provision_count',
         'created_at', 'updated_at',
+        'bootstrap_download_button',
     ]
     list_editable = ['status']
 
-    actions = ['mark_available', 'mark_offline']
+    actions = ['mark_available', 'mark_offline', 'import_serials_action', 'download_bootstrap_bulk']
+
+    fieldsets = (
+        (None, {
+            'fields': ('serial_number', 'reseller', 'status', 'location_name', 'bootstrap_download_button'),
+        }),
+        ('Health', {
+            'fields': ('last_seen', 'provision_count'),
+        }),
+        ('WireGuard', {
+            'fields': ('wg_public_key', 'wg_tunnel_ip'),
+            'classes': ('collapse',),
+        }),
+        ('RADIUS / API', {
+            'fields': ('nas_secret', 'api_username', 'api_password'),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+
+    @admin.display(description='Bootstrap')
+    def bootstrap_link(self, obj):
+        """Show a download link in the list view."""
+        url = reverse('admin:routers_router_download_bootstrap', args=[obj.pk])
+        return format_html('<a href="{}">Download .rsc</a>', url)
+
+    @admin.display(description='Bootstrap Script')
+    def bootstrap_download_button(self, obj):
+        """Show a download button on the detail/change page."""
+        if not obj.pk:
+            return '-'
+        url = reverse('admin:routers_router_download_bootstrap', args=[obj.pk])
+        return format_html(
+            '<a href="{}" class="button" style="padding: 5px 15px;">Download Bootstrap .rsc</a>',
+            url,
+        )
+
+    @admin.action(description='Download bootstrap .rsc for selected routers')
+    def download_bootstrap_bulk(self, request, queryset):
+        """Download bootstrap for a single selected router (first in selection)."""
+        router = queryset.first()
+        if router:
+            return HttpResponseRedirect(
+                reverse('admin:routers_router_download_bootstrap', args=[router.pk])
+            )
 
     @admin.action(description='Mark as available (unassign)')
     def mark_available(self, request, queryset):
-        queryset.update(status='available', reseller=None)
+        from routers.wg_utils import remove_peer, WireGuardError
+        # Remove WireGuard peers before unassigning
+        for router in queryset.filter(wg_public_key__gt=''):
+            try:
+                remove_peer(router.wg_public_key)
+            except WireGuardError as e:
+                self.message_user(
+                    request,
+                    f"Warning: failed to remove WG peer for {router.serial_number}: {e}",
+                    level='warning',
+                )
+        queryset.update(
+            status='available',
+            reseller=None,
+            wg_public_key='',
+            wg_tunnel_ip=None,
+            nas_secret='',
+            api_password='',
+        )
 
     @admin.action(description='Mark as offline')
     def mark_offline(self, request, queryset):
         queryset.update(status='offline')
+
+    @admin.action(description='Import serials from file')
+    def import_serials_action(self, request, queryset):
+        """Redirect to the serial import page."""
+        return HttpResponseRedirect(
+            reverse('admin:routers_router_import_serials')
+        )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'import-serials/',
+                self.admin_site.admin_view(self.import_serials_view),
+                name='routers_router_import_serials',
+            ),
+            path(
+                '<int:pk>/download-bootstrap/',
+                self.admin_site.admin_view(self.download_bootstrap_view),
+                name='routers_router_download_bootstrap',
+            ),
+        ]
+        return custom_urls + urls
+
+    def download_bootstrap_view(self, request, pk):
+        """Admin view to download the bootstrap .rsc for a single router."""
+        try:
+            router = Router.objects.get(pk=pk)
+        except Router.DoesNotExist:
+            self.message_user(request, 'Router not found.', level='error')
+            return HttpResponseRedirect(reverse('admin:routers_router_changelist'))
+
+        platform_domain = getattr(settings, 'PLATFORM_DOMAIN', 'localhost')
+        rsc_content = generate_bootstrap_rsc(router.serial_number, platform_domain)
+
+        response = HttpResponse(rsc_content, content_type='text/plain')
+        response['Content-Disposition'] = f'attachment; filename="bootstrap-{router.serial_number}.rsc"'
+        return response
+
+    def import_serials_view(self, request):
+        """Admin view for bulk-importing router serial numbers from a file."""
+        if request.method == 'POST' and request.FILES.get('serial_file'):
+            serial_file = request.FILES['serial_file']
+            content = serial_file.read().decode('utf-8')
+
+            created = 0
+            skipped = 0
+            errors = []
+
+            if serial_file.name.endswith('.csv'):
+                reader = csv.reader(io.StringIO(content))
+                lines = [row[0] for row in reader if row]
+            else:
+                lines = content.splitlines()
+
+            for line in lines:
+                serial = line.strip().upper()
+                if not serial or serial.startswith('#'):
+                    continue
+                try:
+                    _, was_created = Router.objects.get_or_create(
+                        serial_number=serial,
+                        defaults={'status': 'available'},
+                    )
+                    if was_created:
+                        created += 1
+                    else:
+                        skipped += 1
+                except Exception as e:
+                    errors.append(f"{serial}: {e}")
+
+            msg = f"Import complete: {created} created, {skipped} already existed."
+            if errors:
+                msg += f" {len(errors)} errors: {'; '.join(errors[:5])}"
+            self.message_user(request, msg)
+            logger.info(f"Admin serial import: {created} created, {skipped} skipped, {len(errors)} errors")
+            return HttpResponseRedirect(reverse('admin:routers_router_changelist'))
+
+        return render(request, 'admin/routers/import_serials.html', {
+            'title': 'Import Router Serials',
+            'opts': self.model._meta,
+        })
 
 
 # Admin site customization

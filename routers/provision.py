@@ -11,11 +11,17 @@ PROVISION_TEMPLATE = """# ============================================
 # Generated: {timestamp}
 # ============================================
 
+# --- 0. Remove bootstrap scheduler (if present) ---
+:do {{ /system/scheduler/remove sabiwifi-phonehome }} on-error={{}}
+:do {{ /system/script/remove sabiwifi-phonehome }} on-error={{}}
+
 # --- 1. Identity (used by hotspot redirect) ---
 /system/identity/set name="{serial_number}"
 
 # --- 2. RouterOS API user (for platform management) ---
 /user/add name="{api_username}" password="{api_password}" group=full
+/ip/service/set api address=10.99.0.0/16 disabled=no
+/ip/service/set api-ssl disabled=yes
 
 # --- 3. Guest network bridge ---
 /interface/bridge/add name=hotspot-br
@@ -26,7 +32,7 @@ PROVISION_TEMPLATE = """# ============================================
 
 # --- 4. WireGuard tunnel ---
 /interface/wireguard/add name=wg0 private-key="{wg_private_key}"
-/interface/wireguard/peers/add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16
+/interface/wireguard/peers/add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
 /ip/address/add address={wg_tunnel_ip}/32 interface=wg0
 
 # --- 5. Download hotspot redirect files ---
