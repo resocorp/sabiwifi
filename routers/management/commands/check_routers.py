@@ -56,7 +56,7 @@ class Command(BaseCommand):
         """Ping an IP address. Returns True if reachable."""
         try:
             result = subprocess.run(
-                ['ping', '-n', '1', '-w', '2000', str(ip)],
+                ['ping', '-c', '1', '-W', '2', str(ip)],
                 capture_output=True, timeout=5,
             )
             return result.returncode == 0
