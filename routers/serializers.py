@@ -14,7 +14,10 @@ class RouterAddSerializer(serializers.Serializer):
         try:
             router = Router.objects.get(serial_number=value)
         except Router.DoesNotExist:
-            raise serializers.ValidationError("We don't recognize this serial number.")
+            raise serializers.ValidationError(
+                "Serial number not found. Power on the router and wait a few minutes "
+                "for it to register, then try again."
+            )
 
         if router.reseller is not None:
             raise serializers.ValidationError("This router is already assigned to another account.")

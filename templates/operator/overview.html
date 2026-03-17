@@ -59,6 +59,61 @@
         </div>
     </div>
 
+    {% load tz %}
+    <!-- Router Activity -->
+    <div class="bg-white rounded-xl border border-border mt-6">
+        <div class="p-4 border-b border-border flex items-center justify-between">
+            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Router Activity</h2>
+            <a href="/admin/routers/router/" class="text-xs text-primary hover:underline">All routers →</a>
+        </div>
+
+        {% if phoning_home_routers %}
+        <div class="p-4 border-b border-border">
+            <h3 class="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">Currently Phoning Home (last 5 min)</h3>
+            <div class="divide-y divide-border">
+                {% for r in phoning_home_routers %}
+                <div class="py-2 flex items-center justify-between text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-2 h-2 rounded-full bg-green-500" style="animation: pulse 2s infinite;"></span>
+                        <span class="font-mono font-medium">{{ r.serial_number }}</span>
+                        {% if r.reseller %}
+                        <span class="text-text-secondary text-xs">{{ r.reseller.name }}</span>
+                        {% else %}
+                        <span style="background: #fef3c7; color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">NOT CLAIMED</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-xs text-text-secondary">
+                        {{ r.get_status_display }} · {{ r.last_seen|timesince }} ago
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="p-4 border-b border-border">
+            <p class="text-sm text-text-secondary">No routers phoning home right now.</p>
+        </div>
+        {% endif %}
+
+        {% if unclaimed_with_contact %}
+        <div class="p-4">
+            <h3 class="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Unclaimed Routers (have phoned home before)</h3>
+            <div class="divide-y divide-border">
+                {% for r in unclaimed_with_contact %}
+                <div class="py-2 flex items-center justify-between text-sm">
+                    <span class="font-mono font-medium">{{ r.serial_number }}</span>
+                    <span class="text-xs text-text-secondary">Last seen {{ r.last_seen|timesince }} ago</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <style>
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    </style>
+
     <!-- Top Resellers -->
     {% if top_resellers %}
     <div class="bg-white rounded-xl border border-border mt-6">

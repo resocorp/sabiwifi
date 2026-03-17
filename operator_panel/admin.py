@@ -15,7 +15,7 @@ from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
 from routers.models import Router
-from routers.bootstrap import generate_bootstrap_rsc
+from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class PaymentAdmin(SimpleHistoryAdmin):
 
 @admin.register(Router)
 class RouterAdmin(SimpleHistoryAdmin):
-    list_display = ['serial_number', 'reseller', 'status', 'location_name', 'last_seen', 'bootstrap_link', 'created_at']
+    list_display = ['serial_number', 'reseller', 'status_display', 'location_name', 'last_seen_display', 'bootstrap_link', 'created_at']
     list_filter = ['status', 'reseller', 'created_at']
     search_fields = ['serial_number', 'reseller__name', 'location_name']
     readonly_fields = [
@@ -167,7 +167,7 @@ class RouterAdmin(SimpleHistoryAdmin):
         'created_at', 'updated_at',
         'bootstrap_download_button',
     ]
-    list_editable = ['status']
+    change_list_template = 'admin/routers/router_changelist.html'
 
     actions = ['mark_available', 'mark_offline', 'import_serials_action', 'download_bootstrap_bulk']
 
@@ -190,6 +190,54 @@ class RouterAdmin(SimpleHistoryAdmin):
             'fields': ('created_at', 'updated_at'),
         }),
     )
+
+    @admin.display(description='Status', ordering='status')
+    def status_display(self, obj):
+        """Show status with phone-home indicator for unclaimed routers."""
+        from django.utils import timezone
+        status_colors = {
+            'available': '#6b7280',
+            'pending_provision': '#f59e0b',
+            'provisioned': '#3b82f6',
+            'online': '#10b981',
+            'offline': '#ef4444',
+            'failed': '#dc2626',
+        }
+        color = status_colors.get(obj.status, '#6b7280')
+        label = obj.get_status_display()
+
+        # Check if router is phoning home (last_seen within 5 minutes)
+        if obj.last_seen and obj.status == 'available':
+            age = (timezone.now() - obj.last_seen).total_seconds()
+            if age < 300:  # 5 minutes
+                return format_html(
+                    '<span style="color: {}">●</span> {} '
+                    '<span style="background: #d1fae5; color: #065f46; padding: 1px 6px; '
+                    'border-radius: 8px; font-size: 10px; font-weight: 600;">📡 Phoning Home</span>',
+                    color, label,
+                )
+            else:
+                return format_html(
+                    '<span style="color: {}">●</span> {} '
+                    '<span style="background: #fef3c7; color: #92400e; padding: 1px 6px; '
+                    'border-radius: 8px; font-size: 10px;">Last seen {}m ago</span>',
+                    color, label, int(age // 60),
+                )
+
+        return format_html('<span style="color: {}">●</span> {}', color, label)
+
+    @admin.display(description='Last Seen', ordering='last_seen')
+    def last_seen_display(self, obj):
+        """Show last_seen with relative time."""
+        if not obj.last_seen:
+            return '-'
+        from django.utils import timezone
+        from django.utils.timesince import timesince
+        age = (timezone.now() - obj.last_seen).total_seconds()
+        time_str = timesince(obj.last_seen) + ' ago'
+        if age < 300:
+            return format_html('<span style="color: #10b981; font-weight: 600;">{}</span>', time_str)
+        return time_str
 
     @admin.display(description='Bootstrap')
     def bootstrap_link(self, obj):
@@ -250,6 +298,13 @@ class RouterAdmin(SimpleHistoryAdmin):
             reverse('admin:routers_router_import_serials')
         )
 
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['generic_bootstrap_url'] = reverse(
+            'admin:routers_router_download_generic_bootstrap'
+        )
+        return super().changelist_view(request, extra_context=extra_context)
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -259,12 +314,26 @@ class RouterAdmin(SimpleHistoryAdmin):
                 name='routers_router_import_serials',
             ),
             path(
+                'download-generic-bootstrap/',
+                self.admin_site.admin_view(self.download_generic_bootstrap_view),
+                name='routers_router_download_generic_bootstrap',
+            ),
+            path(
                 '<int:pk>/download-bootstrap/',
                 self.admin_site.admin_view(self.download_bootstrap_view),
                 name='routers_router_download_bootstrap',
             ),
         ]
         return custom_urls + urls
+
+    def download_generic_bootstrap_view(self, request):
+        """Download the generic bootstrap .rsc (no serial needed)."""
+        platform_domain = getattr(settings, 'PLATFORM_DOMAIN', 'localhost')
+        rsc_content = generate_generic_bootstrap_rsc(platform_domain)
+
+        response = HttpResponse(rsc_content, content_type='text/plain')
+        response['Content-Disposition'] = 'attachment; filename="bootstrap-generic.rsc"'
+        return response
 
     def download_bootstrap_view(self, request, pk):
         """Admin view to download the bootstrap .rsc for a single router."""

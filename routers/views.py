@@ -10,15 +10,16 @@ from rest_framework.throttling import AnonRateThrottle
 from routers.models import Router
 from routers.serializers import RouterAddSerializer, RouterSerializer, RouterSSIDSerializer
 from routers.provision import generate_provision_rsc
-from routers.bootstrap import generate_bootstrap_rsc
+from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc
+from routers.serial_utils import is_valid_mikrotik_serial
 from routers.wg_utils import generate_keypair, add_peer, remove_peer, WireGuardError
 
 logger = logging.getLogger(__name__)
 
 
 class ProvisionRateThrottle(AnonRateThrottle):
-    """Aggressive rate limit for the unauthenticated provision endpoint."""
-    rate = '10/hour'
+    """Rate limit for the unauthenticated provision endpoint (router phones home every 2 min)."""
+    rate = '60/hour'
 
 
 def _allocate_tunnel_ip():
@@ -116,15 +117,23 @@ def router_provision(request, serial):
     """
     serial = serial.strip().upper()
 
+    from django.utils import timezone
+
     try:
         router = Router.objects.get(serial_number=serial)
     except Router.DoesNotExist:
-        # Return 200 with short body so /tool/fetch doesn't error out.
-        # Bootstrap script checks content length > 100 before importing.
-        return HttpResponse('# not found', content_type='text/plain')
+        # Auto-register if it looks like a valid MikroTik serial
+        if not is_valid_mikrotik_serial(serial):
+            return HttpResponse('# not found', content_type='text/plain')
+
+        router, created = Router.objects.get_or_create(
+            serial_number=serial,
+            defaults={'status': 'available'},
+        )
+        if created:
+            logger.info(f"Auto-registered router {serial} from phone-home")
 
     # Update last_seen on every phone-home attempt
-    from django.utils import timezone
     Router.objects.filter(pk=router.pk).update(last_seen=timezone.now())
 
     if router.reseller is None:
@@ -187,6 +196,22 @@ def router_bootstrap(request, serial):
 
     response = HttpResponse(rsc_content, content_type='text/plain')
     response['Content-Disposition'] = f'attachment; filename="bootstrap-{serial}.rsc"'
+    return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def router_bootstrap_generic(request):
+    """
+    Download a generic bootstrap .rsc script (no serial embedded).
+    Staff-only. The script reads the hardware serial at runtime.
+    Flash this to any MikroTik via Netinstall or USB.
+    """
+    platform_domain = settings.PLATFORM_DOMAIN
+    rsc_content = generate_generic_bootstrap_rsc(platform_domain)
+
+    response = HttpResponse(rsc_content, content_type='text/plain')
+    response['Content-Disposition'] = 'attachment; filename="bootstrap-generic.rsc"'
     return response
 
 

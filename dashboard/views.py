@@ -368,7 +368,10 @@ def router_add(request):
                     messages.success(request, 'Router added! Waiting for it to come online...')
                     return redirect('dashboard-overview')
             except Router.DoesNotExist:
-                errors['serial_number'] = ["We don't recognize this serial number."]
+                errors['serial_number'] = [
+                    "Serial number not found. Power on the router and wait a few "
+                    "minutes for it to register, then try again."
+                ]
 
     return render(request, 'dashboard/router_add.html', {
         'reseller': reseller,

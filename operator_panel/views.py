@@ -50,6 +50,17 @@ def operator_overview(request):
         month_revenue=Sum('payments__amount_ngn')
     ).order_by('-month_revenue')[:10]
 
+    # Routers phoning home (last_seen within 5 min, regardless of status)
+    five_min_ago = now - timezone.timedelta(minutes=5)
+    phoning_home_routers = Router.objects.filter(
+        last_seen__gte=five_min_ago
+    ).select_related('reseller').order_by('-last_seen')
+
+    # Unclaimed routers that have phoned home at least once
+    unclaimed_with_contact = Router.objects.filter(
+        status='available', last_seen__isnull=False
+    ).select_related('reseller').order_by('-last_seen')[:10]
+
     # Recent alerts placeholder
     alerts = []
     offline_routers_list = Router.objects.filter(status='offline').select_related('reseller')[:5]
@@ -73,5 +84,7 @@ def operator_overview(request):
         'today_revenue': today_revenue,
         'top_resellers': top_resellers,
         'alerts': alerts,
+        'phoning_home_routers': phoning_home_routers,
+        'unclaimed_with_contact': unclaimed_with_contact,
     }
     return render(request, 'operator/overview.html', context)
