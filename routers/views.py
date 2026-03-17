@@ -119,10 +119,17 @@ def router_provision(request, serial):
     try:
         router = Router.objects.get(serial_number=serial)
     except Router.DoesNotExist:
-        return HttpResponse('Not found', status=404, content_type='text/plain')
+        # Return 200 with short body so /tool/fetch doesn't error out.
+        # Bootstrap script checks content length > 100 before importing.
+        return HttpResponse('# not found', content_type='text/plain')
+
+    # Update last_seen on every phone-home attempt
+    from django.utils import timezone
+    Router.objects.filter(pk=router.pk).update(last_seen=timezone.now())
 
     if router.reseller is None:
-        return HttpResponse('Not assigned', status=404, content_type='text/plain')
+        # Router exists but not claimed by a reseller yet
+        return HttpResponse('# not ready', content_type='text/plain')
 
     # Retrieve WG private key from cache (or regenerate if needed)
     from django.core.cache import cache

@@ -439,9 +439,9 @@ class RouterProvisionAPITest(TestCase):
         content = resp.content.decode()
         self.assertIn('SabiWiFi Provision Script', content)
         self.assertIn('PROV123', content)
-        self.assertIn('/interface/wireguard/add', content)
-        self.assertIn('/ip/hotspot/add', content)
-        self.assertIn('/radius/add', content)
+        self.assertIn('/interface wireguard add', content)
+        self.assertIn('/ip hotspot add', content)
+        self.assertIn('/radius add', content)
         # Router should be marked provisioned
         router = Router.objects.get(serial_number='PROV123')
         self.assertEqual(router.status, 'provisioned')
@@ -450,13 +450,15 @@ class RouterProvisionAPITest(TestCase):
     def test_provision_unknown_serial(self):
         anon = Client()
         resp = anon.get(reverse('api-router-provision', args=['UNKNOWN']))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('# not found', resp.content.decode())
 
     def test_provision_unassigned_serial(self):
         Router.objects.create(serial_number='UNASSIGNED', status='available')
         anon = Client()
         resp = anon.get(reverse('api-router-provision', args=['UNASSIGNED']))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('# not ready', resp.content.decode())
 
 
 # ──────────────────────────────────────────────

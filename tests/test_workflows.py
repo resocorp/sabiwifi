@@ -177,9 +177,9 @@ class WF04_RouterProvisioningTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         content = resp.content.decode()
         self.assertIn('WF04TEST', content)
-        self.assertIn('/interface/wireguard/add', content)
-        self.assertIn('/radius/add', content)
-        self.assertIn('/ip/hotspot/add', content)
+        self.assertIn('/interface wireguard add', content)
+        self.assertIn('/radius add', content)
+        self.assertIn('/ip hotspot add', content)
         r = Router.objects.get(serial_number='WF04TEST')
         self.assertEqual(r.status, 'provisioned')
 
