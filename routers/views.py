@@ -10,7 +10,7 @@ from rest_framework.throttling import AnonRateThrottle
 from routers.models import Router
 from routers.serializers import RouterAddSerializer, RouterSerializer, RouterSSIDSerializer
 from routers.provision import generate_provision_rsc
-from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc
+from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc, generate_phonehome_setup_rsc
 from routers.serial_utils import is_valid_mikrotik_serial
 from routers.wg_utils import generate_keypair, add_peer, remove_peer, WireGuardError
 
@@ -213,6 +213,20 @@ def router_bootstrap_generic(request):
     response = HttpResponse(rsc_content, content_type='text/plain')
     response['Content-Disposition'] = 'attachment; filename="bootstrap-generic.rsc"'
     return response
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@throttle_classes([ProvisionRateThrottle])
+def router_phonehome_setup(request):
+    """
+    Stage 2 bootstrap: returns phonehome-setup.rsc.
+    Called by the Stage 1 setup script on the router via /tool/fetch + /import.
+    Unauthenticated (router has no credentials at this stage).
+    """
+    platform_domain = settings.PLATFORM_DOMAIN
+    rsc_content = generate_phonehome_setup_rsc(platform_domain)
+    return HttpResponse(rsc_content, content_type='text/plain')
 
 
 @api_view(['GET'])

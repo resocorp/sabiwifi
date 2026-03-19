@@ -19,6 +19,8 @@ PROVISION_TEMPLATE = """\
 # --- 0. Remove bootstrap scheduler/script (if present) ---
 :do {{ /system scheduler remove [find name=sabiwifi-phonehome] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-phonehome] }} on-error={{}}
+:do {{ /system scheduler remove [find name=sabiwifi-setup] }} on-error={{}}
+:do {{ /system script remove [find name=sabiwifi-setup] }} on-error={{}}
 
 # --- 1. Identity ---
 /system identity set name="{serial_number}"
