@@ -79,8 +79,8 @@ GENERIC_BOOTSTRAP_TEMPLATE = """\
 # --- 3. Setup script: fetches phone-home installer from server (skips if already done) ---
 /system/script/add name=sabiwifi-setup dont-require-permissions=yes source=":if ([:len [/system/script/find name=sabiwifi-phonehome]] > 0) do={{ :log info \\"SabiWiFi: already configured\\" }} else={{ /tool/fetch url=\\"https://{platform_domain}/api/routers/phonehome-setup/\\" dst-path=phonehome-setup.rsc mode=https check-certificate=no; :delay 2s; /import phonehome-setup.rsc; /file/remove phonehome-setup.rsc }}"
 
-# --- 4. Run setup every 2 minutes until it succeeds ---
-/system/scheduler/add name=sabiwifi-setup interval=2m start-time=startup on-event="/system/script/run sabiwifi-setup"
+# --- 4. Run setup every 10 seconds until it succeeds ---
+/system/scheduler/add name=sabiwifi-setup interval=10s start-time=startup on-event="/system/script/run sabiwifi-setup"
 
 :log info "SabiWiFi: bootstrap installed, setup scheduled"
 """
@@ -122,8 +122,8 @@ PHONEHOME_SETUP_TEMPLATE = """\
 # --- 4. Create phone-home script (single-line source) ---
 /system/script/add name=sabiwifi-phonehome dont-require-permissions=yes source=":local s [/system/routerboard/get serial-number]; :do {{ /tool/fetch url=(\\"https://{platform_domain}/api/routers/provision/\\" . \\$s . \\"/\\") dst-path=provision.rsc mode=https check-certificate=no }} on-error={{ :log warning \\"SabiWiFi: fetch failed\\"; :error \\"fetch failed\\" }}; :local c [/file/get [/file/find name=provision.rsc] contents]; :if ([:len \\$c] > 100) do={{ /import provision.rsc; :delay 2s; /file/remove provision.rsc; /system/scheduler/remove [find name=sabiwifi-phonehome]; /system/script/remove [find name=sabiwifi-phonehome]; :log info \\"SabiWiFi: provisioning complete\\" }} else={{ :log info \\"SabiWiFi: not ready yet, will retry\\"; /file/remove provision.rsc }}"
 
-# --- 5. Schedule phone-home every 2 minutes ---
-/system/scheduler/add name=sabiwifi-phonehome interval=2m start-time=startup on-event="/system/script/run sabiwifi-phonehome"
+# --- 5. Schedule phone-home every 30 seconds ---
+/system/scheduler/add name=sabiwifi-phonehome interval=30s start-time=startup on-event="/system/script/run sabiwifi-phonehome"
 
 :log info ("SabiWiFi: phone-home installed for " . $mySerial)
 

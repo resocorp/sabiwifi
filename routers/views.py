@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class ProvisionRateThrottle(AnonRateThrottle):
-    """Rate limit for the unauthenticated provision endpoint (router phones home every 2 min)."""
-    rate = '60/hour'
+    """Rate limit for the unauthenticated provision endpoint (router phones home every 30s)."""
+    rate = '240/hour'
 
 
 def _allocate_tunnel_ip():
