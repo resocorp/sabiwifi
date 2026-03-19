@@ -76,8 +76,8 @@ GENERIC_BOOTSTRAP_TEMPLATE = """\
 # --- 2. DNS fallback ---
 /ip/dns/set servers=8.8.8.8,1.1.1.1 allow-remote-requests=yes
 
-# --- 3. Setup script: fetches phone-home installer from server ---
-/system/script/add name=sabiwifi-setup dont-require-permissions=yes source="/tool/fetch url=https://{platform_domain}/api/routers/phonehome-setup/ dst-path=phonehome-setup.rsc mode=https check-certificate=no; :delay 2s; /import phonehome-setup.rsc; /file/remove phonehome-setup.rsc"
+# --- 3. Setup script: fetches phone-home installer from server (skips if already done) ---
+/system/script/add name=sabiwifi-setup dont-require-permissions=yes source=":if ([:len [/system/script/find name=sabiwifi-phonehome]] > 0) do={{ :log info \\"SabiWiFi: already configured\\" }} else={{ /tool/fetch url=\\"https://{platform_domain}/api/routers/phonehome-setup/\\" dst-path=phonehome-setup.rsc mode=https check-certificate=no; :delay 2s; /import phonehome-setup.rsc; /file/remove phonehome-setup.rsc }}"
 
 # --- 4. Run setup every 2 minutes until it succeeds ---
 /system/scheduler/add name=sabiwifi-setup interval=2m start-time=startup on-event="/system/script/run sabiwifi-setup"
@@ -127,9 +127,9 @@ PHONEHOME_SETUP_TEMPLATE = """\
 
 :log info ("SabiWiFi: phone-home installed for " . $mySerial)
 
-# --- 6. Remove Stage 1 setup artifacts (MUST be last — removing the calling script interrupts execution) ---
-:do {{ /system/scheduler/remove [find name=sabiwifi-setup] }} on-error={{}}
-:do {{ /system/script/remove [find name=sabiwifi-setup] }} on-error={{}}
+# Note: Stage 1 (sabiwifi-setup) is NOT removed here because this script
+# is /import-ed BY Stage 1. Removing the calling script causes "interrupted".
+# Instead, Stage 1 checks if sabiwifi-phonehome exists and skips silently.
 """
 
 
