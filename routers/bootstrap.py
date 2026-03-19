@@ -87,15 +87,17 @@ GENERIC_BOOTSTRAP_TEMPLATE = """\
 
 # ── Stage 2: Phone-home setup (fetched and /import-ed as a file) ─────────────
 #
-# Escaping rules for this template:
+# Escaping rules for this template (NOT a raw string):
 #   Python .format():  {{ → {   }} → }   {platform_domain} → replaced
-#   RouterOS /import:  \$ → $ (prevents expansion at parse time)
-#                      \" → " (literal quote inside source="...")
+#   Top-level lines:   Plain $var — no escaping needed (executed by /import)
+#   Inside source="...":  \\$ → \$ in output → RouterOS reads as $
+#                          \\" → \" in output → RouterOS reads as literal "
 #
-# The phone-home script source is a SINGLE LINE inside source="..."
-# to keep escaping to exactly one level.
+# Two escaping contexts in one template:
+#   - Lines 1-4, 6: top-level /import context → plain $ and "
+#   - Line 5: source="..." string → needs \$ and \" for RouterOS
 
-PHONEHOME_SETUP_TEMPLATE = r"""
+PHONEHOME_SETUP_TEMPLATE = """\
 # ============================================
 # SabiWiFi Phone-Home Setup (Stage 2)
 # Fetched from server and /import-ed.
@@ -107,11 +109,11 @@ PHONEHOME_SETUP_TEMPLATE = r"""
   :set mySerial [/system/routerboard/get serial-number]
 }} on-error={{
   :set mySerial [/interface/ethernet/get [find default-name=ether1] mac-address]
-  :set mySerial ([:pick \$mySerial 0 2].[:pick \$mySerial 3 5].[:pick \$mySerial 6 8].[:pick \$mySerial 9 11].[:pick \$mySerial 12 14].[:pick \$mySerial 15 17])
+  :set mySerial ([:pick $mySerial 0 2].[:pick $mySerial 3 5].[:pick $mySerial 6 8].[:pick $mySerial 9 11].[:pick $mySerial 12 14].[:pick $mySerial 15 17])
 }}
 
 # --- 2. Set identity ---
-/system/identity/set name=\$mySerial
+/system/identity/set name=$mySerial
 
 # --- 3. Remove Stage 1 setup artifacts ---
 :do {{ /system/scheduler/remove [find name=sabiwifi-setup] }} on-error={{}}
@@ -122,12 +124,12 @@ PHONEHOME_SETUP_TEMPLATE = r"""
 :do {{ /system/script/remove [find name=sabiwifi-phonehome] }} on-error={{}}
 
 # --- 5. Create phone-home script (single-line source) ---
-/system/script/add name=sabiwifi-phonehome dont-require-permissions=yes source=":local s [/system/routerboard/get serial-number]; :do {{ /tool/fetch url=(\"https://{platform_domain}/api/routers/provision/\" . \$s . \"/\") dst-path=provision.rsc mode=https check-certificate=no }} on-error={{ :log warning \"SabiWiFi: fetch failed\"; :error \"fetch failed\" }}; :local c [/file/get [/file/find name=provision.rsc] contents]; :if ([:len \$c] > 100) do={{ /import provision.rsc; :delay 2s; /file/remove provision.rsc; /system/scheduler/remove [find name=sabiwifi-phonehome]; /system/script/remove [find name=sabiwifi-phonehome]; :log info \"SabiWiFi: provisioning complete\" }} else={{ :log info \"SabiWiFi: not ready yet, will retry\"; /file/remove provision.rsc }}"
+/system/script/add name=sabiwifi-phonehome dont-require-permissions=yes source=":local s [/system/routerboard/get serial-number]; :do {{ /tool/fetch url=(\\"https://{platform_domain}/api/routers/provision/\\" . \\$s . \\"/\\") dst-path=provision.rsc mode=https check-certificate=no }} on-error={{ :log warning \\"SabiWiFi: fetch failed\\"; :error \\"fetch failed\\" }}; :local c [/file/get [/file/find name=provision.rsc] contents]; :if ([:len \\$c] > 100) do={{ /import provision.rsc; :delay 2s; /file/remove provision.rsc; /system/scheduler/remove [find name=sabiwifi-phonehome]; /system/script/remove [find name=sabiwifi-phonehome]; :log info \\"SabiWiFi: provisioning complete\\" }} else={{ :log info \\"SabiWiFi: not ready yet, will retry\\"; /file/remove provision.rsc }}"
 
 # --- 6. Schedule phone-home every 2 minutes ---
 /system/scheduler/add name=sabiwifi-phonehome interval=2m start-time=startup on-event="/system/script/run sabiwifi-phonehome"
 
-:log info ("SabiWiFi: phone-home installed for " . \$mySerial)
+:log info ("SabiWiFi: phone-home installed for " . $mySerial)
 """
 
 
