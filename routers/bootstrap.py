@@ -115,21 +115,21 @@ PHONEHOME_SETUP_TEMPLATE = """\
 # --- 2. Set identity ---
 /system/identity/set name=$mySerial
 
-# --- 3. Remove Stage 1 setup artifacts ---
-:do {{ /system/scheduler/remove [find name=sabiwifi-setup] }} on-error={{}}
-:do {{ /system/script/remove [find name=sabiwifi-setup] }} on-error={{}}
-
-# --- 4. Remove any previous phone-home artifacts (idempotent) ---
+# --- 3. Remove any previous phone-home artifacts (idempotent) ---
 :do {{ /system/scheduler/remove [find name=sabiwifi-phonehome] }} on-error={{}}
 :do {{ /system/script/remove [find name=sabiwifi-phonehome] }} on-error={{}}
 
-# --- 5. Create phone-home script (single-line source) ---
+# --- 4. Create phone-home script (single-line source) ---
 /system/script/add name=sabiwifi-phonehome dont-require-permissions=yes source=":local s [/system/routerboard/get serial-number]; :do {{ /tool/fetch url=(\\"https://{platform_domain}/api/routers/provision/\\" . \\$s . \\"/\\") dst-path=provision.rsc mode=https check-certificate=no }} on-error={{ :log warning \\"SabiWiFi: fetch failed\\"; :error \\"fetch failed\\" }}; :local c [/file/get [/file/find name=provision.rsc] contents]; :if ([:len \\$c] > 100) do={{ /import provision.rsc; :delay 2s; /file/remove provision.rsc; /system/scheduler/remove [find name=sabiwifi-phonehome]; /system/script/remove [find name=sabiwifi-phonehome]; :log info \\"SabiWiFi: provisioning complete\\" }} else={{ :log info \\"SabiWiFi: not ready yet, will retry\\"; /file/remove provision.rsc }}"
 
-# --- 6. Schedule phone-home every 2 minutes ---
+# --- 5. Schedule phone-home every 2 minutes ---
 /system/scheduler/add name=sabiwifi-phonehome interval=2m start-time=startup on-event="/system/script/run sabiwifi-phonehome"
 
 :log info ("SabiWiFi: phone-home installed for " . $mySerial)
+
+# --- 6. Remove Stage 1 setup artifacts (MUST be last — removing the calling script interrupts execution) ---
+:do {{ /system/scheduler/remove [find name=sabiwifi-setup] }} on-error={{}}
+:do {{ /system/script/remove [find name=sabiwifi-setup] }} on-error={{}}
 """
 
 
