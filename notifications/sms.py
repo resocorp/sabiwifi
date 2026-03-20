@@ -50,8 +50,13 @@ class SMSService:
             return False
 
     def send_otp(self, phone, otp_code):
-        """Send OTP verification code."""
-        message = f"Your SabiWiFi verification code is: {otp_code}. Valid for 10 minutes."
+        """Send OTP verification code.
+        The last line follows Web OTP API format for auto-read on Android.
+        """
+        message = (
+            f"Your SabiWiFi verification code is: {otp_code}. "
+            f"Valid for 10 minutes.\n\n@app.sabiwifi.com #{otp_code}"
+        )
         return self.send_sms(phone, message)
 
     def send_expiry_reminder(self, phone, plan_name, domain='sabiwifi.ng'):

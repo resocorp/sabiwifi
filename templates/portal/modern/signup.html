@@ -22,6 +22,8 @@
         .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; margin-top: 8px; }
+        .btn-link { background: none; border: none; color: {{ branding.primary_color|default:"#0052CC" }}; font-size: 13px; cursor: pointer; padding: 8px 0; }
+        .btn-link:disabled { color: #9CA3AF; cursor: not-allowed; }
         .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
         .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
         .text-center { text-align: center; }
@@ -34,6 +36,8 @@
         .steps { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
         .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #E5E7EB; }
         .step-dot.active { background: {{ branding.primary_color|default:"#0052CC" }}; }
+        .resend-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .countdown { font-size: 12px; color: #6B7280; }
     </style>
 </head>
 <body>
@@ -66,7 +70,11 @@
             <!-- Step 2: OTP Verification -->
             <div id="step-2" class="step">
                 <p class="subtitle">Enter the 6-digit code sent to your phone</p>
-                <input type="text" id="otp" class="otp-input" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="------">
+                <input type="text" id="otp" class="otp-input" maxlength="6" pattern="[0-9]*" inputmode="numeric" autocomplete="one-time-code" placeholder="------">
+                <div class="resend-row">
+                    <button type="button" id="resend-btn" class="btn-link" onclick="doResend()" disabled>Resend Code</button>
+                    <span class="countdown" id="countdown">Wait 60s</span>
+                </div>
                 <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify Code</button>
             </div>
 
@@ -87,9 +95,11 @@
     </div>
 
     <script>
-    const serial = '{{ serial }}';
+    const serial = '{{ serial|escapejs }}';
     let resellerId = '';
     let verifyToken = '';
+    let cooldownTimer = null;
+    let cooldownSecs = 0;
 
     function showMsg(text, type) {
         const el = document.getElementById('msg');
@@ -98,9 +108,7 @@
         el.style.display = 'block';
     }
 
-    function hideMsg() {
-        document.getElementById('msg').style.display = 'none';
-    }
+    function hideMsg() { document.getElementById('msg').style.display = 'none'; }
 
     function goToStep(n) {
         for (let i = 1; i <= 3; i++) {
@@ -108,11 +116,48 @@
             document.getElementById('dot-' + i).classList.remove('active');
         }
         document.getElementById('step-' + n).classList.add('active');
-        for (let i = 1; i <= n; i++) {
-            document.getElementById('dot-' + i).classList.add('active');
+        for (let i = 1; i <= n; i++) document.getElementById('dot-' + i).classList.add('active');
+    }
+
+    // --- Cooldown timer for resend ---
+    function startCooldown(seconds) {
+        cooldownSecs = seconds;
+        const resendBtn = document.getElementById('resend-btn');
+        const countdownEl = document.getElementById('countdown');
+        resendBtn.disabled = true;
+
+        if (cooldownTimer) clearInterval(cooldownTimer);
+        cooldownTimer = setInterval(() => {
+            cooldownSecs--;
+            if (cooldownSecs <= 0) {
+                clearInterval(cooldownTimer);
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend Code';
+                countdownEl.textContent = '';
+            } else {
+                countdownEl.textContent = 'Wait ' + cooldownSecs + 's';
+            }
+        }, 1000);
+    }
+
+    // --- Web OTP API: auto-read SMS ---
+    function listenForOTP() {
+        if ('OTPCredential' in window) {
+            const ac = new AbortController();
+            setTimeout(() => ac.abort(), 300000); // 5 min timeout
+            navigator.credentials.get({
+                otp: {transport: ['sms']},
+                signal: ac.signal,
+            }).then(otp => {
+                if (otp && otp.code) {
+                    document.getElementById('otp').value = otp.code;
+                    doVerify(); // Auto-submit
+                }
+            }).catch(() => {}); // Silently fail if not supported
         }
     }
 
+    // --- Step 1: Signup ---
     function doSignup() {
         const phone = document.getElementById('phone').value.trim();
         const email = document.getElementById('email').value.trim();
@@ -136,6 +181,8 @@
                 resellerId = data.reseller_id;
                 showMsg('Code sent! Check your phone.', 'success');
                 goToStep(2);
+                startCooldown(60);
+                listenForOTP();
             } else {
                 showMsg(data.error || 'Signup failed.', 'error');
             }
@@ -143,6 +190,38 @@
         .catch(() => { btn.disabled = false; btn.textContent = 'Send Verification Code'; showMsg('Network error.', 'error'); });
     }
 
+    // --- Resend OTP ---
+    function doResend() {
+        const phone = document.getElementById('phone').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const resendBtn = document.getElementById('resend-btn');
+
+        hideMsg();
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Sending...';
+
+        fetch('/api/portal/signup/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phone: phone, email: email, serial: serial}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (ok) {
+                resellerId = data.reseller_id;
+                showMsg('New code sent!', 'success');
+                startCooldown(60);
+                listenForOTP();
+            } else {
+                showMsg(data.error || 'Could not resend.', 'error');
+                resendBtn.disabled = false;
+                resendBtn.textContent = 'Resend Code';
+            }
+        })
+        .catch(() => { resendBtn.disabled = false; resendBtn.textContent = 'Resend Code'; showMsg('Network error.', 'error'); });
+    }
+
+    // --- Step 2: Verify OTP ---
     function doVerify() {
         const phone = document.getElementById('phone').value.trim();
         const code = document.getElementById('otp').value.trim();
@@ -164,6 +243,7 @@
             btn.textContent = 'Verify Code';
             if (ok) {
                 verifyToken = data.verify_token;
+                if (cooldownTimer) clearInterval(cooldownTimer);
                 showMsg('Phone verified! Set your WiFi PIN.', 'success');
                 goToStep(3);
             } else {
@@ -173,6 +253,7 @@
         .catch(() => { btn.disabled = false; btn.textContent = 'Verify Code'; showMsg('Network error.', 'error'); });
     }
 
+    // --- Step 3: Set PIN ---
     function doSetPin() {
         const pin = document.getElementById('pin').value.trim();
         const pinConfirm = document.getElementById('pin-confirm').value.trim();
@@ -196,7 +277,7 @@
             if (ok) {
                 showMsg('Account created! Redirecting to login...', 'success');
                 setTimeout(() => {
-                    window.location.href = '/portal/?r=' + serial + '&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}';
+                    window.location.href = '/portal/?r=' + serial + '&mac={{ mac|escapejs }}&link-login={{ link_login|escapejs }}&link-orig={{ link_orig|escapejs }}';
                 }, 1500);
             } else {
                 showMsg(data.error || 'Failed to create account.', 'error');
