@@ -16,11 +16,7 @@ PROVISION_TEMPLATE = """\
 # Generated: {timestamp}
 # ============================================
 
-# --- 0. Remove Stage 1 bootstrap artifacts (safe — not in our call chain) ---
-# NOTE: Do NOT remove sabiwifi-phonehome here! This script is /import-ed BY
-# the phone-home script. Removing the caller corrupts the import context and
-# causes "expected end of command" errors. The phone-home script handles its
-# own cleanup after /import returns.
+# --- 0. Remove Stage 1 bootstrap artifacts (not in our call chain, safe) ---
 :do {{ /system scheduler remove [find name=sabiwifi-setup] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-setup] }} on-error={{}}
 
@@ -41,7 +37,6 @@ PROVISION_TEMPLATE = """\
 
 # --- 4. WireGuard tunnel to SabiWiFi server ---
 :do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
-# Remove any existing peers before adding
 :do {{ /interface wireguard peers remove [find interface=wg0] }} on-error={{}}
 /interface wireguard peers add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
 :do {{ /ip address add address={wg_tunnel_ip}/32 interface=wg0 }} on-error={{}}
@@ -65,8 +60,8 @@ PROVISION_TEMPLATE = """\
 :do {{ /radius remove [find comment="sabiwifi"] }} on-error={{}}
 /radius add service=hotspot address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
-# --- 8. Hotspot server profile + server ---
-/ip hotspot profile set default use-radius=yes interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
+# --- 8. Hotspot server profile + server (RouterOS v7 syntax) ---
+/ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
 /ip hotspot user-profile set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 
@@ -78,6 +73,12 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip firewall filter add chain=input connection-state=established,related action=accept comment="SabiWiFi established" }} on-error={{}}
 :do {{ /ip firewall filter add chain=forward connection-state=established,related action=accept comment="SabiWiFi forward" }} on-error={{}}
 :do {{ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="SabiWiFi NAT" }} on-error={{}}
+
+# --- 11. Heartbeat (keeps running after provisioning) ---
+:do {{ /system scheduler remove [find name=sabiwifi-heartbeat] }} on-error={{}}
+:do {{ /system script remove [find name=sabiwifi-heartbeat] }} on-error={{}}
+/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source="/tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" mode=https check-certificate=no keep-result=no"
+/system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
 
 :log info "SabiWiFi: provisioning complete for {serial_number}"
 """

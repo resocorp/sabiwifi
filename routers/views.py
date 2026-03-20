@@ -178,6 +178,26 @@ def router_provision(request, serial):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+@throttle_classes([ProvisionRateThrottle])
+def router_heartbeat(request, serial):
+    """
+    Lightweight heartbeat endpoint. Called every 2 min by provisioned routers.
+    Updates last_seen and sets status to online.
+    """
+    serial = serial.strip().upper()
+    from django.utils import timezone
+
+    updated = Router.objects.filter(serial_number=serial).update(
+        last_seen=timezone.now(),
+        status='online',
+    )
+    if updated:
+        return HttpResponse('# ok', content_type='text/plain')
+    return HttpResponse('# unknown', content_type='text/plain')
+
+
+@api_view(['GET'])
 @permission_classes([IsAdminUser])
 def router_bootstrap(request, serial):
     """
