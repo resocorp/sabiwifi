@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Sign Up for WiFi{% endif %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .container { width: 100%; max-width: 360px; }
+        .card { background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .logo { text-align: center; margin-bottom: 16px; }
+        .logo img { max-width: 120px; max-height: 60px; }
+        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+        .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 24px; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+        input[type="tel"], input[type="email"] { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
+        input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; margin-top: 8px; }
+        .link { color: {{ branding.primary_color|default:"#0052CC" }}; text-decoration: none; font-size: 13px; }
+        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .text-center { text-align: center; }
+        .mt-3 { margin-top: 12px; }
+        .divider { text-align: center; color: #6B7280; font-size: 12px; margin: 16px 0; position: relative; }
+        .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 1px; background: #E5E7EB; }
+        .divider::before { left: 0; }
+        .divider::after { right: 0; }
+        #otp-section { display: none; }
+        #otp-section input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 18px; text-align: center; letter-spacing: 8px; outline: none; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            {% if branding.logo %}
+            <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
+            {% endif %}
+
+            <h1>Create Account</h1>
+            <p class="subtitle">Sign up to get WiFi access</p>
+
+            <div id="msg"></div>
+
+            <!-- Step 1: Phone + Email -->
+            <div id="signup-section">
+                <label>Phone Number</label>
+                <input type="tel" id="phone" placeholder="+234" required>
+
+                <label>Email</label>
+                <input type="email" id="email" placeholder="you@example.com" required>
+
+                <button type="button" id="signup-btn" class="btn btn-primary" onclick="doSignup()">Sign Up</button>
+            </div>
+
+            <!-- Step 2: OTP Verification -->
+            <div id="otp-section">
+                <p class="subtitle">Enter the 6-digit code sent to your phone</p>
+                <input type="text" id="otp" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="------">
+                <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify</button>
+            </div>
+
+            <div class="divider">or</div>
+            <p class="text-center" style="font-size:14px;">Already have an account?</p>
+            <a href="/portal/?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">Log In</a>
+        </div>
+    </div>
+
+    <script>
+    const serial = '{{ serial }}';
+
+    function showMsg(text, type) {
+        const el = document.getElementById('msg');
+        el.className = type === 'error' ? 'error' : 'success';
+        el.textContent = text;
+        el.style.display = 'block';
+    }
+
+    function doSignup() {
+        const phone = document.getElementById('phone').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const btn = document.getElementById('signup-btn');
+
+        if (!phone || !email) {
+            showMsg('Please enter phone number and email.', 'error');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Sending OTP...';
+
+        fetch('/api/portal/signup/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phone: phone, email: email, serial: serial}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false;
+            btn.textContent = 'Sign Up';
+            if (ok) {
+                showMsg('OTP sent! Check your phone.', 'success');
+                document.getElementById('signup-section').style.display = 'none';
+                document.getElementById('otp-section').style.display = 'block';
+            } else {
+                showMsg(data.error || 'Signup failed.', 'error');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.textContent = 'Sign Up';
+            showMsg('Network error. Please try again.', 'error');
+        });
+    }
+
+    function doVerify() {
+        const phone = document.getElementById('phone').value.trim();
+        const otp = document.getElementById('otp').value.trim();
+        const btn = document.getElementById('verify-btn');
+
+        if (!otp || otp.length !== 6) {
+            showMsg('Please enter the 6-digit code.', 'error');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Verifying...';
+
+        fetch('/api/portal/verify/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phone: phone, otp: otp, serial: serial}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false;
+            btn.textContent = 'Verify';
+            if (ok) {
+                showMsg('Account created! Redirecting to login...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/portal/?r=' + serial + '&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}';
+                }, 1500);
+            } else {
+                showMsg(data.error || 'Verification failed.', 'error');
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.textContent = 'Verify';
+            showMsg('Network error. Please try again.', 'error');
+        });
+    }
+    </script>
+</body>
+</html>

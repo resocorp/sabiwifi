@@ -51,6 +51,27 @@ def portal_connected(request):
     })
 
 
+def portal_signup(request):
+    """Captive portal signup page."""
+    serial = request.GET.get('r', '')
+    mac = request.GET.get('mac', '')
+    link_login = request.GET.get('link-login', '')
+    link_orig = request.GET.get('link-orig', '')
+
+    reseller = _get_reseller_from_serial(serial)
+    branding = reseller.branding if reseller else {}
+    template_name = branding.get('template', 'modern')
+
+    return render(request, f'portal/{template_name}/signup.html', {
+        'reseller': reseller,
+        'branding': branding,
+        'serial': serial,
+        'mac': mac,
+        'link_login': link_login,
+        'link_orig': link_orig,
+    })
+
+
 def account_login(request):
     """Subscriber self-service login (accessible from anywhere)."""
     # Phase 2: Full implementation
