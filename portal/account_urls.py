@@ -3,5 +3,5 @@ from django.urls import path
 from portal import page_views
 
 urlpatterns = [
-    path('', page_views.account_login, name='account-login'),
+    path('', page_views.portal_account_page, name='account-login'),
 ]
