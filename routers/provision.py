@@ -16,9 +16,11 @@ PROVISION_TEMPLATE = """\
 # Generated: {timestamp}
 # ============================================
 
-# --- 0. Remove bootstrap scheduler/script (if present) ---
-:do {{ /system scheduler remove [find name=sabiwifi-phonehome] }} on-error={{}}
-:do {{ /system script remove [find name=sabiwifi-phonehome] }} on-error={{}}
+# --- 0. Remove Stage 1 bootstrap artifacts (safe — not in our call chain) ---
+# NOTE: Do NOT remove sabiwifi-phonehome here! This script is /import-ed BY
+# the phone-home script. Removing the caller corrupts the import context and
+# causes "expected end of command" errors. The phone-home script handles its
+# own cleanup after /import returns.
 :do {{ /system scheduler remove [find name=sabiwifi-setup] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-setup] }} on-error={{}}
 
