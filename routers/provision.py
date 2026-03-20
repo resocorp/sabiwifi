@@ -106,10 +106,10 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip firewall filter add chain=forward connection-state=established,related action=accept comment="SabiWiFi forward" }} on-error={{}}
 :do {{ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="SabiWiFi NAT" }} on-error={{}}
 
-# --- 12. Heartbeat (keeps running after provisioning) ---
+# --- 12. Heartbeat with self-healing WG tunnel ---
 :do {{ /system scheduler remove [find name=sabiwifi-heartbeat] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-heartbeat] }} on-error={{}}
-/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source="/tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" mode=https check-certificate=no keep-result=no"
+/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" mode=https check-certificate=no keep-result=no }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
 /system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
 
 :log info "SabiWiFi: provisioning complete for {serial_number}"

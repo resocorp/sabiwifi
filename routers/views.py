@@ -45,6 +45,7 @@ def _generate_credentials(router):
     wg_private_key, wg_public_key = generate_keypair()
 
     router.wg_public_key = wg_public_key
+    router.wg_private_key = wg_private_key
     router.wg_tunnel_ip = _allocate_tunnel_ip()
     router.nas_secret = secrets.token_urlsafe(24)
     router.api_username = 'sabiwifi'
@@ -140,12 +141,10 @@ def router_provision(request, serial):
         # Router exists but not claimed by a reseller yet
         return HttpResponse('# not ready', content_type='text/plain')
 
-    # Retrieve WG private key from cache (or regenerate if needed)
-    from django.core.cache import cache
-    wg_private_key = cache.get(f'wg_privkey_{router.serial_number}')
-    if not wg_private_key:
-        # Regenerate if cache expired (factory reset scenario)
-        # Remove old WG peer before regenerating keys
+    # Use stored credentials, or generate if first time
+    wg_private_key = router.wg_private_key
+    if not wg_private_key or not router.wg_public_key:
+        # First provision or factory reset — generate new credentials
         old_public_key = router.wg_public_key
         try:
             if old_public_key:
@@ -161,8 +160,6 @@ def router_provision(request, serial):
             add_peer(router.wg_public_key, router.wg_tunnel_ip)
         except WireGuardError as e:
             logger.error(f"Failed to add new WG peer for {serial}: {e}")
-
-        cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
 
     # Generate provision script
     rsc_content = generate_provision_rsc(router, wg_private_key)

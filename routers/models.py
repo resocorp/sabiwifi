@@ -27,6 +27,7 @@ class Router(models.Model):
 
     # WireGuard
     wg_public_key = models.CharField(max_length=255, blank=True, default='')
+    wg_private_key = models.CharField(max_length=255, blank=True, default='')
     wg_tunnel_ip = models.GenericIPAddressField(null=True, blank=True)
 
     # RADIUS / CoA
