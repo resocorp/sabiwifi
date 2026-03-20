@@ -275,6 +275,8 @@
             btn.disabled = false;
             btn.textContent = 'Create Account';
             if (ok) {
+                // Store auth token for account page
+                if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
                 showMsg('Account created! Redirecting to login...', 'success');
                 setTimeout(() => {
                     window.location.href = '/portal/?r=' + serial + '&mac={{ mac|escapejs }}&link-login={{ link_login|escapejs }}&link-orig={{ link_orig|escapejs }}';

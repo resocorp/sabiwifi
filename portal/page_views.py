@@ -72,7 +72,15 @@ def portal_signup(request):
     })
 
 
-def account_login(request):
-    """Subscriber self-service login (accessible from anywhere)."""
-    # Phase 2: Full implementation
-    return render(request, 'portal/account_login.html')
+def portal_account_page(request):
+    """Subscriber self-service portal — view plan, change PIN, switch plan."""
+    serial = request.GET.get('r', '')
+    reseller = _get_reseller_from_serial(serial)
+    branding = reseller.branding if reseller else {}
+    template_name = branding.get('template', 'modern')
+
+    return render(request, f'portal/{template_name}/account.html', {
+        'reseller': reseller,
+        'branding': branding,
+        'serial': serial,
+    })

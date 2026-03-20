@@ -216,6 +216,30 @@ def portal_set_pin(request):
     subscriber.generate_auth_token()
     subscriber.save()
 
+    # Auto-assign trial plan and create RADIUS credentials
+    from datetime import timedelta
+    from radius.utils import assign_subscriber_to_plan, create_default_trial_plan
+    trial_plan = ServicePlan.objects.filter(
+        reseller=reseller, is_trial=True, is_active=True
+    ).first()
+    if not trial_plan:
+        trial_plan = create_default_trial_plan(reseller)
+
+    if trial_plan:
+        now = timezone.now()
+        hours = float(trial_plan.duration_hours or 0)
+        days = int(trial_plan.duration_days or 0)
+        expiry = now + timedelta(days=days, hours=hours)
+        Subscription.objects.create(
+            subscriber=subscriber,
+            plan=trial_plan,
+            reseller=reseller,
+            start_date=now,
+            expiry_date=expiry,
+            status='active',
+        )
+        assign_subscriber_to_plan(subscriber, trial_plan)
+
     cache.delete(f'verified_{verify_token}')
 
     return Response({

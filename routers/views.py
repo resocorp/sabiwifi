@@ -155,6 +155,18 @@ def router_provision(request, serial):
         wg_private_key = _generate_credentials(router)
         router.save()
 
+        # Update NAS entry for FreeRADIUS
+        from radius.models import Nas
+        Nas.objects.update_or_create(
+            shortname=router.serial_number,
+            defaults={
+                'nasname': str(router.wg_tunnel_ip),
+                'type': 'other',
+                'secret': router.nas_secret,
+                'description': f'SabiWiFi router {router.serial_number}',
+            }
+        )
+
         # Add new WG peer
         try:
             add_peer(router.wg_public_key, router.wg_tunnel_ip)

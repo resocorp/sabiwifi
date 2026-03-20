@@ -53,7 +53,7 @@
                 <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Log In</button>
             </div>
 
-            <p class="text-center mt-3"><a href="#" class="link">Forgot PIN?</a></p>
+            <p class="text-center mt-3"><a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> · <a href="/portal/account/?r={{ serial }}" class="link">My Account</a></p>
 
             <div class="divider">or</div>
 
@@ -99,6 +99,8 @@
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
             if (ok) {
+                // Store auth token for account portal
+                if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
                 showMsg('Authenticated! Connecting to WiFi...', 'success');
 
                 if (linkLogin) {
