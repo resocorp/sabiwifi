@@ -26,9 +26,7 @@ PROVISION_TEMPLATE = """\
 /system identity set name="{serial_number}"
 
 # --- 2. RouterOS API user (for platform management via WG tunnel) ---
-:do {{ /user add name="{api_username}" password="{api_password}" group=full }} on-error={{\\
-  /user set [find name="{api_username}"] password="{api_password}"\\
-}}
+:do {{ /user add name="{api_username}" password="{api_password}" group=full }} on-error={{ /user set [find name="{api_username}"] password="{api_password}" }}
 /ip service set api address=10.99.0.0/16 disabled=no
 /ip service set api-ssl disabled=yes
 
@@ -40,17 +38,10 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip dhcp-server network add address=10.8.0.0/16 gateway=10.8.0.1 }} on-error={{}}
 
 # --- 4. WireGuard tunnel to SabiWiFi server ---
-:do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{\\
-  /interface wireguard set [find name=wg0] private-key="{wg_private_key}"\\
-}}
+:do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
 # Remove any existing peers before adding
 :do {{ /interface wireguard peers remove [find interface=wg0] }} on-error={{}}
-/interface wireguard peers add interface=wg0 \\
-  public-key="{server_wg_public_key}" \\
-  endpoint-address={server_ip} \\
-  endpoint-port=51820 \\
-  allowed-address=10.99.0.0/16 \\
-  persistent-keepalive=25
+/interface wireguard peers add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
 :do {{ /ip address add address={wg_tunnel_ip}/32 interface=wg0 }} on-error={{}}
 
 # --- 5. Download hotspot redirect HTML files ---
@@ -70,16 +61,10 @@ PROVISION_TEMPLATE = """\
 
 # --- 7. RADIUS (auth via WireGuard tunnel to server) ---
 :do {{ /radius remove [find comment="sabiwifi"] }} on-error={{}}
-/radius add service=hotspot address=10.99.0.1 secret="{nas_secret}" \\
-  authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
+/radius add service=hotspot address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
 # --- 8. Hotspot server profile + server ---
-/ip hotspot profile set default \\
-  use-radius=yes \\
-  interim-update=5m \\
-  login-by=http-pap \\
-  html-directory=hotspot \\
-  dns-name=wifi.portal
+/ip hotspot profile set default use-radius=yes interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
 /ip hotspot user-profile set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 
