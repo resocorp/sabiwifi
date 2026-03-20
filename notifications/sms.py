@@ -8,7 +8,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-TERMII_BASE_URL = 'https://api.ng.termii.com/api'
+TERMII_BASE_URL = 'https://v3.api.termii.com/api'
 
 
 class SMSService:

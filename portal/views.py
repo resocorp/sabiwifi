@@ -114,14 +114,15 @@ def portal_signup(request):
         'attempts': 0,
     }, timeout=600)  # 10 minutes
 
-    # TODO: Send OTP via Termii SMS in production
-    # For now, log it (and return in dev mode for testing)
-    logger.info(f"OTP for {phone}: {otp}")
+    # Send OTP via Termii SMS
+    from notifications.sms import get_sms_service
+    sms = get_sms_service()
+    sms.send_otp(phone, otp)
+    logger.info(f"OTP sent to {phone}")
 
     return Response({
         'message': 'Verification code sent to your phone.',
         'phone': phone,
-        'otp_debug': otp,  # Remove in production
     })
 
 
@@ -454,12 +455,14 @@ def portal_reset_pin_request(request):
         'attempts': 0,
     }, timeout=600)
 
-    logger.info(f"PIN reset OTP for {phone}: {otp}")
+    from notifications.sms import get_sms_service
+    sms = get_sms_service()
+    sms.send_pin_reset_otp(phone, otp)
+    logger.info(f"PIN reset OTP sent to {phone}")
 
     return Response({
         'message': 'Reset code sent to your phone.',
         'phone': phone,
-        'otp_debug': otp,  # Remove in production
     })
 
 
