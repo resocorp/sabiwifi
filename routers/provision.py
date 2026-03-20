@@ -27,6 +27,8 @@ PROVISION_TEMPLATE = """\
 :do {{ /user add name="{api_username}" password="{api_password}" group=full }} on-error={{ /user set [find name="{api_username}"] password="{api_password}" }}
 /ip service set api address=10.99.0.0/16 disabled=no
 /ip service set api-ssl disabled=yes
+/ip service set www address=10.99.0.0/16 disabled=no
+/ip service set www-ssl disabled=yes
 
 # --- 3. Guest network bridge + DHCP ---
 :do {{ /interface bridge add name=hotspot-br }} on-error={{}}
@@ -39,7 +41,10 @@ PROVISION_TEMPLATE = """\
 :do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
 :do {{ /interface wireguard peers remove [find interface=wg0] }} on-error={{}}
 /interface wireguard peers add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
-:do {{ /ip address add address={wg_tunnel_ip}/32 interface=wg0 }} on-error={{}}
+:do {{ /ip address remove [find interface=wg0] }} on-error={{}}
+/ip address add address={wg_tunnel_ip}/32 interface=wg0
+:do {{ /ip route remove [find comment="SabiWiFi WG"] }} on-error={{}}
+/ip route add dst-address=10.99.0.0/16 gateway=wg0 comment="SabiWiFi WG"
 
 # --- 5. Download hotspot redirect HTML files ---
 :do {{ /tool fetch url="https://{platform_domain}/static/hotspot/login.html" dst-path=hotspot/login.html mode=https check-certificate=no }} on-error={{}}
@@ -70,6 +75,7 @@ PROVISION_TEMPLATE = """\
 
 # --- 10. Firewall ---
 :do {{ /ip firewall filter add chain=input protocol=udp dst-port=51820 action=accept comment="SabiWiFi WireGuard" }} on-error={{}}
+:do {{ /ip firewall filter add chain=input in-interface=wg0 action=accept comment="SabiWiFi WG management" }} on-error={{}}
 :do {{ /ip firewall filter add chain=input connection-state=established,related action=accept comment="SabiWiFi established" }} on-error={{}}
 :do {{ /ip firewall filter add chain=forward connection-state=established,related action=accept comment="SabiWiFi forward" }} on-error={{}}
 :do {{ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="SabiWiFi NAT" }} on-error={{}}
