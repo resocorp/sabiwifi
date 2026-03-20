@@ -62,7 +62,7 @@ PROVISION_TEMPLATE = """\
 
 # --- 8. Hotspot server profile + server (RouterOS v7 syntax) ---
 /ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
-/ip hotspot user-profile set default keepalive-timeout=2d
+/ip/hotspot/user/profile/set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 
 # --- 9. Assign WiFi interface to hotspot bridge ---
