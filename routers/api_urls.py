@@ -10,5 +10,7 @@ urlpatterns = [
     path('bootstrap/<str:serial>/', views.router_bootstrap, name='api-router-bootstrap'),
     path('', views.router_list, name='api-router-list'),
     path('<int:pk>/status/', views.router_status, name='api-router-status'),
+    path('<int:pk>/stats/', views.router_stats, name='api-router-stats'),
     path('<int:pk>/ssid/', views.router_ssid, name='api-router-ssid'),
+    path('<int:pk>/wifi/', views.router_wifi, name='api-router-wifi'),
 ]

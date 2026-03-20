@@ -14,21 +14,99 @@
 
 <div class="space-y-3">
     {% for router in routers %}
-    <div class="bg-white rounded-xl border border-border p-4">
-        <div class="flex items-start justify-between mb-2">
-            <div class="flex items-center gap-2">
-                <span class="text-lg">📡</span>
-                <h3 class="font-heading font-semibold">{{ router.location_name|default:"Router" }}</h3>
+    <div class="bg-white rounded-xl border border-border overflow-hidden" id="router-card-{{ router.pk }}">
+        <!-- Card Header (always visible, clickable to expand) -->
+        <div class="p-4 cursor-pointer hover:bg-gray-50 transition"
+             onclick="toggleRouter({{ router.pk }})">
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📡</span>
+                    <h3 class="font-heading font-semibold">{{ router.location_name|default:"Router" }}</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1 text-xs font-medium
+                        {% if router.status == 'online' %}text-accent
+                        {% elif router.status == 'offline' %}text-danger
+                        {% elif router.status == 'pending_provision' %}text-warning
+                        {% else %}text-text-secondary{% endif %}">
+                        <span class="w-1.5 h-1.5 rounded-full
+                            {% if router.status == 'online' %}bg-accent
+                            {% elif router.status == 'offline' %}bg-danger
+                            {% elif router.status == 'pending_provision' %}bg-warning
+                            {% else %}bg-gray-300{% endif %}"></span>
+                        {{ router.get_status_display }}
+                    </span>
+                    <svg id="chevron-{{ router.pk }}" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
             </div>
-            <span class="inline-flex items-center gap-1 text-xs font-medium {% if router.status == 'online' %}text-accent{% elif router.status == 'offline' %}text-danger{% elif router.status == 'pending_provision' %}text-warning{% else %}text-text-secondary{% endif %}">
-                <span class="w-1.5 h-1.5 rounded-full {% if router.status == 'online' %}bg-accent{% elif router.status == 'offline' %}bg-danger{% elif router.status == 'pending_provision' %}bg-warning{% else %}bg-gray-300{% endif %}"></span>
-                {{ router.get_status_display }}
-            </span>
+            <p class="text-sm text-text-secondary font-mono">Serial: {{ router.serial_number }}</p>
+            {% if router.last_seen %}
+            <p class="text-sm text-text-secondary">Last seen: {{ router.last_seen|timesince }} ago</p>
+            {% endif %}
         </div>
-        <p class="text-sm text-text-secondary font-mono">Serial: {{ router.serial_number }}</p>
-        {% if router.last_seen %}
-        <p class="text-sm text-text-secondary">Last seen: {{ router.last_seen|timesince }} ago</p>
-        {% endif %}
+
+        <!-- Expandable Detail Panel -->
+        <div id="detail-{{ router.pk }}" class="hidden border-t border-border">
+            <!-- Loading state -->
+            <div id="loading-{{ router.pk }}" class="p-6 text-center">
+                <div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
+                <p class="text-sm text-text-secondary mt-2">Loading router stats...</p>
+            </div>
+
+            <!-- Stats content (populated by JS) -->
+            <div id="stats-{{ router.pk }}" class="hidden">
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-text-secondary mb-1">CPU</p>
+                        <p class="text-lg font-bold" id="cpu-{{ router.pk }}">--%</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-text-secondary mb-1">Memory</p>
+                        <p class="text-lg font-bold" id="mem-{{ router.pk }}">--%</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-text-secondary mb-1">Uptime</p>
+                        <p class="text-sm font-semibold" id="uptime-{{ router.pk }}">--</p>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-text-secondary mb-1">Devices</p>
+                        <p class="text-lg font-bold" id="devices-{{ router.pk }}">--</p>
+                    </div>
+                </div>
+
+                <!-- WAN Traffic -->
+                <div class="px-4 pb-3">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-xs text-text-secondary mb-2 font-medium">WAN Traffic (ether1)</p>
+                        <div class="flex justify-between text-sm">
+                            <span>
+                                <span class="text-accent font-medium">&#8595;</span>
+                                <span id="wan-rx-{{ router.pk }}">--</span>
+                            </span>
+                            <span>
+                                <span class="text-primary font-medium">&#8593;</span>
+                                <span id="wan-tx-{{ router.pk }}">--</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WiFi Interfaces -->
+                <div class="px-4 pb-4" id="wifi-section-{{ router.pk }}">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Error state -->
+            <div id="error-{{ router.pk }}" class="hidden p-6 text-center">
+                <p class="text-sm text-danger" id="error-msg-{{ router.pk }}">Could not reach router.</p>
+                <button onclick="fetchStats({{ router.pk }})"
+                        class="mt-2 text-xs text-primary hover:underline">Retry</button>
+            </div>
+        </div>
     </div>
     {% empty %}
     <div class="bg-white rounded-xl border border-border p-8 text-center">
@@ -39,6 +117,203 @@
     </div>
     {% endfor %}
 </div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+const expanded = {};
+
+function toggleRouter(pk) {
+    const detail = document.getElementById('detail-' + pk);
+    const chevron = document.getElementById('chevron-' + pk);
+
+    if (expanded[pk]) {
+        detail.classList.add('hidden');
+        chevron.style.transform = '';
+        expanded[pk] = false;
+    } else {
+        detail.classList.remove('hidden');
+        chevron.style.transform = 'rotate(180deg)';
+        expanded[pk] = true;
+        fetchStats(pk);
+    }
+}
+
+function fetchStats(pk) {
+    const loading = document.getElementById('loading-' + pk);
+    const stats = document.getElementById('stats-' + pk);
+    const error = document.getElementById('error-' + pk);
+
+    loading.classList.remove('hidden');
+    stats.classList.add('hidden');
+    error.classList.add('hidden');
+
+    fetch('/api/routers/' + pk + '/stats/', {
+        headers: {'X-CSRFToken': CSRF},
+        credentials: 'same-origin',
+    })
+    .then(r => {
+        if (!r.ok) throw new Error(r.statusText);
+        return r.json();
+    })
+    .then(data => {
+        loading.classList.add('hidden');
+        stats.classList.remove('hidden');
+        renderStats(pk, data);
+    })
+    .catch(err => {
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        document.getElementById('error-msg-' + pk).textContent =
+            'Could not reach router: ' + err.message;
+    });
+}
+
+function renderStats(pk, data) {
+    // CPU & Memory
+    document.getElementById('cpu-' + pk).textContent = (data.cpu_load || 0) + '%';
+    document.getElementById('mem-' + pk).textContent = (data.memory_pct || 0) + '%';
+
+    // Color code CPU/Memory
+    const cpuEl = document.getElementById('cpu-' + pk);
+    const memEl = document.getElementById('mem-' + pk);
+    cpuEl.className = 'text-lg font-bold ' + (data.cpu_load > 80 ? 'text-danger' : data.cpu_load > 50 ? 'text-warning' : 'text-accent');
+    memEl.className = 'text-lg font-bold ' + (data.memory_pct > 85 ? 'text-danger' : data.memory_pct > 60 ? 'text-warning' : 'text-accent');
+
+    // Uptime
+    document.getElementById('uptime-' + pk).textContent = data.uptime || '--';
+
+    // Devices
+    document.getElementById('devices-' + pk).textContent = data.connected_devices || 0;
+
+    // WAN Traffic
+    document.getElementById('wan-rx-' + pk).textContent = data.wan_rx || '0 B';
+    document.getElementById('wan-tx-' + pk).textContent = data.wan_tx || '0 B';
+
+    // WiFi interfaces
+    renderWifi(pk, data.wifi || []);
+}
+
+function renderWifi(pk, wifiList) {
+    const container = document.getElementById('wifi-section-' + pk);
+    if (!wifiList.length) {
+        container.innerHTML = '<p class="text-sm text-text-secondary">No WiFi interfaces found.</p>';
+        return;
+    }
+
+    let html = '<p class="text-xs text-text-secondary font-medium mb-2">WiFi Interfaces</p>';
+
+    wifiList.forEach((wifi, idx) => {
+        const statusDot = wifi.running
+            ? '<span class="w-1.5 h-1.5 rounded-full bg-accent"></span>'
+            : '<span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>';
+        const statusText = wifi.running ? 'Active' : (wifi.enabled ? 'Enabled' : 'Disabled');
+        const lockIcon = wifi.has_password ? '&#128274;' : '&#128275;';
+        const secText = wifi.has_password ? 'WPA2/3' : 'Open';
+
+        html += `
+        <div class="bg-gray-50 rounded-lg p-3 mb-2">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    ${statusDot}
+                    <span class="font-medium text-sm">${wifi.name}</span>
+                    <span class="text-xs text-text-secondary">${wifi.band || ''}</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-text-secondary">
+                    <span>${lockIcon} ${secText}</span>
+                    <span>${wifi.clients || 0} client${wifi.clients !== 1 ? 's' : ''}</span>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1">
+                    <label class="text-xs text-text-secondary">SSID</label>
+                    <input type="text" id="ssid-${pk}-${wifi.name}" value="${wifi.ssid || ''}"
+                           class="w-full px-2 py-1.5 text-sm border border-border rounded-lg bg-white"
+                           placeholder="Network name" maxlength="32">
+                </div>
+                <div class="flex-1">
+                    <label class="text-xs text-text-secondary">Password</label>
+                    <input type="text" id="pass-${pk}-${wifi.name}" value=""
+                           class="w-full px-2 py-1.5 text-sm border border-border rounded-lg bg-white"
+                           placeholder="${wifi.has_password ? 'Change password' : 'Set password (min 8 chars)'}"
+                           minlength="8" maxlength="63">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="saveWifi(${pk}, '${wifi.name}')"
+                            id="save-btn-${pk}-${wifi.name}"
+                            class="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary-dark transition whitespace-nowrap">
+                        Save
+                    </button>
+                </div>
+            </div>
+            <p id="wifi-msg-${pk}-${wifi.name}" class="text-xs mt-1 hidden"></p>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+function saveWifi(pk, ifaceName) {
+    const ssidEl = document.getElementById('ssid-' + pk + '-' + ifaceName);
+    const passEl = document.getElementById('pass-' + pk + '-' + ifaceName);
+    const btn = document.getElementById('save-btn-' + pk + '-' + ifaceName);
+    const msg = document.getElementById('wifi-msg-' + pk + '-' + ifaceName);
+
+    const ssid = ssidEl.value.trim();
+    const password = passEl.value;
+
+    if (!ssid && !password) {
+        showMsg(msg, 'Enter SSID or password to update.', 'text-warning');
+        return;
+    }
+
+    if (password && password.length < 8) {
+        showMsg(msg, 'Password must be at least 8 characters.', 'text-danger');
+        return;
+    }
+
+    const body = {interface: ifaceName};
+    if (ssid) body.ssid = ssid;
+    if (password) body.password = password;
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    fetch('/api/routers/' + pk + '/wifi/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (ok) {
+            showMsg(msg, data.status || 'Updated!', 'text-accent');
+            passEl.value = '';
+            // Refresh stats to show new SSID
+            setTimeout(() => fetchStats(pk), 500);
+        } else {
+            showMsg(msg, data.error || 'Update failed.', 'text-danger');
+        }
+    })
+    .catch(err => {
+        showMsg(msg, 'Network error: ' + err.message, 'text-danger');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+    });
+}
+
+function showMsg(el, text, cls) {
+    el.textContent = text;
+    el.className = 'text-xs mt-1 ' + cls;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 5000);
+}
+</script>
 
 {% endwith %}
 {% endblock %}

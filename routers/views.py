@@ -302,3 +302,88 @@ def router_ssid(request, pk):
 
     logger.info(f"SSID updated for router {router.serial_number}: {new_ssid}")
     return Response({'status': f'SSID updated to "{new_ssid}".'})
+
+
+@api_view(['GET'])
+def router_stats(request, pk):
+    """
+    Fetch live stats from a router via REST API over WireGuard.
+    Returns: CPU, memory, uptime, WAN traffic, connected devices, WiFi info.
+    Called via AJAX from the dashboard.
+    """
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    if router.status not in ('online', 'provisioned'):
+        return Response({
+            'error': 'Router is not online.',
+            'status': router.status,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    from routers.routeros_utils import get_router_stats as fetch_stats, RouterOSError
+    try:
+        stats = fetch_stats(router)
+        stats['serial_number'] = router.serial_number
+        stats['router_status'] = router.status
+        return Response(stats)
+    except RouterOSError as e:
+        logger.error(f"Stats fetch failed for router {router.serial_number}: {e}")
+        return Response(
+            {'error': f'Cannot reach router: {e}'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+
+@api_view(['POST'])
+def router_wifi(request, pk):
+    """
+    Update WiFi settings (SSID and/or password) on a specific interface.
+    Body: { "ssid": "...", "password": "...", "interface": "wifi1" }
+    Password empty string = open network (remove WPA).
+    """
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    if router.status != 'online':
+        return Response(
+            {'error': 'Router is not online.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    from routers.routeros_utils import set_wifi_ssid, set_wifi_password, RouterOSError
+
+    iface = request.data.get('interface', 'wifi1')
+    new_ssid = request.data.get('ssid', '').strip()
+    new_password = request.data.get('password', None)  # None = don't change
+
+    results = []
+
+    if new_ssid:
+        if len(new_ssid) > 32:
+            return Response({'error': 'SSID must be 1-32 characters.'}, status=400)
+        try:
+            set_wifi_ssid(router, new_ssid, iface)
+            results.append(f'SSID updated to "{new_ssid}"')
+        except RouterOSError as e:
+            return Response({'error': f'SSID update failed: {e}'}, status=502)
+
+    if new_password is not None:
+        try:
+            set_wifi_password(router, new_password, iface)
+            if new_password:
+                results.append('WiFi password updated')
+            else:
+                results.append('WiFi password removed (open network)')
+        except RouterOSError as e:
+            return Response({'error': f'Password update failed: {e}'}, status=502)
+
+    if not results:
+        return Response({'error': 'No changes requested.'}, status=400)
+
+    return Response({'status': '. '.join(results) + '.'})
