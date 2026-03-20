@@ -123,6 +123,7 @@ def portal_signup(request):
     return Response({
         'message': 'Verification code sent to your phone.',
         'phone': phone,
+        'reseller_id': reseller.id,
     })
 
 

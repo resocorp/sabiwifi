@@ -14,23 +14,26 @@
         h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
         .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 24px; }
         label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-        input[type="tel"], input[type="email"] { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
+        input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
         input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        .otp-input { font-size: 18px; text-align: center; letter-spacing: 8px; }
+        .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
         .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
         .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; margin-top: 8px; }
-        .link { color: {{ branding.primary_color|default:"#0052CC" }}; text-decoration: none; font-size: 13px; }
-        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
-        .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+        .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
         .text-center { text-align: center; }
-        .mt-3 { margin-top: 12px; }
         .divider { text-align: center; color: #6B7280; font-size: 12px; margin: 16px 0; position: relative; }
         .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 1px; background: #E5E7EB; }
         .divider::before { left: 0; }
         .divider::after { right: 0; }
-        #otp-section { display: none; }
-        #otp-section input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 18px; text-align: center; letter-spacing: 8px; outline: none; margin-bottom: 16px; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .steps { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+        .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #E5E7EB; }
+        .step-dot.active { background: {{ branding.primary_color|default:"#0052CC" }}; }
     </style>
 </head>
 <body>
@@ -41,26 +44,40 @@
             {% endif %}
 
             <h1>Create Account</h1>
-            <p class="subtitle">Sign up to get WiFi access</p>
+
+            <div class="steps">
+                <div class="step-dot active" id="dot-1"></div>
+                <div class="step-dot" id="dot-2"></div>
+                <div class="step-dot" id="dot-3"></div>
+            </div>
 
             <div id="msg"></div>
 
             <!-- Step 1: Phone + Email -->
-            <div id="signup-section">
+            <div id="step-1" class="step active">
+                <p class="subtitle">Enter your details to get started</p>
                 <label>Phone Number</label>
                 <input type="tel" id="phone" placeholder="+234" required>
-
                 <label>Email</label>
                 <input type="email" id="email" placeholder="you@example.com" required>
-
-                <button type="button" id="signup-btn" class="btn btn-primary" onclick="doSignup()">Sign Up</button>
+                <button type="button" id="signup-btn" class="btn btn-primary" onclick="doSignup()">Send Verification Code</button>
             </div>
 
             <!-- Step 2: OTP Verification -->
-            <div id="otp-section">
+            <div id="step-2" class="step">
                 <p class="subtitle">Enter the 6-digit code sent to your phone</p>
-                <input type="text" id="otp" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="------">
-                <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify</button>
+                <input type="text" id="otp" class="otp-input" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="------">
+                <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify Code</button>
+            </div>
+
+            <!-- Step 3: Set PIN -->
+            <div id="step-3" class="step">
+                <p class="subtitle">Choose a 4-digit PIN for WiFi login</p>
+                <label>WiFi PIN</label>
+                <input type="password" id="pin" class="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="----">
+                <label>Confirm PIN</label>
+                <input type="password" id="pin-confirm" class="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="----">
+                <button type="button" id="pin-btn" class="btn btn-primary" onclick="doSetPin()">Create Account</button>
             </div>
 
             <div class="divider">or</div>
@@ -71,6 +88,8 @@
 
     <script>
     const serial = '{{ serial }}';
+    let resellerId = '';
+    let verifyToken = '';
 
     function showMsg(text, type) {
         const el = document.getElementById('msg');
@@ -79,18 +98,30 @@
         el.style.display = 'block';
     }
 
+    function hideMsg() {
+        document.getElementById('msg').style.display = 'none';
+    }
+
+    function goToStep(n) {
+        for (let i = 1; i <= 3; i++) {
+            document.getElementById('step-' + i).classList.remove('active');
+            document.getElementById('dot-' + i).classList.remove('active');
+        }
+        document.getElementById('step-' + n).classList.add('active');
+        for (let i = 1; i <= n; i++) {
+            document.getElementById('dot-' + i).classList.add('active');
+        }
+    }
+
     function doSignup() {
         const phone = document.getElementById('phone').value.trim();
         const email = document.getElementById('email').value.trim();
         const btn = document.getElementById('signup-btn');
 
-        if (!phone || !email) {
-            showMsg('Please enter phone number and email.', 'error');
-            return;
-        }
-
+        if (!phone || !email) { showMsg('Please enter phone number and email.', 'error'); return; }
+        hideMsg();
         btn.disabled = true;
-        btn.textContent = 'Sending OTP...';
+        btn.textContent = 'Sending...';
 
         fetch('/api/portal/signup/', {
             method: 'POST',
@@ -100,58 +131,78 @@
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
             btn.disabled = false;
-            btn.textContent = 'Sign Up';
+            btn.textContent = 'Send Verification Code';
             if (ok) {
-                showMsg('OTP sent! Check your phone.', 'success');
-                document.getElementById('signup-section').style.display = 'none';
-                document.getElementById('otp-section').style.display = 'block';
+                resellerId = data.reseller_id;
+                showMsg('Code sent! Check your phone.', 'success');
+                goToStep(2);
             } else {
                 showMsg(data.error || 'Signup failed.', 'error');
             }
         })
-        .catch(err => {
-            btn.disabled = false;
-            btn.textContent = 'Sign Up';
-            showMsg('Network error. Please try again.', 'error');
-        });
+        .catch(() => { btn.disabled = false; btn.textContent = 'Send Verification Code'; showMsg('Network error.', 'error'); });
     }
 
     function doVerify() {
         const phone = document.getElementById('phone').value.trim();
-        const otp = document.getElementById('otp').value.trim();
+        const code = document.getElementById('otp').value.trim();
         const btn = document.getElementById('verify-btn');
 
-        if (!otp || otp.length !== 6) {
-            showMsg('Please enter the 6-digit code.', 'error');
-            return;
-        }
-
+        if (!code || code.length !== 6) { showMsg('Please enter the 6-digit code.', 'error'); return; }
+        hideMsg();
         btn.disabled = true;
         btn.textContent = 'Verifying...';
 
         fetch('/api/portal/verify/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, otp: otp, serial: serial}),
+            body: JSON.stringify({phone: phone, code: code, reseller_id: resellerId}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
             btn.disabled = false;
-            btn.textContent = 'Verify';
+            btn.textContent = 'Verify Code';
+            if (ok) {
+                verifyToken = data.verify_token;
+                showMsg('Phone verified! Set your WiFi PIN.', 'success');
+                goToStep(3);
+            } else {
+                showMsg(data.error || 'Verification failed.', 'error');
+            }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Verify Code'; showMsg('Network error.', 'error'); });
+    }
+
+    function doSetPin() {
+        const pin = document.getElementById('pin').value.trim();
+        const pinConfirm = document.getElementById('pin-confirm').value.trim();
+        const btn = document.getElementById('pin-btn');
+
+        if (!pin || pin.length !== 4) { showMsg('PIN must be 4 digits.', 'error'); return; }
+        if (pin !== pinConfirm) { showMsg('PINs do not match.', 'error'); return; }
+        hideMsg();
+        btn.disabled = true;
+        btn.textContent = 'Creating account...';
+
+        fetch('/api/portal/set-pin/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({verify_token: verifyToken, pin: pin, pin_confirm: pinConfirm}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
             if (ok) {
                 showMsg('Account created! Redirecting to login...', 'success');
                 setTimeout(() => {
                     window.location.href = '/portal/?r=' + serial + '&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}';
                 }, 1500);
             } else {
-                showMsg(data.error || 'Verification failed.', 'error');
+                showMsg(data.error || 'Failed to create account.', 'error');
             }
         })
-        .catch(err => {
-            btn.disabled = false;
-            btn.textContent = 'Verify';
-            showMsg('Network error. Please try again.', 'error');
-        });
+        .catch(() => { btn.disabled = false; btn.textContent = 'Create Account'; showMsg('Network error.', 'error'); });
     }
     </script>
 </body>
