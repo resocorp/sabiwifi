@@ -115,24 +115,45 @@ def payment_initialize(request):
     })
 
 
+def _get_secret_key():
+    """Return Paystack secret key from settings or PlatformSettings singleton."""
+    key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+    if not key:
+        from operator_panel.models import PlatformSettings
+        key = PlatformSettings.load().paystack_secret_key
+    return key
+
+
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def payment_webhook(request):
     """
     Paystack webhook handler (charge.success).
-    Verifies HMAC SHA-512 signature, activates plan.
+    Verifies HMAC SHA-512 signature, activates plan for existing subscribers.
+
+    Signup-originated payments (sw_* references from portal_initiate_payment)
+    are verified inline by portal_set_pin and won't have a Payment row yet —
+    those return 'not_applicable' and are safely ignored.
     """
-    # Verify signature
+    secret_key = _get_secret_key()
     signature = request.headers.get('X-Paystack-Signature', '')
-    if settings.PAYSTACK_SECRET_KEY and signature:
+
+    if signature:
+        if not secret_key:
+            logger.error('Paystack webhook received but secret key not configured.')
+            return Response({'error': 'Webhook not configured.'}, status=503)
         computed = hmac.new(
-            settings.PAYSTACK_SECRET_KEY.encode('utf-8'),
+            secret_key.encode('utf-8'),
             request.body,
             hashlib.sha512,
         ).hexdigest()
         if not hmac.compare_digest(computed, signature):
-            logger.warning("Invalid Paystack webhook signature")
+            logger.warning('Invalid Paystack webhook signature')
             return Response({'error': 'Invalid signature.'}, status=400)
+    elif secret_key:
+        logger.warning('Paystack webhook received without X-Paystack-Signature header')
+        return Response({'error': 'Missing signature.'}, status=400)
 
     try:
         payload = json.loads(request.body)
@@ -149,17 +170,16 @@ def payment_webhook(request):
     if not reference:
         return Response({'error': 'Missing reference.'}, status=400)
 
-    # Idempotency check
     try:
         payment = Payment.objects.get(paystack_reference=reference)
     except Payment.DoesNotExist:
-        logger.warning(f"Webhook for unknown reference: {reference}")
-        return Response({'status': 'unknown_reference'})
+        # Signup-path payments are verified inline and have no Payment row yet.
+        logger.info(f'Webhook for reference not in DB (likely signup-path): {reference}')
+        return Response({'status': 'not_applicable'})
 
     if payment.paystack_status == 'success':
         return Response({'status': 'already_processed'})
 
-    # Activate the plan
     _activate_payment(payment, data)
 
     return Response({'status': 'ok'})
