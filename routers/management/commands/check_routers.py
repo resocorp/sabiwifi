@@ -1,64 +1,96 @@
 """
 Management command: check_routers
-Runs every 5 minutes via cron. Pings routers via WireGuard tunnel,
-updates status to online/offline, tracks last_seen.
+
+Runs every 2 minutes via systemd timer. Determines router health by two signals:
+  1. ICMP ping to WireGuard tunnel IP (hard connectivity check)
+  2. Heartbeat staleness — if last_seen is older than HEARTBEAT_STALE_SECONDS
+     and the router was previously online, treat it as offline.
+
+When status changes:
+  - online/provisioned → offline: set offline_since, write RouterHealthLog
+  - offline/provisioned → online: clear offline_since, write RouterHealthLog
+
+Routers in 'available' or 'pending_provision' are skipped.
 """
 import logging
 import subprocess
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from routers.models import Router
+
+from routers.models import Router, RouterHealthLog
 
 logger = logging.getLogger(__name__)
 
+# If last_seen is older than this, treat the router as offline (missed heartbeats)
+HEARTBEAT_STALE_SECONDS = 600  # 10 minutes
+
 
 class Command(BaseCommand):
-    help = 'Check router health by pinging WireGuard tunnel IPs.'
+    help = 'Check router health and update online/offline status.'
 
     def handle(self, *args, **options):
-        routers = Router.objects.filter(
+        now = timezone.now()
+
+        routers = list(Router.objects.filter(
             reseller__isnull=False,
             status__in=['online', 'offline', 'provisioned'],
             wg_tunnel_ip__isnull=False,
-        )
+        ))
 
         online_count = 0
         offline_count = 0
-        changed = []
+        log_entries = []
 
         for router in routers:
-            reachable = self._ping(router.wg_tunnel_ip)
             old_status = router.status
+            reachable = self._ping(str(router.wg_tunnel_ip))
 
-            if reachable:
+            # A router that has stopped sending heartbeats is unhealthy even
+            # if the WireGuard tunnel is still up (e.g. hotspot process crashed).
+            heartbeat_stale = (
+                router.last_seen is not None
+                and (now - router.last_seen).total_seconds() > HEARTBEAT_STALE_SECONDS
+                and old_status == 'online'
+            )
+
+            if reachable and not heartbeat_stale:
                 router.status = 'online'
-                router.last_seen = timezone.now()
+                router.last_seen = now
+                router.offline_since = None
                 online_count += 1
             else:
-                if old_status == 'online':
-                    router.status = 'offline'
+                router.status = 'offline'
+                if not router.offline_since:
+                    router.offline_since = now
                 offline_count += 1
 
+            router.save(update_fields=['status', 'last_seen', 'offline_since'])
+
             if router.status != old_status:
-                changed.append((router.serial_number, old_status, router.status))
+                log_entries.append(RouterHealthLog(router=router, event=router.status))
+                reason = 'heartbeat stale' if heartbeat_stale else ('ping OK' if reachable else 'no ping')
+                logger.info(
+                    f'Router {router.serial_number}: {old_status} → {router.status} ({reason})'
+                )
 
-            router.save(update_fields=['status', 'last_seen'])
+        if log_entries:
+            RouterHealthLog.objects.bulk_create(log_entries)
 
-        for serial, old, new in changed:
-            logger.info(f"Router {serial}: {old} → {new}")
-
-        self.stdout.write(
-            f"Router check: {online_count} online, {offline_count} offline, "
-            f"{len(changed)} changed."
+        msg = (
+            f'Router check: {online_count} online, {offline_count} offline, '
+            f'{len(log_entries)} status change(s).'
         )
+        self.stdout.write(msg)
+        logger.info(msg)
 
     def _ping(self, ip):
-        """Ping an IP address. Returns True if reachable."""
+        """Single ICMP ping. Returns True if reachable within 2 seconds."""
         try:
             result = subprocess.run(
-                ['ping', '-c', '1', '-W', '2', str(ip)],
+                ['ping', '-c', '1', '-W', '2', ip],
                 capture_output=True, timeout=5,
             )
             return result.returncode == 0
-        except (subprocess.TimeoutExpired, Exception):
+        except (subprocess.TimeoutExpired, OSError):
             return False

@@ -192,18 +192,27 @@ def router_provision(request, serial):
 def router_heartbeat(request, serial):
     """
     Lightweight heartbeat endpoint. Called every 2 min by provisioned routers.
-    Updates last_seen and sets status to online.
+    Updates last_seen, clears offline_since, logs recovery if coming back online.
     """
     serial = serial.strip().upper()
     from django.utils import timezone
+    from routers.models import RouterHealthLog
 
-    updated = Router.objects.filter(serial_number=serial).update(
-        last_seen=timezone.now(),
-        status='online',
-    )
-    if updated:
-        return HttpResponse('# ok', content_type='text/plain')
-    return HttpResponse('# unknown', content_type='text/plain')
+    router = Router.objects.filter(serial_number=serial).first()
+    if not router:
+        return HttpResponse('# unknown', content_type='text/plain')
+
+    was_offline = router.status == 'offline'
+    router.last_seen = timezone.now()
+    router.status = 'online'
+    router.offline_since = None
+    router.save(update_fields=['last_seen', 'status', 'offline_since'])
+
+    if was_offline:
+        RouterHealthLog.objects.create(router=router, event='online')
+        logger.info(f'Router {serial} recovered via heartbeat')
+
+    return HttpResponse('# ok', content_type='text/plain')
 
 
 @api_view(['GET'])
@@ -396,3 +405,26 @@ def router_wifi(request, pk):
         return Response({'error': 'No changes requested.'}, status=400)
 
     return Response({'status': '. '.join(results) + '.'})
+
+
+@api_view(['GET'])
+def router_health_log(request, pk):
+    """Return last 20 health events (online/offline transitions) for a router."""
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    from routers.models import RouterHealthLog
+    logs = RouterHealthLog.objects.filter(router=router).order_by('-created_at')[:20]
+    data = [
+        {
+            'event': log.event,
+            'label': log.get_event_display(),
+            'timestamp': log.created_at.strftime('%d %b %Y %H:%M'),
+            'iso': log.created_at.isoformat(),
+        }
+        for log in logs
+    ]
+    return Response({'logs': data})
