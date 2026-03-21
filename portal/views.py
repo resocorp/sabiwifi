@@ -14,7 +14,7 @@ from rest_framework import status
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
-from radius.utils import assign_subscriber_to_plan, update_radcheck_password, disconnect_subscriber_sessions
+from radius.utils import assign_subscriber_to_plan, update_radcheck_password, disconnect_subscriber_sessions, remove_subscriber_from_radius
 
 logger = logging.getLogger(__name__)
 
@@ -669,8 +669,10 @@ def portal_login_api(request):
             assign_subscriber_to_plan(subscriber, plan)
             logger.info(f"Auto-renewed trial for {subscriber.phone}")
         else:
-            # Expired paid plan — still write radcheck so RADIUS accepts
-            update_radcheck_password(subscriber)
+            # No active plan — remove from RADIUS so the hotspot auth fails.
+            # The subscriber can still use /account to top up; has_active_plan=False
+            # in the response tells the frontend to show the "no plan" notice.
+            remove_subscriber_from_radius(subscriber)
 
     # Evict any stale / still-open sessions on the router so MikroTik's
     # Simultaneous-Use check doesn't block the new connection attempt.
