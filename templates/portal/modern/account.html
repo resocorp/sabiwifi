@@ -126,6 +126,7 @@
                 </div>
                 <button class="btn btn-outline mt-8" onclick="showSection('change-pin-section')">Change WiFi PIN</button>
                 <button class="btn btn-outline mt-8" onclick="loadPlans()">Change Plan</button>
+                <button class="btn btn-danger mt-8" id="disconnect-btn" onclick="doDisconnectAll()">📵 Disconnect All Devices</button>
             </div>
 
             <!-- Payment History -->
@@ -393,6 +394,39 @@
             }
         })
         .catch(() => showMsg('reset-msg', 'Network error.', 'error'));
+    }
+
+    // --- Disconnect all devices ---
+    function doDisconnectAll() {
+        if (!confirm('This will disconnect all devices currently using your account from the WiFi. Continue?')) return;
+        const btn = document.getElementById('disconnect-btn');
+        btn.disabled = true;
+        btn.textContent = 'Disconnecting…';
+
+        fetch('/api/portal/disconnect/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Auth-Token': authToken},
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false;
+            btn.textContent = '📵 Disconnect All Devices';
+            if (ok) {
+                // Update stored token (rotated server-side)
+                if (data.auth_token) {
+                    authToken = data.auth_token;
+                    localStorage.setItem('sabiwifi_token', authToken);
+                }
+                showMsg('acct-msg', 'All devices have been disconnected from the WiFi.', 'success');
+            } else {
+                showMsg('acct-msg', data.error || 'Could not disconnect devices.', 'error');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = '📵 Disconnect All Devices';
+            showMsg('acct-msg', 'Network error. Please try again.', 'error');
+        });
     }
 
     // --- Logout ---

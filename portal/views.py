@@ -1000,7 +1000,11 @@ def portal_change_plan(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def portal_disconnect(request):
-    """Force disconnect current session."""
+    """
+    Disconnect all active MikroTik sessions for this subscriber.
+    Sends CoA Disconnect-Message to every router with an open session,
+    then rotates the auth token so existing RADIUS credentials stop working.
+    """
     auth_token = request.headers.get('X-Auth-Token', '')
 
     if not auth_token:
@@ -1011,11 +1015,17 @@ def portal_disconnect(request):
     except Subscriber.DoesNotExist:
         return Response({'error': 'Invalid session.'}, status=401)
 
-    # Regenerate token to invalidate current session
+    # Send CoA Disconnect-Message to all open sessions on the router(s)
+    disconnect_subscriber_sessions(subscriber)
+
+    # Rotate auth token so existing RADIUS credentials stop working
     subscriber.generate_auth_token()
     subscriber.save()
 
-    # Update RADIUS
+    # Write new (now-invalid-for-hotspot) token to radcheck
     update_radcheck_password(subscriber)
 
-    return Response({'message': 'Session disconnected.'})
+    return Response({
+        'message': 'All devices disconnected.',
+        'auth_token': subscriber.auth_token,  # updated token for continued account access
+    })
