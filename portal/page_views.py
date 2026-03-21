@@ -1,6 +1,7 @@
 """Server-rendered captive portal and subscriber self-service pages."""
 from django.shortcuts import render
 from routers.models import Router
+from accounts.models import Country
 
 
 def _get_reseller_from_serial(serial):
@@ -62,6 +63,8 @@ def portal_signup(request):
     branding = reseller.branding if reseller else {}
     template_name = branding.get('template', 'modern')
 
+    countries = Country.objects.filter(is_active=True).order_by('sort_order', 'name')
+
     return render(request, f'portal/{template_name}/signup.html', {
         'reseller': reseller,
         'branding': branding,
@@ -69,6 +72,7 @@ def portal_signup(request):
         'mac': mac,
         'link_login': link_login,
         'link_orig': link_orig,
+        'countries': countries,
     })
 
 

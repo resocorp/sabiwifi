@@ -14,8 +14,11 @@
         h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
         .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 24px; }
         label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-        input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
-        input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        input, select { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; background: #fff; }
+        input:focus, select:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        .phone-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .phone-row select { width: auto; min-width: 110px; flex-shrink: 0; margin-bottom: 0; }
+        .phone-row input { flex: 1; margin-bottom: 0; }
         .otp-input { font-size: 18px; text-align: center; letter-spacing: 8px; }
         .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
         .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
@@ -60,8 +63,20 @@
             <!-- Step 1: Phone + Email -->
             <div id="step-1" class="step active">
                 <p class="subtitle">Enter your details to get started</p>
-                <label>Phone Number</label>
-                <input type="tel" id="phone" placeholder="+234" required>
+                <label>Country &amp; Phone Number</label>
+                <div class="phone-row">
+                    <select id="country">
+                        {% for c in countries %}
+                        <option value="{{ c.code }}" data-prefix="{{ c.local_prefix }}" data-length="{{ c.local_phone_length }}" {% if c.code == 'NG' %}selected{% endif %}>
+                            {{ c.flag_emoji }} {{ c.dial_code }}
+                        </option>
+                        {% endfor %}
+                        {% if not countries %}
+                        <option value="NG" data-prefix="0" data-length="11" selected>🇳🇬 +234</option>
+                        {% endif %}
+                    </select>
+                    <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
+                </div>
                 <label>Email</label>
                 <input type="email" id="email" placeholder="you@example.com" required>
                 <button type="button" id="signup-btn" class="btn btn-primary" onclick="doSignup()">Send Verification Code</button>
@@ -98,8 +113,15 @@
     const serial = '{{ serial|escapejs }}';
     let resellerId = '';
     let verifyToken = '';
+    let selectedCountry = 'NG';
     let cooldownTimer = null;
     let cooldownSecs = 0;
+
+    document.getElementById('country').addEventListener('change', function() {
+        selectedCountry = this.value;
+        const prefix = this.options[this.selectedIndex].dataset.prefix || '0';
+        document.getElementById('phone').placeholder = prefix + '8066...';
+    });
 
     function showMsg(text, type) {
         const el = document.getElementById('msg');
@@ -171,7 +193,7 @@
         fetch('/api/portal/signup/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, email: email, serial: serial}),
+            body: JSON.stringify({phone: phone, email: email, serial: serial, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
@@ -203,7 +225,7 @@
         fetch('/api/portal/signup/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, email: email, serial: serial}),
+            body: JSON.stringify({phone: phone, email: email, serial: serial, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
@@ -235,7 +257,7 @@
         fetch('/api/portal/verify/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, code: code, reseller_id: resellerId}),
+            body: JSON.stringify({phone: phone, code: code, reseller_id: resellerId, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {

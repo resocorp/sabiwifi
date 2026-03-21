@@ -12,7 +12,7 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from simple_history.admin import SimpleHistoryAdmin
 from operator_panel.models import PlatformSettings
-from accounts.models import Reseller, Subscriber
+from accounts.models import Reseller, Subscriber, Country
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
 from routers.models import Router
@@ -61,6 +61,16 @@ class PlatformSettingsAdmin(SimpleHistoryAdmin):
         return False
 
 
+# --- Country ---
+
+@admin.register(Country)
+class CountryAdmin(admin.ModelAdmin):
+    list_display = ['flag_emoji', 'name', 'code', 'dial_code', 'local_phone_length', 'is_active', 'sort_order']
+    list_editable = ['is_active', 'sort_order']
+    search_fields = ['name', 'code', 'dial_code']
+    ordering = ['sort_order', 'name']
+
+
 # --- Reseller ---
 
 @admin.register(Reseller)
@@ -107,15 +117,15 @@ class ResellerAdmin(SimpleHistoryAdmin):
 
 # --- Subscriber ---
 
-def _normalize_phone_admin(phone):
-    """Normalize Nigerian phone number to +234XXXXXXXXXX."""
-    import re
-    phone = re.sub(r'\s+', '', phone.strip())
-    if phone.startswith('0') and len(phone) == 11:
-        phone = '+234' + phone[1:]
-    elif phone.startswith('234') and len(phone) == 13:
-        phone = '+' + phone
-    return phone
+def _normalize_phone_admin(phone, country_code='NG'):
+    """Normalize phone to local storage format via Country model."""
+    from accounts.models import Country
+    try:
+        country = Country.objects.get(code=country_code)
+        local = country.normalize_to_local(phone)
+        return local if local else phone
+    except Country.DoesNotExist:
+        return phone
 
 
 class SubscriberAdminForm(forms.ModelForm):

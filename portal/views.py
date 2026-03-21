@@ -28,18 +28,100 @@ class OTPRateThrottle(AnonRateThrottle):
         return self.get_ident(request)
 
 
-def _normalize_phone(phone):
-    """Normalize Nigerian phone number to +234XXXXXXXXXX format."""
-    phone = re.sub(r'\s+', '', phone)
-    if phone.startswith('0'):
-        phone = '+234' + phone[1:]
-    elif phone.startswith('234'):
-        phone = '+' + phone
-    elif not phone.startswith('+234'):
-        return None
-    if not re.match(r'^\+234\d{10}$', phone):
-        return None
-    return phone
+def _normalize_phone(raw_phone, country=None):
+    """
+    Normalize a phone number to local storage format (e.g. 08066137843 for Nigeria).
+    Accepts +234..., 234..., or 0... input.
+    If country is None, defaults to Nigeria.
+    Returns (local_phone, country) or (None, None) if invalid.
+    """
+    from accounts.models import Country as CountryModel
+    if country is None:
+        try:
+            country = CountryModel.objects.get(code='NG')
+        except CountryModel.DoesNotExist:
+            return None, None
+    local = country.normalize_to_local(raw_phone)
+    if local is None:
+        return None, None
+    return local, country
+
+
+def _get_client_ip(request):
+    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    return xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR', '')
+
+
+def _check_otp_limits(phone, ip):
+    """
+    Multi-layer rate limiting for OTP requests.
+    Returns (allowed: bool, error_message: str | None).
+    """
+    # 1. Per-phone cooldown: 60s between sends
+    cooldown_key = f'otp_cooldown_{phone}'
+    if cache.get(cooldown_key):
+        remaining = cache.ttl(cooldown_key) if hasattr(cache, 'ttl') else 60
+        return False, f'Please wait before requesting another code.'
+
+    # 2. Per-phone hourly limit: 5 OTPs/hour
+    phone_hour_key = f'otp_phone_hour_{phone}'
+    phone_hour = cache.get(phone_hour_key, 0)
+    if phone_hour >= 5:
+        return False, 'Too many codes requested for this number. Try again in an hour.'
+
+    # 3. Per-phone daily limit: 10 OTPs/day
+    phone_day_key = f'otp_phone_day_{phone}'
+    phone_day = cache.get(phone_day_key, 0)
+    if phone_day >= 10:
+        return False, 'Daily verification limit reached for this number. Try again tomorrow.'
+
+    # 4. Per-IP hourly limit: 15 OTPs/hour
+    ip_hour_key = f'otp_ip_hour_{ip}'
+    ip_hour = cache.get(ip_hour_key, 0)
+    if ip_hour >= 15:
+        return False, 'Too many requests from your device. Try again later.'
+
+    # 5. Global circuit breaker: 200 OTPs/hour across all users
+    global_key = 'otp_global_hour'
+    global_count = cache.get(global_key, 0)
+    if global_count >= 200:
+        logger.error('OTP global circuit breaker triggered!')
+        return False, 'Service is temporarily busy. Please try again in a few minutes.'
+
+    return True, None
+
+
+def _record_otp_sent(phone, ip):
+    """Increment all OTP rate limit counters after a successful send."""
+    # 60s cooldown per phone
+    cache.set(f'otp_cooldown_{phone}', 1, timeout=60)
+
+    # Hourly phone counter
+    phone_hour_key = f'otp_phone_hour_{phone}'
+    try:
+        cache.incr(phone_hour_key)
+    except ValueError:
+        cache.set(phone_hour_key, 1, timeout=3600)
+
+    # Daily phone counter
+    phone_day_key = f'otp_phone_day_{phone}'
+    try:
+        cache.incr(phone_day_key)
+    except ValueError:
+        cache.set(phone_day_key, 1, timeout=86400)
+
+    # Hourly IP counter
+    ip_hour_key = f'otp_ip_hour_{ip}'
+    try:
+        cache.incr(ip_hour_key)
+    except ValueError:
+        cache.set(ip_hour_key, 1, timeout=3600)
+
+    # Global hourly counter
+    try:
+        cache.incr('otp_global_hour')
+    except ValueError:
+        cache.set('otp_global_hour', 1, timeout=3600)
 
 
 def _resolve_reseller(request):
@@ -71,18 +153,30 @@ def _generate_otp():
 @permission_classes([AllowAny])
 def portal_signup(request):
     """
-    Register subscriber: phone + email → OTP sent.
+    Register subscriber: phone + email + country → OTP sent.
     Requires reseller context (serial or reseller_slug).
     """
-    phone = request.data.get('phone', '')
+    from accounts.models import Country as CountryModel
+    raw_phone = request.data.get('phone', '')
     email = request.data.get('email', '').strip().lower()
+    country_code = request.data.get('country', 'NG').upper()
 
-    phone = _normalize_phone(phone)
+    try:
+        country = CountryModel.objects.get(code=country_code, is_active=True)
+    except CountryModel.DoesNotExist:
+        return Response({'error': 'Selected country is not supported.'}, status=400)
+
+    phone, country = _normalize_phone(raw_phone, country)
     if not phone:
-        return Response({'error': 'Invalid Nigerian phone number.'}, status=400)
+        return Response({'error': f'Invalid phone number for {country_code}.'}, status=400)
 
     if not email:
         return Response({'error': 'Email is required for payment receipts.'}, status=400)
+
+    ip = _get_client_ip(request)
+    allowed, limit_error = _check_otp_limits(phone, ip)
+    if not allowed:
+        return Response({'error': limit_error}, status=429)
 
     reseller = _resolve_reseller(request)
     if not reseller:
@@ -111,19 +205,22 @@ def portal_signup(request):
         'phone': phone,
         'email': email,
         'reseller_id': reseller.id,
+        'country_code': country.code,
         'attempts': 0,
-    }, timeout=600)  # 10 minutes
+    }, timeout=600)
 
-    # Send OTP via Termii SMS
+    # Send OTP — convert to international format for SMS
     from notifications.sms import get_sms_service
     sms = get_sms_service()
-    sms.send_otp(phone, otp)
-    logger.info(f"OTP sent to {phone}")
+    sms.send_otp(country.to_international(phone), otp)
+    _record_otp_sent(phone, ip)
+    logger.info(f"OTP sent to {phone} ({country.code})")
 
     return Response({
         'message': 'Verification code sent to your phone.',
         'phone': phone,
         'reseller_id': reseller.id,
+        'country': country.code,
     })
 
 
@@ -131,11 +228,12 @@ def portal_signup(request):
 @permission_classes([AllowAny])
 def portal_verify_otp(request):
     """Verify the 6-digit OTP code."""
-    phone = request.data.get('phone', '')
+    raw_phone = request.data.get('phone', '')
     code = request.data.get('code', '').strip()
     reseller_id = request.data.get('reseller_id', '')
+    country_code = request.data.get('country', 'NG').upper()
 
-    phone = _normalize_phone(phone)
+    phone, country = _normalize_phone(raw_phone)
     if not phone:
         return Response({'error': 'Invalid phone number.'}, status=400)
 
@@ -202,11 +300,20 @@ def portal_set_pin(request):
     except Reseller.DoesNotExist:
         return Response({'error': 'Network not found.'}, status=400)
 
+    # Resolve country
+    from accounts.models import Country as CountryModel
+    country = None
+    country_code = verified_data.get('country_code', 'NG')
+    try:
+        country = CountryModel.objects.get(code=country_code)
+    except CountryModel.DoesNotExist:
+        pass
+
     # Create subscriber
     subscriber, created = Subscriber.objects.get_or_create(
         reseller=reseller,
         phone=verified_data['phone'],
-        defaults={'email': verified_data['email'], 'verified': True}
+        defaults={'email': verified_data['email'], 'verified': True, 'country': country}
     )
 
     if not created:
@@ -259,7 +366,7 @@ def portal_login_api(request):
     serial = request.data.get('serial', '')
     reseller_slug = request.data.get('reseller_slug', '')
 
-    phone = _normalize_phone(phone)
+    phone, _ = _normalize_phone(phone)
     if not phone:
         return Response({'error': 'Invalid phone number.'}, status=400)
 
@@ -483,10 +590,16 @@ def portal_change_pin(request):
 @permission_classes([AllowAny])
 def portal_reset_pin_request(request):
     """Request PIN reset — sends OTP to phone."""
-    phone = request.data.get('phone', '')
-    phone = _normalize_phone(phone)
+    raw_phone = request.data.get('phone', '')
+    ip = _get_client_ip(request)
+
+    phone, country = _normalize_phone(raw_phone)
     if not phone:
         return Response({'error': 'Invalid phone number.'}, status=400)
+
+    allowed, limit_error = _check_otp_limits(phone, ip)
+    if not allowed:
+        return Response({'error': limit_error}, status=429)
 
     subscribers = Subscriber.objects.filter(phone=phone)
     if not subscribers.exists():
@@ -501,7 +614,9 @@ def portal_reset_pin_request(request):
 
     from notifications.sms import get_sms_service
     sms = get_sms_service()
-    sms.send_pin_reset_otp(phone, otp)
+    intl = country.to_international(phone) if country else phone
+    sms.send_pin_reset_otp(intl, otp)
+    _record_otp_sent(phone, ip)
     logger.info(f"PIN reset OTP sent to {phone}")
 
     return Response({
@@ -519,7 +634,7 @@ def portal_reset_pin_confirm(request):
     new_pin = request.data.get('new_pin', '')
     new_pin_confirm = request.data.get('new_pin_confirm', '')
 
-    phone = _normalize_phone(phone)
+    phone, _ = _normalize_phone(phone)
     if not phone:
         return Response({'error': 'Invalid phone number.'}, status=400)
 

@@ -1,9 +1,65 @@
 import secrets
+import re
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils.text import slugify
 from simple_history.models import HistoricalRecords
+
+
+class Country(models.Model):
+    """
+    Supported countries for subscriber registration.
+    Defines how phone numbers are stored and sent via SMS.
+    """
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=2, unique=True, help_text='ISO 3166-1 alpha-2, e.g. NG')
+    dial_code = models.CharField(max_length=10, help_text='International prefix, e.g. +234')
+    local_prefix = models.CharField(max_length=5, default='0', help_text='Leading digit(s) in local format, e.g. 0')
+    local_phone_length = models.IntegerField(default=11, help_text='Expected length of local-format number, e.g. 11 for Nigeria')
+    flag_emoji = models.CharField(max_length=10, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    sort_order = models.IntegerField(default=100)
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+        verbose_name_plural = 'Countries'
+
+    def __str__(self):
+        return f'{self.flag_emoji} {self.name} ({self.dial_code})'
+
+    def normalize_to_local(self, raw_phone):
+        """
+        Convert any input format to local storage format (e.g. 0803XXXXXXX for Nigeria).
+        Returns None if phone is invalid for this country.
+        """
+        phone = re.sub(r'[\s\-()]', '', raw_phone.strip())
+        intl_prefix = self.dial_code.lstrip('+')  # e.g. '234'
+
+        # Already local format: 0803...
+        if phone.startswith(self.local_prefix):
+            if len(phone) == self.local_phone_length:
+                return phone
+
+        # International with +: +2348033...
+        elif phone.startswith('+' + intl_prefix):
+            local = self.local_prefix + phone[1 + len(intl_prefix):]
+            if len(local) == self.local_phone_length:
+                return local
+
+        # International without +: 2348033...
+        elif phone.startswith(intl_prefix):
+            local = self.local_prefix + phone[len(intl_prefix):]
+            if len(local) == self.local_phone_length:
+                return local
+
+        return None
+
+    def to_international(self, local_phone):
+        """Convert local format (0803...) to international (+234803...)."""
+        if local_phone.startswith(self.local_prefix):
+            return self.dial_code + local_phone[len(self.local_prefix):]
+        return local_phone
 
 
 class Reseller(models.Model):
@@ -110,6 +166,10 @@ class Subscriber(models.Model):
     Authenticated via phone + PIN. No Django User — lightweight model.
     """
     reseller = models.ForeignKey(Reseller, on_delete=models.CASCADE, related_name='subscribers')
+    country = models.ForeignKey(
+        Country, on_delete=models.PROTECT, null=True, blank=True,
+        help_text='Country determines phone format and SMS routing.'
+    )
     phone = models.CharField(max_length=20)
     email = models.EmailField(blank=True, default='')
     pin_hash = models.CharField(max_length=255, blank=True, default='')
