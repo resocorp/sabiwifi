@@ -6,21 +6,29 @@
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#222;min-height:100vh;padding:24px 16px}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#111;min-height:100vh;padding:40px 24px}
         .container{max-width:320px;margin:0 auto}
-        h1{font-size:18px;font-weight:600;margin-bottom:4px}
-        .subtitle{font-size:13px;color:#666;margin-bottom:24px}
-        label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#666;margin-bottom:4px;margin-top:16px}
-        input[type="tel"],input[type="password"]{width:100%;padding:10px 0;border:none;border-bottom:2px solid #ddd;font-size:16px;outline:none;background:transparent}
-        input:focus{border-bottom-color:#222}
-        .btn{display:block;width:100%;padding:12px;border:2px solid #222;border-radius:0;font-size:14px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none;margin-top:24px;background:#222;color:#fff}
-        .btn-outline{background:transparent;color:#222;margin-top:8px}
-        .link{color:#666;text-decoration:underline;font-size:12px}
-        .divider{text-align:center;color:#999;font-size:11px;margin:20px 0;text-transform:uppercase;letter-spacing:1px}
-        .error{color:#E53935;font-size:13px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #fcc}
+        h1{font-size:20px;font-weight:600;margin-bottom:4px}
+        .subtitle{font-size:13px;color:#666;margin-bottom:28px}
+        label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:4px;margin-top:20px}
+        input[type="tel"],input[type="password"]{width:100%;padding:10px 0;border:none;border-bottom:2px solid #ddd;font-size:16px;outline:none;background:transparent;color:#111}
+        input::placeholder{color:#ccc}
+        input:focus{border-bottom-color:#111}
+        .btn{display:block;width:100%;padding:13px;border:2px solid #111;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;margin-top:28px;background:#111;color:#fff;border-radius:0}
+        .btn-outline{background:#fff;color:#111;margin-top:10px}
+        .btn:disabled{opacity:.4;cursor:not-allowed}
+        .link{color:#888;text-decoration:underline;font-size:12px}
+        .divider{text-align:center;color:#ccc;font-size:11px;margin:20px 0;text-transform:uppercase;letter-spacing:1px}
+        hr{border:none;border-top:1px solid #eee;margin:20px 0}
+        .notice{padding:10px 12px;font-size:13px;margin-bottom:16px;border-left:3px solid;line-height:1.5}
+        .notice strong{display:block;margin-bottom:2px;font-size:13px}
+        .notice-amber{border-color:#F59E0B;background:#FFFBEB;color:#92400E}
+        .notice-red{border-color:#EF4444;background:#FEF2F2;color:#991B1B}
+        .msg{padding:10px 12px;font-size:13px;margin-bottom:16px;border-left:3px solid;display:none;line-height:1.5}
+        .msg-error{border-color:#EF4444;background:#FEF2F2;color:#991B1B}
+        .msg-success{border-color:#10B981;background:#F0FDF4;color:#065F46}
         .text-center{text-align:center}
         .mt-3{margin-top:12px}
-        hr{border:none;border-top:1px solid #eee;margin:20px 0}
     </style>
 </head>
 <body>
@@ -28,25 +36,112 @@
         <h1>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
         <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected.{% endif %}</p>
 
-        {% if error %}
-        <div class="error">{{ error }}</div>
+        <div id="msg" class="msg"></div>
+
+        {% if reason == 'session_ended' %}
+        <div class="notice notice-amber">
+            <strong>Your session has ended</strong>
+            Your browsing time ran out or your plan expired. Log in again to reconnect.
+        </div>
+        {% elif error %}
+        <div class="notice notice-red" id="server-notice">
+            <div id="server-notice-text"></div>
+        </div>
         {% endif %}
 
-        <form method="post" action="{% url 'api-portal-login' %}">
-            <label>Phone</label>
-            <input type="tel" name="phone" placeholder="+234" required>
-            <label>PIN</label>
-            <input type="password" name="pin" placeholder="••••" maxlength="4" required>
-            <input type="hidden" name="serial" value="{{ serial }}">
-            <input type="hidden" name="link_login" value="{{ link_login }}">
-            <input type="hidden" name="link_orig" value="{{ link_orig }}">
-            <input type="hidden" name="mac" value="{{ mac }}">
-            <button type="submit" class="btn">Log In</button>
-        </form>
+        <label>Phone</label>
+        <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
+        <label>PIN</label>
+        <input type="password" id="pin" placeholder="••••" maxlength="4" inputmode="numeric" required>
+        <button type="button" id="login-btn" class="btn" onclick="doLogin()">Log In</button>
 
-        <p class="text-center mt-3"><a href="#" class="link">Forgot PIN?</a></p>
+        <p class="text-center mt-3">
+            <a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> ·
+            <a href="/portal/account/?r={{ serial }}" class="link">My Account</a>
+        </p>
         <hr>
-        <a href="{% url 'api-portal-signup' %}?r={{ serial }}" class="btn btn-outline">New? Sign Up</a>
+        <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">New? Sign Up</a>
     </div>
+
+    <form id="hotspot-form" method="post" style="display:none;">
+        <input type="hidden" name="username" id="hs-username">
+        <input type="hidden" name="password" id="hs-password">
+        <input type="hidden" name="dst" id="hs-dst">
+    </form>
+
+    <script>
+    const serial = '{{ serial|escapejs }}';
+    const linkLogin = '{{ link_login|escapejs }}';
+    const linkOrig = '{{ link_orig|escapejs }}';
+    const rawError = '{{ error|escapejs }}';
+
+    (function() {
+        const el = document.getElementById('server-notice-text');
+        if (!el || !rawError) return;
+        const e = rawError.toLowerCase();
+        let h, b;
+        if (e.includes('no more session') || e.includes('simultaneous') || e.includes('maximum number')) {
+            h = 'Too many devices connected';
+            b = 'You have reached your plan\'s device limit. Disconnect another device or <a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;">upgrade your plan</a>.';
+        } else if (e.includes('session limit') || e.includes('quota') || (e.includes('data') && e.includes('limit'))) {
+            h = 'Data limit reached';
+            b = '<a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;">Visit My Account</a> to purchase a new plan.';
+        } else if (e.includes('not logged') || e.includes('session') || e.includes('timeout')) {
+            h = 'Session expired'; b = 'Please log in again.';
+        } else { h = 'Connection interrupted'; b = 'Please try again.'; }
+        el.innerHTML = '<strong>' + h + '</strong>' + b;
+    })();
+
+    function showMsg(text, type) {
+        const el = document.getElementById('msg');
+        el.className = 'msg ' + (type === 'error' ? 'msg-error' : 'msg-success');
+        el.innerHTML = text; el.style.display = 'block';
+    }
+
+    function doLogin() {
+        const phone = document.getElementById('phone').value.trim();
+        const pin = document.getElementById('pin').value.trim();
+        const btn = document.getElementById('login-btn');
+        if (!phone || !pin) { showMsg('Enter phone and PIN.', 'error'); return; }
+        btn.disabled = true; btn.textContent = 'Logging in…';
+
+        fetch('/api/portal/login/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({phone, pin, serial}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (ok) {
+                if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
+                if (data.has_active_plan === false) {
+                    btn.disabled = false; btn.textContent = 'Log In';
+                    showMsg('<strong>No active plan.</strong> <a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;">Go to My Account</a> to choose a plan.', 'error');
+                    return;
+                }
+                showMsg('Connecting…', 'success');
+                if (linkLogin) {
+                    const dst = window.location.protocol + '//' + window.location.host
+                        + '/portal/connected/?r=' + encodeURIComponent(serial)
+                        + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
+                    document.getElementById('hs-username').value = data.phone || phone;
+                    document.getElementById('hs-password').value = data.auth_token || '';
+                    document.getElementById('hs-dst').value = dst;
+                    const form = document.getElementById('hotspot-form');
+                    form.action = linkLogin; form.submit();
+                } else {
+                    showMsg('Connected!', 'success');
+                    btn.disabled = false; btn.textContent = 'Log In';
+                }
+            } else {
+                btn.disabled = false; btn.textContent = 'Log In';
+                showMsg(data.error || 'Login failed.', 'error');
+            }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Log In'; showMsg('Network error.', 'error'); });
+    }
+
+    document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });
+    </script>
 </body>
 </html>

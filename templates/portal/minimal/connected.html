@@ -3,19 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connected</title>
+    <title>Connected — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}WiFi{% endif %}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#222;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-        .container{max-width:320px;text-align:center}
-        h1{font-size:18px;font-weight:600;margin-bottom:8px}
-        p{font-size:13px;color:#666}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#111;min-height:100vh;padding:40px 24px}
+        .container{max-width:320px;margin:0 auto}
+        h1{font-size:20px;font-weight:600;margin-bottom:4px}
+        .subtitle{font-size:13px;color:#666;margin-bottom:28px}
+        .check{font-size:36px;margin-bottom:12px}
+        .info-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eee;font-size:13px}
+        .info-row:last-child{border-bottom:none}
+        .info-label{color:#888}
+        .info-value{font-weight:600;text-align:right;max-width:58%}
+        .badge{display:inline-block;padding:1px 6px;border:1px solid #111;font-size:10px;font-weight:700;margin-left:4px;letter-spacing:.3px}
+        hr{border:none;border-top:1px solid #eee;margin:20px 0}
+        .note{font-size:12px;color:#666;line-height:1.6;margin-bottom:20px}
+        .note a{color:#111;font-weight:700}
+        .bar-wrap{background:#eee;height:2px;margin-bottom:8px}
+        .bar{height:2px;background:#111;width:100%;transition:width 1s linear}
+        .countdown-text{font-size:11px;color:#999;margin-bottom:20px;text-transform:uppercase;letter-spacing:.5px}
+        .btn{display:block;width:100%;padding:13px;border:2px solid #111;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;background:#111;color:#fff;border-radius:0}
+        .skeleton{background:#eee;height:12px;margin:9px 0;border-radius:2px;animation:shimmer 1.2s ease-in-out infinite}
+        @keyframes shimmer{0%,100%{opacity:1}50%{opacity:.35}}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Connected ✓</h1>
-        <p>Manage your account at sabiwifi.ng/account</p>
+        <div class="check">✓</div>
+        <h1>Connected</h1>
+        <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}You're online.{% endif %}</p>
+
+        <div id="account-info">
+            <div class="skeleton" style="width:70%"></div>
+            <div class="skeleton" style="width:55%"></div>
+            <div class="skeleton" style="width:65%"></div>
+        </div>
+
+        <hr>
+
+        <p class="note">Manage your plan, change your PIN, or top up at <a id="account-link" href="/portal/account/?r={{ serial|urlencode }}">My Account</a>.</p>
+
+        <div class="bar-wrap"><div class="bar" id="countdown-bar"></div></div>
+        <p class="countdown-text">Redirecting in <strong id="countdown-num">15</strong>s</p>
+
+        <button class="btn" onclick="goNow()">Start Browsing Now</button>
     </div>
+
+    <script>
+    const serial = '{{ serial|escapejs }}';
+    const urlParams = new URLSearchParams(window.location.search);
+    const dst = urlParams.get('dst') || '';
+    const accountUrl = '/portal/account/?r=' + encodeURIComponent(serial);
+    const TOTAL = 15;
+    let remaining = TOTAL, timer = null;
+
+    document.getElementById('account-link').href = accountUrl;
+
+    function goNow() { clearInterval(timer); window.location.href = dst || accountUrl; }
+
+    function tick() {
+        remaining--;
+        const n = document.getElementById('countdown-num');
+        const b = document.getElementById('countdown-bar');
+        if (n) n.textContent = remaining;
+        if (b) b.style.width = (remaining / TOTAL * 100) + '%';
+        if (remaining <= 0) { clearInterval(timer); window.location.href = dst || accountUrl; }
+    }
+
+    const authToken = localStorage.getItem('sabiwifi_token') || '';
+    if (authToken) {
+        fetch('/api/portal/account/?token=' + encodeURIComponent(authToken))
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (!ok) { document.getElementById('account-info').innerHTML = ''; return; }
+            const s = data.subscription;
+            let html = '<div class="info-row"><span class="info-label">Phone</span><span class="info-value">' + (data.phone || '—') + '</span></div>';
+            if (s) {
+                const exp = s.expiry_date ? new Date(s.expiry_date).toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'}) : '—';
+                const dl = s.days_remaining > 1 ? s.days_remaining + ' days left' : s.days_remaining === 1 ? '1 day left' : 'Expires today';
+                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value">' + s.plan_name + '<span class="badge">' + dl + '</span></span></div>'
+                      + '<div class="info-row"><span class="info-label">Speed</span><span class="info-value">' + s.speed_display + '</span></div>'
+                      + '<div class="info-row"><span class="info-label">Expires</span><span class="info-value">' + exp + '</span></div>';
+            } else {
+                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value" style="color:#999;">No active plan</span></div>';
+            }
+            document.getElementById('account-info').innerHTML = html;
+        })
+        .catch(() => { document.getElementById('account-info').innerHTML = ''; });
+    } else {
+        document.getElementById('account-info').innerHTML = '';
+    }
+
+    timer = setInterval(tick, 1000);
+    </script>
 </body>
 </html>
