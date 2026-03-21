@@ -26,3 +26,6 @@ requests==2.32.3
 
 # CORS
 django-cors-headers==4.6.0
+
+# Cache (shared across Gunicorn workers)
+django-redis==5.4.0
