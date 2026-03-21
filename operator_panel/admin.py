@@ -107,6 +107,17 @@ class ResellerAdmin(SimpleHistoryAdmin):
 
 # --- Subscriber ---
 
+def _normalize_phone_admin(phone):
+    """Normalize Nigerian phone number to +234XXXXXXXXXX."""
+    import re
+    phone = re.sub(r'\s+', '', phone.strip())
+    if phone.startswith('0') and len(phone) == 11:
+        phone = '+234' + phone[1:]
+    elif phone.startswith('234') and len(phone) == 13:
+        phone = '+' + phone
+    return phone
+
+
 class SubscriberAdminForm(forms.ModelForm):
     pin = forms.CharField(
         label='WiFi PIN',
@@ -120,6 +131,10 @@ class SubscriberAdminForm(forms.ModelForm):
     class Meta:
         model = Subscriber
         fields = '__all__'
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '')
+        return _normalize_phone_admin(phone)
 
     def save(self, commit=True):
         instance = super().save(commit=False)
