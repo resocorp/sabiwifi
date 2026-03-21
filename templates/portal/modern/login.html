@@ -29,6 +29,11 @@
         .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
         .text-center { text-align: center; }
         .mt-3 { margin-top: 12px; }
+        .notice { border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
+        .notice-icon { font-size: 20px; flex-shrink: 0; margin-top: -1px; }
+        .notice-amber { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; }
+        .notice-red { background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; }
+        .notice strong { display: block; margin-bottom: 2px; }
     </style>
 </head>
 <body>
@@ -42,6 +47,21 @@
             <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected in seconds.{% endif %}</p>
 
             <div id="msg"></div>
+
+            {% if reason == 'session_ended' %}
+            <div class="notice notice-amber">
+                <span class="notice-icon">⏱</span>
+                <div>
+                    <strong>Your session has ended</strong>
+                    Your browsing time ran out or your plan expired. Log in again to reconnect.
+                </div>
+            </div>
+            {% elif error %}
+            <div class="notice notice-red" id="server-notice">
+                <span class="notice-icon">⚠️</span>
+                <div id="server-notice-text"></div>
+            </div>
+            {% endif %}
 
             <div id="login-form">
                 <label>Phone Number</label>
@@ -73,6 +93,32 @@
     const serial = '{{ serial|escapejs }}';
     const linkLogin = '{{ link_login|escapejs }}';
     const linkOrig = '{{ link_orig|escapejs }}';
+
+    // Translate raw MikroTik error codes into friendly messages
+    const rawError = '{{ error|escapejs }}';
+    (function() {
+        const noticeEl = document.getElementById('server-notice-text');
+        if (!noticeEl || !rawError) return;
+        const e = rawError.toLowerCase();
+        let heading, body;
+        if (e.includes('session limit') || e.includes('quota') || e.includes('data') && e.includes('limit')) {
+            heading = 'Data or session limit reached';
+            body = 'You have used up your plan allowance. Visit My Account to top up or change your plan.';
+        } else if (e.includes('not logged') || e.includes('session') || e.includes('timeout')) {
+            heading = 'Your session has expired';
+            body = 'Please log in again to continue browsing.';
+        } else if (e.includes('ip') && e.includes('use')) {
+            heading = 'Connection conflict';
+            body = 'Another device is using your session. Log in again to take over.';
+        } else if (e.includes('radius') || e.includes('auth')) {
+            heading = 'Could not connect';
+            body = 'There was a problem authenticating your account. Please try again or contact support.';
+        } else {
+            heading = 'Connection interrupted';
+            body = 'Something went wrong with your session. Please log in again.';
+        }
+        noticeEl.innerHTML = '<strong>' + heading + '</strong>' + body;
+    })();
 
     function showMsg(text, type) {
         const el = document.getElementById('msg');

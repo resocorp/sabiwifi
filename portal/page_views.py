@@ -22,12 +22,12 @@ def portal_login(request):
     link_login = request.GET.get('link-login', '')
     link_orig = request.GET.get('link-orig', '')
     error = request.GET.get('error', '')
+    reason = request.GET.get('reason', '')
 
     reseller = _get_reseller_from_serial(serial)
     branding = reseller.branding if reseller else {}
     template_name = branding.get('template', 'modern')
 
-    # Phase 2: Full portal implementation
     return render(request, f'portal/{template_name}/login.html', {
         'reseller': reseller,
         'branding': branding,
@@ -36,6 +36,7 @@ def portal_login(request):
         'link_login': link_login,
         'link_orig': link_orig,
         'error': error,
+        'reason': reason,
     })
 
 
