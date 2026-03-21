@@ -7,7 +7,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-        .container { width: 100%; max-width: 360px; }
+        .container { width: 100%; max-width: 400px; }
         .card { background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
         .logo { text-align: center; margin-bottom: 16px; }
         .logo img { max-width: 120px; max-height: 60px; }
@@ -41,6 +41,24 @@
         .step-dot.active { background: {{ branding.primary_color|default:"#0052CC" }}; }
         .resend-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .countdown { font-size: 12px; color: #6B7280; }
+
+        /* Plan cards */
+        .plans-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+        .plan-card { border: 2px solid #E5E7EB; border-radius: 12px; padding: 14px 16px; cursor: pointer; transition: border-color .15s, background .15s; position: relative; }
+        .plan-card:hover { border-color: {{ branding.primary_color|default:"#0052CC" }}44; }
+        .plan-card.selected { border-color: {{ branding.primary_color|default:"#0052CC" }}; background: {{ branding.primary_color|default:"#0052CC" }}08; }
+        .plan-card input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
+        .plan-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .plan-name { font-size: 15px; font-weight: 700; }
+        .plan-price { font-size: 16px; font-weight: 700; color: {{ branding.primary_color|default:"#0052CC" }}; }
+        .plan-free-badge { font-size: 12px; font-weight: 700; color: #065F46; background: #D1FAE5; padding: 2px 8px; border-radius: 99px; }
+        .plan-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+        .plan-tag { font-size: 12px; color: #6B7280; background: #F3F4F6; padding: 2px 8px; border-radius: 6px; }
+        .plans-loading { text-align: center; color: #6B7280; font-size: 14px; padding: 20px 0; }
+        .plans-empty { text-align: center; color: #6B7280; font-size: 14px; padding: 20px 0; }
+
+        /* Payment waiting state */
+        .payment-note { font-size: 12px; color: #6B7280; text-align: center; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -56,6 +74,7 @@
                 <div class="step-dot active" id="dot-1"></div>
                 <div class="step-dot" id="dot-2"></div>
                 <div class="step-dot" id="dot-3"></div>
+                <div class="step-dot" id="dot-4"></div>
             </div>
 
             <div id="msg"></div>
@@ -93,8 +112,17 @@
                 <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify Code</button>
             </div>
 
-            <!-- Step 3: Set PIN -->
+            <!-- Step 3: Choose Plan -->
             <div id="step-3" class="step">
+                <p class="subtitle">Choose a plan to get started</p>
+                <div id="plans-container" class="plans-grid">
+                    <div class="plans-loading">Loading available plans…</div>
+                </div>
+                <button type="button" id="plan-btn" class="btn btn-primary" onclick="doPlanNext()" disabled>Continue</button>
+            </div>
+
+            <!-- Step 4: Set PIN -->
+            <div id="step-4" class="step">
                 <p class="subtitle">Choose a 4-digit PIN for WiFi login</p>
                 <label>WiFi PIN</label>
                 <input type="password" id="pin" class="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="----">
@@ -114,8 +142,12 @@
     let resellerId = '';
     let verifyToken = '';
     let selectedCountry = 'NG';
+    let selectedPlanId = null;
+    let selectedPlanIsFree = true;
+    let paystackReference = '';
     let cooldownTimer = null;
     let cooldownSecs = 0;
+    let paystackLoaded = false;
 
     document.getElementById('country').addEventListener('change', function() {
         selectedCountry = this.value;
@@ -133,21 +165,21 @@
     function hideMsg() { document.getElementById('msg').style.display = 'none'; }
 
     function goToStep(n) {
-        for (let i = 1; i <= 3; i++) {
+        for (let i = 1; i <= 4; i++) {
             document.getElementById('step-' + i).classList.remove('active');
             document.getElementById('dot-' + i).classList.remove('active');
         }
         document.getElementById('step-' + n).classList.add('active');
         for (let i = 1; i <= n; i++) document.getElementById('dot-' + i).classList.add('active');
+        hideMsg();
     }
 
-    // --- Cooldown timer for resend ---
+    // --- Cooldown timer ---
     function startCooldown(seconds) {
         cooldownSecs = seconds;
         const resendBtn = document.getElementById('resend-btn');
         const countdownEl = document.getElementById('countdown');
         resendBtn.disabled = true;
-
         if (cooldownTimer) clearInterval(cooldownTimer);
         cooldownTimer = setInterval(() => {
             cooldownSecs--;
@@ -162,43 +194,44 @@
         }, 1000);
     }
 
-    // --- Web OTP API: auto-read SMS ---
+    // --- Web OTP API ---
     function listenForOTP() {
         if ('OTPCredential' in window) {
             const ac = new AbortController();
-            setTimeout(() => ac.abort(), 300000); // 5 min timeout
-            navigator.credentials.get({
-                otp: {transport: ['sms']},
-                signal: ac.signal,
-            }).then(otp => {
-                if (otp && otp.code) {
-                    document.getElementById('otp').value = otp.code;
-                    doVerify(); // Auto-submit
-                }
-            }).catch(() => {}); // Silently fail if not supported
+            setTimeout(() => ac.abort(), 300000);
+            navigator.credentials.get({ otp: {transport: ['sms']}, signal: ac.signal })
+                .then(otp => { if (otp && otp.code) { document.getElementById('otp').value = otp.code; doVerify(); } })
+                .catch(() => {});
         }
     }
 
-    // --- Step 1: Signup ---
+    // --- Load Paystack inline script lazily ---
+    function loadPaystack(callback) {
+        if (paystackLoaded) { callback(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://js.paystack.co/v1/inline.js';
+        s.onload = () => { paystackLoaded = true; callback(); };
+        s.onerror = () => showMsg('Could not load payment library. Check your connection.', 'error');
+        document.head.appendChild(s);
+    }
+
+    // === Step 1: Signup ===
     function doSignup() {
         const phone = document.getElementById('phone').value.trim();
         const email = document.getElementById('email').value.trim();
         const btn = document.getElementById('signup-btn');
-
         if (!phone || !email) { showMsg('Please enter phone number and email.', 'error'); return; }
         hideMsg();
-        btn.disabled = true;
-        btn.textContent = 'Sending...';
+        btn.disabled = true; btn.textContent = 'Sending...';
 
         fetch('/api/portal/signup/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, email: email, serial: serial, country: selectedCountry}),
+            body: JSON.stringify({phone, email, serial, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
-            btn.disabled = false;
-            btn.textContent = 'Send Verification Code';
+            btn.disabled = false; btn.textContent = 'Send Verification Code';
             if (ok) {
                 resellerId = data.reseller_id;
                 showMsg('Code sent! Check your phone.', 'success');
@@ -217,15 +250,13 @@
         const phone = document.getElementById('phone').value.trim();
         const email = document.getElementById('email').value.trim();
         const resendBtn = document.getElementById('resend-btn');
-
         hideMsg();
-        resendBtn.disabled = true;
-        resendBtn.textContent = 'Sending...';
+        resendBtn.disabled = true; resendBtn.textContent = 'Sending...';
 
         fetch('/api/portal/signup/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, email: email, serial: serial, country: selectedCountry}),
+            body: JSON.stringify({phone, email, serial, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
@@ -236,38 +267,34 @@
                 listenForOTP();
             } else {
                 showMsg(data.error || 'Could not resend.', 'error');
-                resendBtn.disabled = false;
-                resendBtn.textContent = 'Resend Code';
+                resendBtn.disabled = false; resendBtn.textContent = 'Resend Code';
             }
         })
         .catch(() => { resendBtn.disabled = false; resendBtn.textContent = 'Resend Code'; showMsg('Network error.', 'error'); });
     }
 
-    // --- Step 2: Verify OTP ---
+    // === Step 2: Verify OTP ===
     function doVerify() {
         const phone = document.getElementById('phone').value.trim();
         const code = document.getElementById('otp').value.trim();
         const btn = document.getElementById('verify-btn');
-
         if (!code || code.length !== 6) { showMsg('Please enter the 6-digit code.', 'error'); return; }
         hideMsg();
-        btn.disabled = true;
-        btn.textContent = 'Verifying...';
+        btn.disabled = true; btn.textContent = 'Verifying...';
 
         fetch('/api/portal/verify/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({phone: phone, code: code, reseller_id: resellerId, country: selectedCountry}),
+            body: JSON.stringify({phone, code, reseller_id: resellerId, country: selectedCountry}),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
-            btn.disabled = false;
-            btn.textContent = 'Verify Code';
+            btn.disabled = false; btn.textContent = 'Verify Code';
             if (ok) {
                 verifyToken = data.verify_token;
                 if (cooldownTimer) clearInterval(cooldownTimer);
-                showMsg('Phone verified! Set your WiFi PIN.', 'success');
                 goToStep(3);
+                loadPlans();
             } else {
                 showMsg(data.error || 'Verification failed.', 'error');
             }
@@ -275,7 +302,117 @@
         .catch(() => { btn.disabled = false; btn.textContent = 'Verify Code'; showMsg('Network error.', 'error'); });
     }
 
-    // --- Step 3: Set PIN ---
+    // === Step 3: Load & Select Plan ===
+    function loadPlans() {
+        const container = document.getElementById('plans-container');
+        container.innerHTML = '<div class="plans-loading">Loading available plans…</div>';
+        document.getElementById('plan-btn').disabled = true;
+
+        const url = '/api/portal/plans/?' + (serial ? 'r=' + encodeURIComponent(serial) : 'reseller=' + encodeURIComponent(resellerId));
+        fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const plans = data.plans || [];
+            if (!plans.length) {
+                container.innerHTML = '<div class="plans-empty">No plans available.</div>';
+                return;
+            }
+            container.innerHTML = '';
+            plans.forEach(p => {
+                const card = document.createElement('label');
+                card.className = 'plan-card';
+                card.setAttribute('for', 'plan-' + p.id);
+                const priceHtml = p.is_free
+                    ? '<span class="plan-free-badge">FREE</span>'
+                    : '<span class="plan-price">₦' + Number(p.price_ngn).toLocaleString() + '</span>';
+                card.innerHTML = `
+                    <input type="radio" name="plan" id="plan-${p.id}" value="${p.id}" data-free="${p.is_free}" onchange="selectPlan(${p.id}, ${p.is_free})">
+                    <div class="plan-header">
+                        <span class="plan-name">${p.name}</span>
+                        ${priceHtml}
+                    </div>
+                    <div class="plan-meta">
+                        <span class="plan-tag">📶 ${p.speed_display}</span>
+                        <span class="plan-tag">⏱ ${p.duration_display}</span>
+                        <span class="plan-tag">💾 ${p.data_cap_display}</span>
+                    </div>`;
+                container.appendChild(card);
+            });
+
+            // Auto-select first plan
+            if (plans.length === 1) {
+                document.getElementById('plan-' + plans[0].id).checked = true;
+                selectPlan(plans[0].id, plans[0].is_free);
+            }
+        })
+        .catch(() => {
+            container.innerHTML = '<div class="plans-empty">Could not load plans. Please refresh.</div>';
+        });
+    }
+
+    function selectPlan(planId, isFree) {
+        selectedPlanId = planId;
+        selectedPlanIsFree = isFree;
+        document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+        const radio = document.getElementById('plan-' + planId);
+        if (radio) radio.closest('.plan-card').classList.add('selected');
+        const btn = document.getElementById('plan-btn');
+        btn.disabled = false;
+        btn.textContent = isFree ? 'Continue' : 'Pay & Continue';
+    }
+
+    function doPlanNext() {
+        if (!selectedPlanId) { showMsg('Please select a plan.', 'error'); return; }
+
+        if (selectedPlanIsFree) {
+            // No payment needed — go straight to PIN setup
+            paystackReference = '';
+            goToStep(4);
+        } else {
+            // Initiate Paystack payment
+            initiatePayment();
+        }
+    }
+
+    // === Paystack payment (paid plans) ===
+    function initiatePayment() {
+        const btn = document.getElementById('plan-btn');
+        btn.disabled = true; btn.textContent = 'Preparing payment…';
+        hideMsg();
+
+        fetch('/api/portal/initiate-payment/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({verify_token: verifyToken, plan_id: selectedPlanId}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false; btn.textContent = 'Pay & Continue';
+            if (!ok) { showMsg(data.error || 'Could not initialize payment.', 'error'); return; }
+
+            loadPaystack(() => {
+                const handler = PaystackPop.setup({
+                    key: data.public_key,
+                    email: data.email,
+                    amount: data.amount_kobo,
+                    ref: data.reference,
+                    access_code: data.access_code,
+                    onSuccess: function(response) {
+                        paystackReference = response.reference || data.reference;
+                        showMsg('Payment successful! Now set your PIN.', 'success');
+                        goToStep(4);
+                    },
+                    onCancel: function() {
+                        showMsg('Payment was cancelled. Please try again.', 'error');
+                    },
+                });
+                handler.openIframe();
+            });
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Pay & Continue'; showMsg('Network error.', 'error'); });
+    }
+
+    // === Step 4: Set PIN ===
     function doSetPin() {
         const pin = document.getElementById('pin').value.trim();
         const pinConfirm = document.getElementById('pin-confirm').value.trim();
@@ -284,22 +421,27 @@
         if (!pin || pin.length !== 4) { showMsg('PIN must be 4 digits.', 'error'); return; }
         if (pin !== pinConfirm) { showMsg('PINs do not match.', 'error'); return; }
         hideMsg();
-        btn.disabled = true;
-        btn.textContent = 'Creating account...';
+        btn.disabled = true; btn.textContent = 'Creating account...';
+
+        const payload = {
+            verify_token: verifyToken,
+            pin: pin,
+            pin_confirm: pinConfirm,
+        };
+        if (selectedPlanId) payload.plan_id = selectedPlanId;
+        if (paystackReference) payload.paystack_reference = paystackReference;
 
         fetch('/api/portal/set-pin/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({verify_token: verifyToken, pin: pin, pin_confirm: pinConfirm}),
+            body: JSON.stringify(payload),
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
-            btn.disabled = false;
-            btn.textContent = 'Create Account';
+            btn.disabled = false; btn.textContent = 'Create Account';
             if (ok) {
-                // Store auth token for account page
                 if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
-                showMsg('Account created! Redirecting to login...', 'success');
+                showMsg('Account created! Redirecting to login…', 'success');
                 setTimeout(() => {
                     window.location.href = '/portal/?r=' + serial + '&mac={{ mac|escapejs }}&link-login={{ link_login|escapejs }}&link-orig={{ link_orig|escapejs }}';
                 }, 1500);

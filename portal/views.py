@@ -2,6 +2,7 @@
 import secrets
 import logging
 import re
+import requests as http_requests
 from django.utils import timezone
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -271,13 +272,136 @@ def portal_verify_otp(request):
     })
 
 
+def _get_paystack_secret_key():
+    """Return Paystack secret key from settings or PlatformSettings."""
+    from django.conf import settings
+    key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+    if not key:
+        from operator_panel.models import PlatformSettings
+        key = PlatformSettings.load().paystack_secret_key
+    return key
+
+
+def _get_paystack_public_key():
+    """Return Paystack public key from settings or PlatformSettings."""
+    from django.conf import settings
+    key = getattr(settings, 'PAYSTACK_PUBLIC_KEY', '')
+    if not key:
+        from operator_panel.models import PlatformSettings
+        key = PlatformSettings.load().paystack_public_key
+    return key
+
+
+def _verify_paystack_payment(reference, expected_amount_kobo):
+    """
+    Verify a Paystack transaction. Returns (data_dict, None) on success
+    or (None, error_string) on failure.
+    """
+    secret_key = _get_paystack_secret_key()
+    try:
+        resp = http_requests.get(
+            f'https://api.paystack.co/transaction/verify/{reference}',
+            headers={'Authorization': f'Bearer {secret_key}'},
+            timeout=15,
+        )
+        body = resp.json()
+    except Exception as exc:
+        logger.error(f'Paystack verify request error: {exc}')
+        return None, 'Payment gateway unavailable. Please contact support.'
+
+    if not body.get('status') or body.get('data', {}).get('status') != 'success':
+        return None, 'Payment was not successful. Please try again.'
+
+    paid_amount = body['data'].get('amount', 0)
+    if paid_amount < expected_amount_kobo:
+        logger.warning(
+            f'Paystack amount mismatch: expected {expected_amount_kobo}, got {paid_amount}'
+        )
+        return None, 'Payment amount does not match. Please contact support.'
+
+    return body['data'], None
+
+
+def _create_subscription(subscriber, plan, reseller, paystack_data=None):
+    """
+    Create a Subscription + optional Payment record, assign RADIUS group.
+    Returns the new Subscription.
+    """
+    from datetime import timedelta
+    from radius.utils import create_default_trial_plan
+
+    now = timezone.now()
+    hours = float(plan.duration_hours or 0)
+    days = int(plan.duration_days or 0)
+    expiry = now + timedelta(days=days, hours=hours) if (days or hours) else now + timedelta(days=36500)
+
+    # Expire any existing active subscription
+    Subscription.objects.filter(subscriber=subscriber, status='active').update(status='expired')
+
+    sub = Subscription.objects.create(
+        subscriber=subscriber,
+        plan=plan,
+        reseller=reseller,
+        start_date=now,
+        expiry_date=expiry,
+        status='active',
+    )
+    assign_subscriber_to_plan(subscriber, plan)
+
+    # Create payment record
+    if paystack_data:
+        commission_pct = reseller.get_commission_pct()
+        fee_bearer = reseller.get_fee_bearer()
+        amount_ngn = plan.price_ngn
+        platform_share = (amount_ngn * commission_pct / 100).quantize(amount_ngn)
+        reseller_share = amount_ngn - platform_share
+        Payment.objects.create(
+            subscriber=subscriber,
+            plan=plan,
+            reseller=reseller,
+            amount_ngn=amount_ngn,
+            paystack_reference=paystack_data.get('reference', ''),
+            paystack_status='success',
+            payment_method=paystack_data.get('channel', 'card'),
+            commission_pct_applied=commission_pct,
+            fee_bearer_applied=fee_bearer,
+            platform_amount_ngn=platform_share,
+            reseller_amount_ngn=reseller_share,
+            gateway_fee_ngn=0,
+        )
+    elif plan.is_free:
+        Payment.objects.create(
+            subscriber=subscriber,
+            plan=plan,
+            reseller=reseller,
+            amount_ngn=0,
+            paystack_reference=f'free_{secrets.token_hex(16)}',
+            paystack_status='success',
+            payment_method='free',
+        )
+
+    return sub
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def portal_set_pin(request):
-    """Set WiFi PIN after OTP verification. Creates the subscriber account."""
+    """
+    Set WiFi PIN after OTP verification. Creates the subscriber account and
+    activates the chosen plan (free or already-paid).
+
+    Body:
+        verify_token      — from /api/portal/verify/
+        pin               — 4-digit WiFi PIN
+        pin_confirm       — confirmation
+        plan_id           — chosen ServicePlan id (optional; defaults to trial)
+        paystack_reference — required for paid plans
+    """
     verify_token = request.data.get('verify_token', '')
     pin = request.data.get('pin', '')
     pin_confirm = request.data.get('pin_confirm', '')
+    plan_id = request.data.get('plan_id')
+    paystack_reference = request.data.get('paystack_reference', '').strip()
 
     if not verify_token:
         return Response({'error': 'Verification required.'}, status=400)
@@ -286,11 +410,8 @@ def portal_set_pin(request):
     if not verified_data:
         return Response({'error': 'Verification expired. Please start over.'}, status=400)
 
-    if not pin or len(pin) < 4 or len(pin) > 6:
+    if not pin or len(pin) < 4 or len(pin) > 6 or not pin.isdigit():
         return Response({'error': 'PIN must be 4-6 digits.'}, status=400)
-
-    if not pin.isdigit():
-        return Response({'error': 'PIN must contain only numbers.'}, status=400)
 
     if pin != pin_confirm:
         return Response({'error': 'PINs do not match.'}, status=400)
@@ -300,8 +421,43 @@ def portal_set_pin(request):
     except Reseller.DoesNotExist:
         return Response({'error': 'Network not found.'}, status=400)
 
-    # Resolve country
+    # --- Resolve plan ---
+    from radius.utils import create_default_trial_plan
     from accounts.models import Country as CountryModel
+
+    chosen_plan = None
+    paystack_data = None
+
+    if plan_id:
+        try:
+            chosen_plan = ServicePlan.objects.get(id=plan_id, reseller=reseller, is_active=True)
+        except ServicePlan.DoesNotExist:
+            return Response({'error': 'Selected plan not found.'}, status=400)
+
+        if not chosen_plan.is_free:
+            # Require a verified Paystack payment
+            if not paystack_reference:
+                return Response({'error': 'Payment required for this plan.'}, status=400)
+
+            pending = cache.get(f'pending_payment_{verify_token}')
+            if not pending or pending.get('reference') != paystack_reference:
+                return Response({'error': 'Invalid payment reference.'}, status=400)
+
+            paystack_data, pmt_error = _verify_paystack_payment(
+                paystack_reference, pending['amount_kobo']
+            )
+            if not paystack_data:
+                return Response({'error': pmt_error}, status=400)
+
+    if chosen_plan is None:
+        # Fall back to trial plan
+        chosen_plan = ServicePlan.objects.filter(
+            reseller=reseller, is_trial=True, is_active=True
+        ).first()
+        if not chosen_plan:
+            chosen_plan = create_default_trial_plan(reseller)
+
+    # --- Create subscriber ---
     country = None
     country_code = verified_data.get('country_code', 'NG')
     try:
@@ -309,11 +465,10 @@ def portal_set_pin(request):
     except CountryModel.DoesNotExist:
         pass
 
-    # Create subscriber
     subscriber, created = Subscriber.objects.get_or_create(
         reseller=reseller,
         phone=verified_data['phone'],
-        defaults={'email': verified_data['email'], 'verified': True, 'country': country}
+        defaults={'email': verified_data['email'], 'verified': True, 'country': country},
     )
 
     if not created:
@@ -323,31 +478,13 @@ def portal_set_pin(request):
     subscriber.generate_auth_token()
     subscriber.save()
 
-    # Auto-assign trial plan and create RADIUS credentials
-    from datetime import timedelta
-    from radius.utils import assign_subscriber_to_plan, create_default_trial_plan
-    trial_plan = ServicePlan.objects.filter(
-        reseller=reseller, is_trial=True, is_active=True
-    ).first()
-    if not trial_plan:
-        trial_plan = create_default_trial_plan(reseller)
-
-    if trial_plan:
-        now = timezone.now()
-        hours = float(trial_plan.duration_hours or 0)
-        days = int(trial_plan.duration_days or 0)
-        expiry = now + timedelta(days=days, hours=hours)
-        Subscription.objects.create(
-            subscriber=subscriber,
-            plan=trial_plan,
-            reseller=reseller,
-            start_date=now,
-            expiry_date=expiry,
-            status='active',
-        )
-        assign_subscriber_to_plan(subscriber, trial_plan)
+    # Activate chosen plan
+    if chosen_plan:
+        _create_subscription(subscriber, chosen_plan, reseller, paystack_data)
 
     cache.delete(f'verified_{verify_token}')
+    if paystack_reference:
+        cache.delete(f'pending_payment_{verify_token}')
 
     return Response({
         'message': 'Account created!',
@@ -355,6 +492,108 @@ def portal_set_pin(request):
         'auth_token': subscriber.auth_token,
         'reseller_slug': reseller.slug,
     }, status=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_initiate_payment(request):
+    """
+    Initialize a Paystack transaction for plan purchase during signup.
+
+    Body:
+        verify_token  — from /api/portal/verify/
+        plan_id       — paid ServicePlan id
+
+    Returns:
+        reference, access_code, public_key, amount_kobo, email
+    """
+    import uuid
+    from django.conf import settings
+
+    verify_token = request.data.get('verify_token', '')
+    plan_id = request.data.get('plan_id')
+
+    if not verify_token or not plan_id:
+        return Response({'error': 'verify_token and plan_id are required.'}, status=400)
+
+    verified_data = cache.get(f'verified_{verify_token}')
+    if not verified_data:
+        return Response({'error': 'Session expired. Please start over.'}, status=400)
+
+    try:
+        reseller = Reseller.objects.get(id=verified_data['reseller_id'])
+    except Reseller.DoesNotExist:
+        return Response({'error': 'Network not found.'}, status=400)
+
+    try:
+        plan = ServicePlan.objects.get(id=plan_id, reseller=reseller, is_active=True)
+    except ServicePlan.DoesNotExist:
+        return Response({'error': 'Plan not found.'}, status=404)
+
+    if plan.is_free:
+        return Response({'error': 'This plan is free — no payment needed.'}, status=400)
+
+    if not reseller.payment_verified or not reseller.paystack_subaccount_code:
+        return Response({'error': 'This network does not accept online payments yet.'}, status=400)
+
+    secret_key = _get_paystack_secret_key()
+    public_key = _get_paystack_public_key()
+    if not secret_key or not public_key:
+        return Response({'error': 'Payment gateway not configured.'}, status=503)
+
+    reference = f'sw_{uuid.uuid4().hex[:20]}'
+    amount_kobo = int(plan.price_ngn * 100)
+    commission_pct = reseller.get_commission_pct()
+    fee_bearer = reseller.get_fee_bearer()
+    platform_share_kobo = int(amount_kobo * commission_pct / 100)
+
+    payload = {
+        'email': verified_data['email'],
+        'amount': amount_kobo,
+        'reference': reference,
+        'subaccount': reseller.paystack_subaccount_code,
+        'bearer': fee_bearer,
+        'transaction_charge': platform_share_kobo,
+        'metadata': {
+            'custom_fields': [
+                {'display_name': 'Phone', 'variable_name': 'phone', 'value': verified_data['phone']},
+                {'display_name': 'Plan', 'variable_name': 'plan', 'value': plan.name},
+                {'display_name': 'Network', 'variable_name': 'network', 'value': reseller.name},
+            ],
+        },
+    }
+
+    try:
+        resp = http_requests.post(
+            'https://api.paystack.co/transaction/initialize',
+            json=payload,
+            headers={'Authorization': f'Bearer {secret_key}'},
+            timeout=15,
+        )
+        body = resp.json()
+    except Exception as exc:
+        logger.error(f'Paystack init error: {exc}')
+        return Response({'error': 'Payment gateway unavailable. Please try again.'}, status=502)
+
+    if not body.get('status'):
+        logger.error(f'Paystack init failed: {body}')
+        return Response({'error': body.get('message', 'Could not initialize payment.')}, status=400)
+
+    # Cache pending payment so set-pin can verify it later
+    cache.set(f'pending_payment_{verify_token}', {
+        'reference': reference,
+        'plan_id': int(plan_id),
+        'amount_kobo': amount_kobo,
+    }, timeout=1800)
+
+    return Response({
+        'reference': reference,
+        'access_code': body['data']['access_code'],
+        'public_key': public_key,
+        'amount_kobo': amount_kobo,
+        'email': verified_data['email'],
+        'plan_name': plan.name,
+    })
 
 
 @api_view(['POST'])
