@@ -14,7 +14,7 @@ from rest_framework import status
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
-from radius.utils import assign_subscriber_to_plan, update_radcheck_password
+from radius.utils import assign_subscriber_to_plan, update_radcheck_password, disconnect_subscriber_sessions
 
 logger = logging.getLogger(__name__)
 
@@ -671,6 +671,11 @@ def portal_login_api(request):
         else:
             # Expired paid plan — still write radcheck so RADIUS accepts
             update_radcheck_password(subscriber)
+
+    # Evict any stale / still-open sessions on the router so MikroTik's
+    # Simultaneous-Use check doesn't block the new connection attempt.
+    # Errors are swallowed inside disconnect_subscriber_sessions — never blocks login.
+    disconnect_subscriber_sessions(subscriber)
 
     return Response({
         'message': 'Login successful.',

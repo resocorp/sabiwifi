@@ -101,9 +101,17 @@
         if (!noticeEl || !rawError) return;
         const e = rawError.toLowerCase();
         let heading, body;
-        if (e.includes('session limit') || e.includes('quota') || e.includes('data') && e.includes('limit')) {
-            heading = 'Data or session limit reached';
-            body = 'You have used up your plan allowance. Visit My Account to top up or change your plan.';
+        if (e.includes('no more session') || e.includes('simultaneous') || e.includes('maximum number')) {
+            heading = 'Too many devices connected';
+            body = 'You have reached the device limit for your current plan. '
+                 + 'Disconnect one of your other devices and try again, or '
+                 + '<a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;text-decoration:underline;">upgrade your plan</a> '
+                 + 'to allow more devices.';
+        } else if (e.includes('session limit') || e.includes('quota') || (e.includes('data') && e.includes('limit'))) {
+            heading = 'Data limit reached';
+            body = 'You have used up your data allowance. '
+                 + '<a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;text-decoration:underline;">Visit My Account</a> '
+                 + 'to purchase a new plan.';
         } else if (e.includes('not logged') || e.includes('session') || e.includes('timeout')) {
             heading = 'Your session has expired';
             body = 'Please log in again to continue browsing.';
@@ -112,10 +120,10 @@
             body = 'Another device is using your session. Log in again to take over.';
         } else if (e.includes('radius') || e.includes('auth')) {
             heading = 'Could not connect';
-            body = 'There was a problem authenticating your account. Please try again or contact support.';
+            body = 'There was a problem with your account. Please try again or contact support.';
         } else {
             heading = 'Connection interrupted';
-            body = 'Something went wrong with your session. Please log in again.';
+            body = 'Something went wrong. Please log in again.';
         }
         noticeEl.innerHTML = '<strong>' + heading + '</strong>' + body;
     })();
@@ -149,10 +157,21 @@
                 if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
 
                 if (data.has_active_plan === false) {
-                    showMsg('Your plan has expired. Redirecting...', 'error');
-                    setTimeout(() => {
-                        window.location.href = '/portal/account/?r=' + serial;
-                    }, 1500);
+                    btn.disabled = false;
+                    btn.textContent = 'Log In';
+                    // Show inline notice with a direct link — don't silently redirect
+                    const noticeHtml = `
+                        <div class="notice notice-amber" style="margin-bottom:16px;">
+                            <span class="notice-icon">📋</span>
+                            <div>
+                                <strong>No active plan</strong>
+                                Your plan has expired or you don't have an active subscription.
+                                <a href="/portal/account/?r=${serial}" style="color:inherit;font-weight:700;text-decoration:underline;">Go to My Account</a>
+                                to choose a plan and reconnect.
+                            </div>
+                        </div>`;
+                    document.getElementById('msg').innerHTML = noticeHtml;
+                    document.getElementById('msg').style.display = 'block';
                     return;
                 }
 

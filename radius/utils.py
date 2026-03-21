@@ -122,6 +122,93 @@ def update_radcheck_password(subscriber):
     logger.info(f"Updated radcheck password for {username}")
 
 
+def disconnect_subscriber_sessions(subscriber):
+    """
+    Send a RADIUS Disconnect-Message (DM, RFC 5176) to every NAS that has an
+    open accounting session for this subscriber.
+
+    Called at login time so MikroTik's Simultaneous-Use check doesn't reject
+    a new connection because of a stale or still-active session on another device.
+    Errors are logged but never raised — a CoA failure must not block login.
+    """
+    from radius.models import Radacct
+    from routers.models import Router
+
+    open_sessions = list(
+        Radacct.objects.filter(
+            username=subscriber.phone,
+            acctstoptime__isnull=True,
+        ).values('nasipaddress', 'acctsessionid')
+    )
+
+    if not open_sessions:
+        return
+
+    for session in open_sessions:
+        nas_ip = str(session['nasipaddress'])
+        try:
+            router = Router.objects.get(wg_tunnel_ip=nas_ip)
+        except Router.DoesNotExist:
+            logger.warning(f'CoA DM: no router found for NAS IP {nas_ip}')
+            continue
+
+        _coa_disconnect(
+            username=subscriber.phone,
+            session_id=session.get('acctsessionid', ''),
+            nas_ip=nas_ip,
+            secret=router.nas_secret,
+        )
+
+
+def _coa_disconnect(username, session_id, nas_ip, secret):
+    """
+    Build and send a raw RADIUS Disconnect-Message (code 40) over UDP.
+    Uses only stdlib — no extra dependency beyond what is already installed.
+    """
+    import hashlib
+    import socket
+    import struct
+    import os
+
+    secret_bytes = secret.encode('utf-8') if isinstance(secret, str) else secret
+    identifier = int.from_bytes(os.urandom(1), 'big')
+
+    def _attr(type_code, value_bytes):
+        return bytes([type_code, len(value_bytes) + 2]) + value_bytes
+
+    attrs = _attr(1, username.encode('utf-8'))           # User-Name (type 1)
+    if session_id:
+        attrs += _attr(44, session_id.encode('utf-8'))   # Acct-Session-Id (type 44)
+
+    length = 20 + len(attrs)   # 20-byte RADIUS header + attributes
+
+    # Authenticator = MD5(Code || ID || Length || 0×16 || Attrs || Secret)
+    pre_auth = (
+        bytes([40, identifier]) + struct.pack('!H', length)
+        + b'\x00' * 16 + attrs + secret_bytes
+    )
+    authenticator = hashlib.md5(pre_auth).digest()
+
+    packet = bytes([40, identifier]) + struct.pack('!H', length) + authenticator + attrs
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(3)
+    try:
+        sock.sendto(packet, (nas_ip, 3799))
+        resp, _ = sock.recvfrom(4096)
+        code = resp[0] if resp else 0
+        if code == 41:
+            logger.info(f'CoA DM ACK: {username} session evicted from {nas_ip}')
+        else:
+            logger.warning(f'CoA DM NAK (code={code}) from {nas_ip} for {username}')
+    except socket.timeout:
+        logger.warning(f'CoA DM timeout from {nas_ip} for {username}')
+    except OSError as exc:
+        logger.warning(f'CoA DM error for {username} on {nas_ip}: {exc}')
+    finally:
+        sock.close()
+
+
 def remove_subscriber_from_radius(subscriber):
     """Remove a subscriber from all RADIUS groups and auth."""
     username = subscriber.phone
