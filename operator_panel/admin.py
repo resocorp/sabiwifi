@@ -128,6 +128,37 @@ def _normalize_phone_admin(phone, country_code='NG'):
         return phone
 
 
+class SubscriptionInlineForm(forms.ModelForm):
+    class Meta:
+        model = Subscription
+        fields = ['plan', 'status', 'start_date', 'expiry_date']
+        widgets = {
+            'start_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
+            'expiry_date': forms.DateTimeInput(attrs={'type': 'datetime-local'}, format='%Y-%m-%dT%H:%M'),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['start_date'].input_formats = ['%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']
+        self.fields['expiry_date'].input_formats = ['%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d']
+        self.fields['plan'].required = True
+        self.fields['status'].required = True
+
+
+class SubscriptionInline(admin.TabularInline):
+    model = Subscription
+    form = SubscriptionInlineForm
+    extra = 1
+    fields = ['plan', 'status', 'start_date', 'expiry_date']
+    ordering = ['-start_date']
+    verbose_name = 'Subscription / Plan'
+    verbose_name_plural = 'Subscriptions & Plan Assignment'
+    show_change_link = True
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('plan').order_by('-start_date')
+
+
 class SubscriberAdminForm(forms.ModelForm):
     pin = forms.CharField(
         label='WiFi PIN',
@@ -161,18 +192,19 @@ class SubscriberAdminForm(forms.ModelForm):
 @admin.register(Subscriber)
 class SubscriberAdmin(SimpleHistoryAdmin):
     form = SubscriberAdminForm
-    list_display = ['phone', 'reseller', 'email', 'verified', 'active_plan', 'created_at']
+    inlines = [SubscriptionInline]
+    list_display = ['phone', 'reseller', 'email', 'verified', 'active_plan', 'plan_expiry', 'created_at']
     list_filter = ['verified', 'reseller', 'created_at']
     search_fields = ['phone', 'email', 'reseller__name']
     readonly_fields = ['pin_hash', 'auth_token', 'created_at', 'updated_at']
 
     fieldsets = (
         (None, {
-            'fields': ('reseller', 'phone', 'email', 'verified'),
+            'fields': ('reseller', 'country', 'phone', 'email', 'verified'),
         }),
         ('WiFi PIN', {
             'fields': ('pin', 'pin_hash'),
-            'description': 'Enter a new PIN to set or change it. The hash is shown for reference only.',
+            'description': 'Enter a new PIN to set or change it. Leave blank to keep existing PIN.',
         }),
         ('Session', {
             'fields': ('auth_token',),
@@ -184,19 +216,73 @@ class SubscriberAdmin(SimpleHistoryAdmin):
         }),
     )
 
+    def _active_sub(self, obj):
+        return Subscription.objects.filter(subscriber=obj, status='active').select_related('plan').first()
+
     def active_plan(self, obj):
-        sub = Subscription.objects.filter(subscriber=obj, status='active').select_related('plan').first()
+        sub = self._active_sub(obj)
         return sub.plan.name if sub else '—'
     active_plan.short_description = 'Active Plan'
 
+    def plan_expiry(self, obj):
+        sub = self._active_sub(obj)
+        if not sub:
+            return '—'
+        from django.utils import timezone
+        delta = sub.expiry_date - timezone.now()
+        days = delta.days
+        if days < 0:
+            return format_html('<span style="color:red">Expired</span>')
+        elif days == 0:
+            hours = max(0, delta.seconds // 3600)
+            return format_html('<span style="color:orange">{}h left</span>', hours)
+        return format_html('{}d left ({})', days, sub.expiry_date.strftime('%d %b %Y'))
+    plan_expiry.short_description = 'Expiry'
+
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        self._sync_radius(obj)
+
+    def save_formset(self, request, form, formset, change):
+        """When subscriptions are saved via inline, enforce one active plan and sync RADIUS."""
+        if formset.model == Subscription:
+            instances = formset.save(commit=False)
+            subscriber = form.instance
+
+            for obj in instances:
+                obj.reseller = subscriber.reseller
+                if not obj.start_date:
+                    from django.utils import timezone
+                    obj.start_date = timezone.now()
+                obj.save()
+
+            # If any inline was set to active, expire all others
+            active_being_set = [i for i in instances if i.status == 'active']
+            if active_being_set:
+                latest_active = active_being_set[-1]
+                Subscription.objects.filter(
+                    subscriber=subscriber, status='active'
+                ).exclude(pk=latest_active.pk).update(status='expired')
+
+            formset.save_m2m()
+
+            # Delete marked-for-deletion
+            for obj in formset.deleted_objects:
+                obj.delete()
+
+            self._sync_radius(subscriber)
+        else:
+            super().save_formset(request, form, formset, change)
+
+    def _sync_radius(self, subscriber):
         from radius.utils import assign_subscriber_to_plan, update_radcheck_password
-        current_sub = Subscription.objects.filter(subscriber=obj, status='active').select_related('plan').first()
+        current_sub = Subscription.objects.filter(
+            subscriber=subscriber, status='active'
+        ).select_related('plan').first()
         if current_sub:
-            assign_subscriber_to_plan(obj, current_sub.plan)
-        elif obj.auth_token:
-            update_radcheck_password(obj)
+            assign_subscriber_to_plan(subscriber, current_sub.plan)
+        elif subscriber.auth_token:
+            update_radcheck_password(subscriber)
 
 
 # --- ServicePlan ---
