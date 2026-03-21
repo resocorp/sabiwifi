@@ -5,6 +5,7 @@ import logging
 
 from django.conf import settings
 from django.contrib import admin
+from django import forms
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
@@ -106,12 +107,71 @@ class ResellerAdmin(SimpleHistoryAdmin):
 
 # --- Subscriber ---
 
+class SubscriberAdminForm(forms.ModelForm):
+    pin = forms.CharField(
+        label='WiFi PIN',
+        max_length=6,
+        min_length=4,
+        required=False,
+        help_text='Enter 4–6 digit PIN to set or change it. Leave blank to keep existing PIN.',
+        widget=forms.PasswordInput(render_value=False),
+    )
+
+    class Meta:
+        model = Subscriber
+        fields = '__all__'
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        raw_pin = self.cleaned_data.get('pin')
+        if raw_pin:
+            instance.set_pin(raw_pin)
+        if not instance.auth_token:
+            instance.generate_auth_token()
+        if commit:
+            instance.save()
+        return instance
+
+
 @admin.register(Subscriber)
 class SubscriberAdmin(SimpleHistoryAdmin):
-    list_display = ['phone', 'reseller', 'email', 'verified', 'created_at']
+    form = SubscriberAdminForm
+    list_display = ['phone', 'reseller', 'email', 'verified', 'active_plan', 'created_at']
     list_filter = ['verified', 'reseller', 'created_at']
     search_fields = ['phone', 'email', 'reseller__name']
-    readonly_fields = ['created_at', 'updated_at', 'pin_hash', 'auth_token']
+    readonly_fields = ['pin_hash', 'auth_token', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (None, {
+            'fields': ('reseller', 'phone', 'email', 'verified'),
+        }),
+        ('WiFi PIN', {
+            'fields': ('pin', 'pin_hash'),
+            'description': 'Enter a new PIN to set or change it. The hash is shown for reference only.',
+        }),
+        ('Session', {
+            'fields': ('auth_token',),
+            'classes': ('collapse',),
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    def active_plan(self, obj):
+        sub = Subscription.objects.filter(subscriber=obj, status='active').select_related('plan').first()
+        return sub.plan.name if sub else '—'
+    active_plan.short_description = 'Active Plan'
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from radius.utils import assign_subscriber_to_plan, update_radcheck_password
+        current_sub = Subscription.objects.filter(subscriber=obj, status='active').select_related('plan').first()
+        if current_sub:
+            assign_subscriber_to_plan(obj, current_sub.plan)
+        elif obj.auth_token:
+            update_radcheck_password(obj)
 
 
 # --- ServicePlan ---
