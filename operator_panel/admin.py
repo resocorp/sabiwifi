@@ -245,34 +245,34 @@ class SubscriberAdmin(SimpleHistoryAdmin):
 
     def save_formset(self, request, form, formset, change):
         """When subscriptions are saved via inline, enforce one active plan and sync RADIUS."""
-        if formset.model == Subscription:
-            instances = formset.save(commit=False)
-            subscriber = form.instance
-
-            for obj in instances:
-                obj.reseller = subscriber.reseller
-                if not obj.start_date:
-                    from django.utils import timezone
-                    obj.start_date = timezone.now()
-                obj.save()
-
-            # If any inline was set to active, expire all others
-            active_being_set = [i for i in instances if i.status == 'active']
-            if active_being_set:
-                latest_active = active_being_set[-1]
-                Subscription.objects.filter(
-                    subscriber=subscriber, status='active'
-                ).exclude(pk=latest_active.pk).update(status='expired')
-
-            formset.save_m2m()
-
-            # Delete marked-for-deletion
-            for obj in formset.deleted_objects:
-                obj.delete()
-
-            self._sync_radius(subscriber)
-        else:
+        if formset.model != Subscription:
             super().save_formset(request, form, formset, change)
+            return
+
+        from django.utils import timezone
+        subscriber = form.instance
+
+        # Fill in subscriber + reseller on every form before saving
+        for f in formset.forms:
+            if f.has_changed() and f.is_valid() and f.instance:
+                f.instance.subscriber = subscriber
+                f.instance.reseller = subscriber.reseller
+                if not f.instance.start_date:
+                    f.instance.start_date = timezone.now()
+
+        # Let Django handle saves + deletions normally
+        instances = formset.save()
+
+        # Enforce single active plan: if any just-saved instance is active,
+        # expire all other active subscriptions for this subscriber
+        newly_active = [i for i in instances if i.status == 'active']
+        if newly_active:
+            keep_pk = newly_active[-1].pk
+            Subscription.objects.filter(
+                subscriber=subscriber, status='active'
+            ).exclude(pk=keep_pk).update(status='expired')
+
+        self._sync_radius(subscriber)
 
     def _sync_radius(self, subscriber):
         from radius.utils import assign_subscriber_to_plan, update_radcheck_password
