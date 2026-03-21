@@ -33,6 +33,7 @@
 </head>
 <body>
     <div class="container">
+        {% if branding.logo %}<div style="margin-bottom:16px"><img src="{{ branding.logo }}" alt="Logo" style="max-width:120px;max-height:60px"></div>{% endif %}
         <h1>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
         <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected.{% endif %}</p>
 

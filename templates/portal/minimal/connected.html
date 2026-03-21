@@ -29,6 +29,7 @@
 </head>
 <body>
     <div class="container">
+        {% if branding.logo %}<div style="margin-bottom:16px"><img src="{{ branding.logo }}" alt="Logo" style="max-width:100px;max-height:50px"></div>{% endif %}
         <div class="check">✓</div>
         <h1>Connected</h1>
         <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}You're online.{% endif %}</p>
