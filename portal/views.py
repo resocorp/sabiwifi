@@ -13,7 +13,7 @@ from rest_framework import status
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
-from radius.utils import assign_subscriber_to_plan
+from radius.utils import assign_subscriber_to_plan, update_radcheck_password
 
 logger = logging.getLogger(__name__)
 
@@ -299,6 +299,32 @@ def portal_login_api(request):
 
     if current_sub:
         assign_subscriber_to_plan(subscriber, current_sub.plan)
+    else:
+        # No active subscription — check if last plan was a free trial, auto-renew it
+        from datetime import timedelta
+        last_sub = Subscription.objects.filter(
+            subscriber=subscriber
+        ).select_related('plan').order_by('-expiry_date').first()
+
+        if last_sub and last_sub.plan.is_trial and last_sub.plan.is_free:
+            plan = last_sub.plan
+            now = timezone.now()
+            hours = float(plan.duration_hours or 0)
+            days = int(plan.duration_days or 0)
+            expiry = now + timedelta(days=days, hours=hours)
+            current_sub = Subscription.objects.create(
+                subscriber=subscriber,
+                plan=plan,
+                reseller=subscriber.reseller,
+                start_date=now,
+                expiry_date=expiry,
+                status='active',
+            )
+            assign_subscriber_to_plan(subscriber, plan)
+            logger.info(f"Auto-renewed trial for {subscriber.phone}")
+        else:
+            # Expired paid plan — still write radcheck so RADIUS accepts
+            update_radcheck_password(subscriber)
 
     return Response({
         'message': 'Login successful.',
@@ -445,14 +471,7 @@ def portal_change_pin(request):
     subscriber.save()
 
     # Update RADIUS auth token
-    from radius.models import Radcheck
-    Radcheck.objects.filter(username=subscriber.phone, attribute='Cleartext-Password').delete()
-    Radcheck.objects.create(
-        username=subscriber.phone,
-        attribute='Cleartext-Password',
-        op=':=',
-        value=subscriber.auth_token,
-    )
+    update_radcheck_password(subscriber)
 
     return Response({
         'message': 'PIN updated successfully.',
@@ -638,9 +657,6 @@ def portal_disconnect(request):
     subscriber.save()
 
     # Update RADIUS
-    from radius.models import Radcheck
-    Radcheck.objects.filter(username=subscriber.phone, attribute='Cleartext-Password').update(
-        value=subscriber.auth_token
-    )
+    update_radcheck_password(subscriber)
 
     return Response({'message': 'Session disconnected.'})

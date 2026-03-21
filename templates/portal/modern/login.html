@@ -101,7 +101,16 @@
             if (ok) {
                 // Store auth token for account portal
                 if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
-                showMsg('Authenticated! Connecting to WiFi...', 'success');
+
+                if (data.has_active_plan === false) {
+                    showMsg('Your plan has expired. Redirecting...', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/portal/account/?r=' + serial;
+                    }, 1500);
+                    return;
+                }
+
+                showMsg('Connecting to WiFi...', 'success');
 
                 if (linkLogin) {
                     // Submit RADIUS credentials to MikroTik hotspot
@@ -113,6 +122,8 @@
                     form.submit();
                 } else {
                     showMsg('Connected! You can now use the internet.', 'success');
+                    btn.disabled = false;
+                    btn.textContent = 'Log In';
                 }
             } else {
                 btn.disabled = false;

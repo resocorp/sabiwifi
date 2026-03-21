@@ -108,6 +108,20 @@ def assign_subscriber_to_plan(subscriber, plan):
     logger.info(f"Subscriber {username} assigned to RADIUS group {group_name}")
 
 
+def update_radcheck_password(subscriber):
+    """Write/update only the Cleartext-Password in radcheck (no group change)."""
+    username = subscriber.phone
+    Radcheck.objects.filter(username=username, attribute='Cleartext-Password').delete()
+    if subscriber.auth_token:
+        Radcheck.objects.create(
+            username=username,
+            attribute='Cleartext-Password',
+            op=':=',
+            value=subscriber.auth_token,
+        )
+    logger.info(f"Updated radcheck password for {username}")
+
+
 def remove_subscriber_from_radius(subscriber):
     """Remove a subscriber from all RADIUS groups and auth."""
     username = subscriber.phone
