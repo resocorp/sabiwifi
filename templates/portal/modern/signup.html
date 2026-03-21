@@ -397,13 +397,15 @@
                     amount: data.amount_kobo,
                     ref: data.reference,
                     access_code: data.access_code,
-                    onSuccess: function(response) {
+                    callback: function(response) {
                         paystackReference = response.reference || data.reference;
                         showMsg('Payment successful! Now set your PIN.', 'success');
                         goToStep(4);
                     },
-                    onCancel: function() {
+                    onClose: function() {
                         showMsg('Payment was cancelled. Please try again.', 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Pay & Continue';
                     },
                 });
                 handler.openIframe();
