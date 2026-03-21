@@ -3,21 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connected!</title>
+    <title>Connected — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}SabiWiFi{% endif %}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-        .card { background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); text-align: center; max-width: 360px; width: 100%; }
-        .check { font-size: 48px; margin-bottom: 16px; }
-        h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-        p { font-size: 14px; color: #6B7280; }
+        .container { width: 100%; max-width: 360px; }
+        .card { background: #fff; border-radius: 16px; padding: 28px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .logo { text-align: center; margin-bottom: 12px; }
+        .logo img { max-width: 100px; max-height: 50px; }
+        .icon { font-size: 48px; text-align: center; margin-bottom: 10px; }
+        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+        .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 20px; }
+        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #F3F4F6; font-size: 14px; }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #6B7280; }
+        .info-value { font-weight: 500; text-align: right; max-width: 58%; }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #D1FAE5; color: #065F46; margin-left: 4px; white-space: nowrap; }
+        .divider { border: none; border-top: 1px solid #F3F4F6; margin: 16px 0; }
+        .account-note { background: {{ branding.primary_color|default:"#0052CC" }}0D; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+        .account-note strong { display: block; margin-bottom: 3px; }
+        .account-note a { color: {{ branding.primary_color|default:"#0052CC" }}; font-weight: 600; text-decoration: none; }
+        .countdown-bar-wrap { background: #F3F4F6; border-radius: 99px; height: 4px; margin-bottom: 10px; overflow: hidden; }
+        .countdown-bar { height: 4px; border-radius: 99px; background: {{ branding.primary_color|default:"#0052CC" }}; width: 100%; transition: width 1s linear; }
+        .countdown-text { font-size: 12px; color: #9CA3AF; text-align: center; margin-bottom: 16px; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
+        .skeleton { background: #F3F4F6; border-radius: 4px; height: 13px; margin: 8px 0; animation: shimmer 1.2s ease-in-out infinite; }
+        @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="check">✅</div>
-        <h1>You're Connected!</h1>
-        <p>Enjoy your internet. You can manage your account at<br><a href="/portal/account/" style="color:#0052CC;font-weight:600;">My Account</a></p>
+    <div class="container">
+        <div class="card">
+            {% if branding.logo %}
+            <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
+            {% endif %}
+
+            <div class="icon">✅</div>
+            <h1>You're Connected!</h1>
+            <p class="subtitle">
+                Welcome to {% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}the WiFi{% endif %}
+            </p>
+
+            <!-- Subscriber account info — filled by JS -->
+            <div id="account-info">
+                <div class="skeleton" style="width:75%"></div>
+                <div class="skeleton" style="width:55%"></div>
+                <div class="skeleton" style="width:65%"></div>
+            </div>
+
+            <hr class="divider">
+
+            <div class="account-note">
+                <strong>Manage your account anytime</strong>
+                Go to <a id="account-link" href="/portal/account/?r={{ serial|urlencode }}">My Account</a>
+                to view your plan, change your WiFi PIN, or purchase a new plan.
+            </div>
+
+            <!-- Progress bar countdown -->
+            <div class="countdown-bar-wrap">
+                <div class="countdown-bar" id="countdown-bar"></div>
+            </div>
+            <p class="countdown-text">Redirecting in <strong id="countdown-num">15</strong>s &mdash; or</p>
+
+            <button class="btn btn-primary" onclick="goNow()">Start Browsing Now</button>
+        </div>
     </div>
+
+    <script>
+    const serial = '{{ serial|escapejs }}';
+    const urlParams = new URLSearchParams(window.location.search);
+    const dst = urlParams.get('dst') || '';
+    const accountUrl = '/portal/account/?r=' + encodeURIComponent(serial);
+    const TOTAL = 15;
+    let remaining = TOTAL;
+    let countdownTimer = null;
+
+    document.getElementById('account-link').href = accountUrl;
+
+    function goNow() {
+        clearInterval(countdownTimer);
+        window.location.href = dst || accountUrl;
+    }
+
+    function tick() {
+        remaining--;
+        const numEl = document.getElementById('countdown-num');
+        const barEl = document.getElementById('countdown-bar');
+        if (numEl) numEl.textContent = remaining;
+        if (barEl) barEl.style.width = (remaining / TOTAL * 100) + '%';
+        if (remaining <= 0) {
+            clearInterval(countdownTimer);
+            window.location.href = dst || accountUrl;
+        }
+    }
+
+    // Load subscriber account info
+    const authToken = localStorage.getItem('sabiwifi_token') || '';
+
+    function renderInfo(data) {
+        const s = data.subscription;
+        let html = `
+            <div class="info-row">
+                <span class="info-label">Phone</span>
+                <span class="info-value">${data.phone || '—'}</span>
+            </div>`;
+        if (s) {
+            const expDate = s.expiry_date
+                ? new Date(s.expiry_date).toLocaleDateString('en-NG', {day:'numeric', month:'short', year:'numeric'})
+                : '—';
+            const daysLeft = s.days_remaining > 1
+                ? s.days_remaining + ' days left'
+                : s.days_remaining === 1 ? '1 day left' : 'Expires today';
+            html += `
+            <div class="info-row">
+                <span class="info-label">Plan</span>
+                <span class="info-value">${s.plan_name}<span class="badge">${daysLeft}</span></span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Speed</span>
+                <span class="info-value">${s.speed_display}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Data</span>
+                <span class="info-value">${s.data_cap_display}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Expires</span>
+                <span class="info-value">${expDate}</span>
+            </div>`;
+        } else {
+            html += `
+            <div class="info-row">
+                <span class="info-label">Plan</span>
+                <span class="info-value" style="color:#D97706;">No active plan</span>
+            </div>`;
+        }
+        document.getElementById('account-info').innerHTML = html;
+    }
+
+    if (authToken) {
+        fetch('/api/portal/account/?token=' + encodeURIComponent(authToken))
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (ok) renderInfo(data);
+            else document.getElementById('account-info').innerHTML = '';
+        })
+        .catch(() => { document.getElementById('account-info').innerHTML = ''; });
+    } else {
+        document.getElementById('account-info').innerHTML = '';
+    }
+
+    countdownTimer = setInterval(tick, 1000);
+    </script>
 </body>
 </html>

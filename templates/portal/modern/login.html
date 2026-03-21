@@ -45,7 +45,7 @@
 
             <div id="login-form">
                 <label>Phone Number</label>
-                <input type="tel" id="phone" placeholder="+234" required>
+                <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
 
                 <label>WiFi PIN</label>
                 <input type="password" id="pin" placeholder="----" maxlength="4" inputmode="numeric" required>
@@ -113,11 +113,16 @@
                 showMsg('Connecting to WiFi...', 'success');
 
                 if (linkLogin) {
-                    // Submit RADIUS credentials to MikroTik hotspot
+                    // Submit RADIUS credentials to MikroTik hotspot.
+                    // Route through our connected page so subscriber sees account info,
+                    // then auto-redirects to their original destination.
+                    const connectedUrl = window.location.protocol + '//' + window.location.host
+                        + '/portal/connected/?r=' + encodeURIComponent(serial)
+                        + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
                     const form = document.getElementById('hotspot-form');
                     document.getElementById('hs-username').value = data.phone || phone;
                     document.getElementById('hs-password').value = data.auth_token || '';
-                    document.getElementById('hs-dst').value = linkOrig || '';
+                    document.getElementById('hs-dst').value = connectedUrl;
                     form.action = linkLogin;
                     form.submit();
                 } else {

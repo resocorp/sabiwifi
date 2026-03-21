@@ -60,7 +60,7 @@
                 <h1>My Account</h1>
                 <div id="login-msg"></div>
                 <label>Phone Number</label>
-                <input type="tel" id="login-phone" placeholder="+234">
+                <input type="tel" id="login-phone" placeholder="08066..." inputmode="numeric">
                 <label>WiFi PIN</label>
                 <input type="password" id="login-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
                 <button class="btn btn-primary mt-16" id="login-btn" onclick="doLogin()">Log In</button>
@@ -77,7 +77,7 @@
                 <div id="reset-msg"></div>
                 <div id="reset-step-1">
                     <label>Phone Number</label>
-                    <input type="tel" id="reset-phone" placeholder="+234">
+                    <input type="tel" id="reset-phone" placeholder="08066..." inputmode="numeric">
                     <button class="btn btn-primary mt-16" onclick="doResetRequest()">Send Reset Code</button>
                 </div>
                 <div id="reset-step-2" style="display:none;">

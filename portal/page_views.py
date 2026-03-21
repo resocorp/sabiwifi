@@ -40,7 +40,7 @@ def portal_login(request):
 
 
 def portal_connected(request):
-    """Post-authentication success page."""
+    """Post-authentication success page — shows account info and countdown."""
     serial = request.GET.get('r', '')
     reseller = _get_reseller_from_serial(serial)
     branding = reseller.branding if reseller else {}
@@ -49,6 +49,7 @@ def portal_connected(request):
     return render(request, f'portal/{template_name}/connected.html', {
         'reseller': reseller,
         'branding': branding,
+        'serial': serial,
     })
 
 
