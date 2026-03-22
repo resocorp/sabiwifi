@@ -39,6 +39,9 @@ urlpatterns = [
 
     # Operator
     path('operator/', include('operator_panel.urls')),
+
+    # Notifications (WA webhook + reseller config + broadcasts)
+    path('api/notifications/', include('notifications.urls')),
 ]
 
 if settings.DEBUG:

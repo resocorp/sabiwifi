@@ -13,4 +13,5 @@ urlpatterns = [
     path('routers/', views.routers_list, name='dashboard-routers'),
     path('routers/add/', views.router_add, name='dashboard-router-add'),
     path('settings/', views.settings_page, name='dashboard-settings'),
+    path('broadcasts/', views.broadcasts_page, name='dashboard-broadcasts'),
 ]

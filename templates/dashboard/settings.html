@@ -280,7 +280,343 @@
         {% endif %}
     </div>
 
+
+    <!-- Notifications -->
+    <div class="bg-white rounded-xl border border-border p-5">
+        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Notifications</h2>
+
+        <!-- WhatsApp Connection -->
+        <div class="mb-5 pb-5 border-b border-border">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <p class="font-medium text-sm">WhatsApp</p>
+                    <p class="text-xs text-text-secondary mt-0.5" id="wa-status-text">Checking...</p>
+                </div>
+                <div class="flex gap-2">
+                    <button id="wa-connect-btn" onclick="waConnect()"
+                        class="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hidden">
+                        Connect
+                    </button>
+                    <button id="wa-disconnect-btn" onclick="waDisconnect()"
+                        class="px-3 py-1.5 border border-danger text-danger text-xs font-semibold rounded-lg hidden">
+                        Disconnect
+                    </button>
+                    <button id="wa-test-btn" onclick="waTest()"
+                        class="px-3 py-1.5 border border-border text-text-secondary text-xs rounded-lg hidden">
+                        Send Test
+                    </button>
+                </div>
+            </div>
+            <!-- QR code area -->
+            <div id="wa-qr-wrap" class="hidden text-center py-4">
+                <p class="text-xs text-text-secondary mb-3">Scan this QR code with WhatsApp on your phone<br><span class="font-medium">Settings → Linked Devices → Link a Device</span></p>
+                <img id="wa-qr-img" src="" alt="QR Code" class="inline-block border border-border rounded-lg" style="max-width:220px">
+                <p class="text-xs text-text-secondary mt-2">QR refreshes automatically. Waiting for scan...</p>
+            </div>
+        </div>
+
+        <!-- What to send subscribers -->
+        <div class="mb-5 pb-5 border-b border-border">
+            <p class="font-medium text-sm mb-3">Messages to your subscribers</p>
+            <div class="space-y-2" id="sub-toggles">
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Plan expiry warning (3 days before)</span>
+                    <input type="checkbox" id="tog-expiry3d" class="toggle-sub" data-key="send_plan_expiry_3d">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Plan expiry warning (day before)</span>
+                    <input type="checkbox" id="tog-expiry1d" class="toggle-sub" data-key="send_plan_expiry_1d">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Plan expired notice</span>
+                    <input type="checkbox" id="tog-expired" class="toggle-sub" data-key="send_plan_expired">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Welcome message on signup</span>
+                    <input type="checkbox" id="tog-welcome" class="toggle-sub" data-key="send_welcome">
+                </label>
+            </div>
+            <div class="mt-3">
+                <label class="text-xs text-text-secondary font-medium">Channel for subscriber messages</label>
+                <select id="sub-channel" class="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm">
+                    <option value="sms">SMS only</option>
+                    <option value="whatsapp">WhatsApp only</option>
+                    <option value="both">WhatsApp + SMS</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- What notifies me -->
+        <div class="mb-5 pb-5 border-b border-border">
+            <p class="font-medium text-sm mb-3">Alerts for you</p>
+            <div class="space-y-2">
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>New subscriber signup</span>
+                    <input type="checkbox" id="tog-newsub" class="toggle-me" data-key="recv_new_subscriber">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Payment received</span>
+                    <input type="checkbox" id="tog-payment" class="toggle-me" data-key="recv_payment">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Router went offline</span>
+                    <input type="checkbox" id="tog-offline" class="toggle-me" data-key="recv_router_offline">
+                </label>
+                <label class="flex items-center justify-between text-sm py-1">
+                    <span>Router came back online</span>
+                    <input type="checkbox" id="tog-online" class="toggle-me" data-key="recv_router_recovered">
+                </label>
+            </div>
+            <div class="mt-3">
+                <label class="text-xs text-text-secondary font-medium">Channel for your alerts</label>
+                <select id="me-channel" class="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm">
+                    <option value="sms">SMS only</option>
+                    <option value="whatsapp">WhatsApp only</option>
+                    <option value="both">WhatsApp + SMS</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Admin contacts -->
+        <div class="mb-5 pb-5 border-b border-border">
+            <p class="font-medium text-sm mb-3">Admin Contacts <span class="text-xs text-text-secondary font-normal">(also receive operational alerts)</span></p>
+            <div id="contacts-list" class="space-y-2 mb-3"></div>
+            <div class="flex gap-2">
+                <input id="contact-name" type="text" placeholder="Name" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm">
+                <input id="contact-phone" type="tel" placeholder="Phone" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm">
+                <select id="contact-channel" class="px-3 py-2 border border-border rounded-lg text-sm">
+                    <option value="sms">SMS</option>
+                    <option value="whatsapp">WA</option>
+                    <option value="both">Both</option>
+                </select>
+                <button onclick="addContact()" class="px-3 py-2 bg-primary text-white text-sm font-semibold rounded-lg">Add</button>
+            </div>
+        </div>
+
+        <!-- Message templates -->
+        <div class="mb-5 pb-5 border-b border-border">
+            <p class="font-medium text-sm mb-1">Message Templates</p>
+            <p class="text-xs text-text-secondary mb-3">Customise the text your subscribers receive. Variables: <code class="bg-gray-100 px-1 rounded">&#123;&#123;name&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;plan&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;expiry_date&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;link&#125;&#125;</code></p>
+            <div id="templates-list" class="space-y-3"></div>
+        </div>
+
+        <p id="notif-save-msg" class="text-xs text-accent mb-3 hidden">Settings saved.</p>
+        <button onclick="saveNotifConfig()"
+            class="w-full py-2.5 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary-dark transition">
+            Save Notification Settings
+        </button>
+    </div>
+
 </div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+let notifData = {};
+
+// --------------- WhatsApp ---------------
+let waPoller = null;
+
+function waUpdateUI(status, phone) {
+    const statusText = document.getElementById('wa-status-text');
+    const connectBtn = document.getElementById('wa-connect-btn');
+    const disconnectBtn = document.getElementById('wa-disconnect-btn');
+    const testBtn = document.getElementById('wa-test-btn');
+    const qrWrap = document.getElementById('wa-qr-wrap');
+
+    if (status === 'connected') {
+        statusText.innerHTML = '<span class="text-accent font-medium">&#9679; Connected</span> as ' + phone;
+        connectBtn.classList.add('hidden');
+        disconnectBtn.classList.remove('hidden');
+        testBtn.classList.remove('hidden');
+        qrWrap.classList.add('hidden');
+        stopWaPoller();
+    } else if (status === 'connecting') {
+        statusText.innerHTML = '<span class="text-warning font-medium">&#9679; Connecting...</span> Scan QR code below';
+        connectBtn.classList.add('hidden');
+        disconnectBtn.classList.add('hidden');
+        testBtn.classList.add('hidden');
+        qrWrap.classList.remove('hidden');
+    } else {
+        statusText.innerHTML = '<span class="text-text-secondary">&#9679; Not connected</span>';
+        connectBtn.classList.remove('hidden');
+        disconnectBtn.classList.add('hidden');
+        testBtn.classList.add('hidden');
+        qrWrap.classList.add('hidden');
+    }
+}
+
+function pollWaStatus() {
+    fetch('/api/notifications/wa/status/', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+        waUpdateUI(data.status, data.phone);
+        if (data.qr) {
+            document.getElementById('wa-qr-img').src = data.qr;
+            document.getElementById('wa-qr-wrap').classList.remove('hidden');
+        }
+    })
+    .catch(() => {});
+}
+
+function startWaPoller() {
+    stopWaPoller();
+    pollWaStatus();
+    waPoller = setInterval(pollWaStatus, 3000);
+}
+
+function stopWaPoller() {
+    if (waPoller) { clearInterval(waPoller); waPoller = null; }
+}
+
+function waConnect() {
+    fetch('/api/notifications/wa/connect/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+    }).then(r => r.json()).then(data => {
+        if (data.ok) startWaPoller();
+        else alert(data.error || 'Failed to start WhatsApp session.');
+    });
+}
+
+function waDisconnect() {
+    if (!confirm('Disconnect WhatsApp? Your subscribers will no longer receive WhatsApp messages.')) return;
+    fetch('/api/notifications/wa/disconnect/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+    }).then(() => waUpdateUI('disconnected', ''));
+}
+
+function waTest() {
+    fetch('/api/notifications/wa/test/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+    }).then(r => r.json()).then(data => {
+        alert(data.ok ? data.message : (data.error || 'Test failed.'));
+    });
+}
+
+// --------------- Config load/save ---------------
+function loadNotifConfig() {
+    fetch('/api/notifications/config/', { credentials: 'same-origin' })
+    .then(r => r.json())
+    .then(data => {
+        notifData = data;
+        const c = data.config;
+        const keyMap = {
+            'send_plan_expiry_3d': 'tog-expiry3d',
+            'send_plan_expiry_1d': 'tog-expiry1d',
+            'send_plan_expired':   'tog-expired',
+            'send_welcome':        'tog-welcome',
+            'recv_new_subscriber': 'tog-newsub',
+            'recv_payment':        'tog-payment',
+            'recv_router_offline': 'tog-offline',
+            'recv_router_recovered': 'tog-online',
+        };
+        Object.entries(keyMap).forEach(([k, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!c[k];
+        });
+        document.getElementById('sub-channel').value = c.subscriber_channel || 'sms';
+        document.getElementById('me-channel').value = c.reseller_channel || 'sms';
+
+        renderContacts(data.contacts);
+        renderTemplates(data.templates);
+        waUpdateUI(data.wa.status, data.wa.phone);
+        if (data.wa.status === 'connecting') startWaPoller();
+    });
+}
+
+function renderContacts(contacts) {
+    const el = document.getElementById('contacts-list');
+    if (!contacts.length) { el.innerHTML = '<p class="text-xs text-text-secondary">No admin contacts yet.</p>'; return; }
+    el.innerHTML = contacts.map(c => `
+        <div class="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+            <span class="font-medium">${c.name}</span>
+            <span class="text-text-secondary">${c.phone}</span>
+            <span class="text-xs text-text-secondary">${c.channel.toUpperCase()}</span>
+            <button onclick="deleteContact(${c.id})" class="text-danger text-xs hover:underline ml-2">Remove</button>
+        </div>`).join('');
+}
+
+function renderTemplates(templates) {
+    const labels = {
+        'plan_expiry_3d': 'Expiry — 3 days before',
+        'plan_expiry_1d': 'Expiry — day before',
+        'plan_expired':   'Plan expired',
+        'welcome':        'Welcome on signup',
+    };
+    const el = document.getElementById('templates-list');
+    el.innerHTML = Object.entries(labels).map(([key, label]) => {
+        const t = templates[key] || { body: '', is_enabled: true };
+        return `<div class="border border-border rounded-lg p-3">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-medium">${label}</span>
+                <label class="flex items-center gap-1 text-xs">
+                    <input type="checkbox" data-tmpl="${key}" class="tmpl-toggle" ${t.is_enabled ? 'checked' : ''}> Enabled
+                </label>
+            </div>
+            <textarea data-tmpl-body="${key}" rows="2"
+                class="w-full text-xs px-2 py-1.5 border border-border rounded-lg resize-none">${t.body}</textarea>
+        </div>`;
+    }).join('');
+}
+
+function saveNotifConfig() {
+    const payload = {
+        subscriber_channel: document.getElementById('sub-channel').value,
+        reseller_channel:   document.getElementById('me-channel').value,
+        templates: {},
+    };
+    document.querySelectorAll('.toggle-sub, .toggle-me').forEach(el => {
+        payload[el.dataset.key] = el.checked;
+    });
+    document.querySelectorAll('.tmpl-toggle').forEach(el => {
+        const key = el.dataset.tmpl;
+        const body = document.querySelector(`[data-tmpl-body="${key}"]`)?.value || '';
+        payload.templates[key] = { body, is_enabled: el.checked };
+    });
+
+    fetch('/api/notifications/config/save/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }).then(r => r.json()).then(data => {
+        if (data.ok) {
+            const msg = document.getElementById('notif-save-msg');
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+        }
+    });
+}
+
+function addContact() {
+    const name = document.getElementById('contact-name').value.trim();
+    const phone = document.getElementById('contact-phone').value.trim();
+    const channel = document.getElementById('contact-channel').value;
+    if (!name || !phone) { alert('Name and phone required.'); return; }
+    fetch('/api/notifications/contacts/add/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, phone, channel }),
+    }).then(r => r.json()).then(data => {
+        if (data.id) {
+            document.getElementById('contact-name').value = '';
+            document.getElementById('contact-phone').value = '';
+            loadNotifConfig();
+        }
+    });
+}
+
+function deleteContact(id) {
+    fetch('/api/notifications/contacts/' + id + '/delete/', {
+        method: 'DELETE', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF },
+    }).then(() => loadNotifConfig());
+}
+
+loadNotifConfig();
+</script>
 
 {% endwith %}
 {% endblock %}

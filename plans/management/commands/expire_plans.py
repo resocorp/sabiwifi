@@ -52,6 +52,17 @@ class Command(BaseCommand):
                 # Remove from RADIUS so new auth attempts are rejected
                 remove_subscriber_from_radius(subscriber)
 
+                # Notify subscriber their plan has expired
+                try:
+                    from notifications.notify import notify_subscriber
+                    notify_subscriber(subscriber, 'plan_expired', {
+                        'name': subscriber.phone,
+                        'plan': sub.plan.name,
+                        'link': f'https://app.sabiwifi.com/portal/account/?r={subscriber.reseller.slug}',
+                    })
+                except Exception as _exc:
+                    logger.warning(f'Expiry notify failed for {subscriber.phone}: {_exc}')
+
                 logger.info(
                     f'Expired: {subscriber.phone} plan={sub.plan.name} '
                     f'expired_at={sub.expiry_date.isoformat()}'

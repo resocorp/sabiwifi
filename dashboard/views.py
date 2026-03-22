@@ -465,3 +465,19 @@ def settings_page(request):
         'reseller': reseller,
         'errors': errors,
     })
+
+
+@login_required
+def broadcasts_page(request):
+    """Broadcasts — compose and track bulk messages."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+    try:
+        wa_connected = reseller.whatsapp_session.status == 'connected'
+    except Exception:
+        wa_connected = False
+    return render(request, 'dashboard/broadcasts.html', {
+        'reseller': reseller,
+        'wa_connected': wa_connected,
+    })

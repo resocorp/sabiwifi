@@ -77,6 +77,22 @@ class Command(BaseCommand):
         if log_entries:
             RouterHealthLog.objects.bulk_create(log_entries)
 
+        # Send notifications for status changes
+        for router, old, new in [(e.router, None, e.event) for e in log_entries]:
+            try:
+                from notifications.notify import notify_reseller, notify_admin_contacts
+                ctx = {
+                    'location': router.location_name or router.serial_number,
+                    'serial': router.serial_number,
+                    'offline_duration': router.offline_duration_display,
+                }
+                event = 'router_offline' if new == 'offline' else 'router_recovered'
+                if router.reseller:
+                    notify_reseller(router.reseller, event, ctx)
+                    notify_admin_contacts(router.reseller, event, ctx)
+            except Exception as exc:
+                logger.warning(f'Router notify failed for {router.serial_number}: {exc}')
+
         msg = (
             f'Router check: {online_count} online, {offline_count} offline, '
             f'{len(log_entries)} status change(s).'

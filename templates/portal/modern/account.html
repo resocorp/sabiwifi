@@ -129,6 +129,25 @@
                 <button class="btn btn-danger mt-8" id="disconnect-btn" onclick="doDisconnectAll()">📵 Disconnect All Devices</button>
             </div>
 
+            <!-- Notification Preferences -->
+            <div class="card" id="notif-prefs-card">
+                <h2>Notification Preferences</h2>
+                <p class="text-muted" style="font-size:12px;margin-bottom:12px">Choose which messages you receive from your network.</p>
+                <label class="info-row" style="cursor:pointer">
+                    <span class="info-label">Service alerts</span>
+                    <input type="checkbox" id="pref-alerts" onchange="saveNotifPrefs()">
+                </label>
+                <label class="info-row" style="cursor:pointer">
+                    <span class="info-label">Promotions</span>
+                    <input type="checkbox" id="pref-promos" onchange="saveNotifPrefs()">
+                </label>
+                <label class="info-row" style="cursor:pointer">
+                    <span class="info-label">Marketing</span>
+                    <input type="checkbox" id="pref-marketing" onchange="saveNotifPrefs()">
+                </label>
+                <p id="notif-prefs-msg" style="font-size:11px;color:#10B981;margin-top:8px;display:none">Preferences saved.</p>
+            </div>
+
             <!-- Payment History -->
             <div class="card">
                 <h2>Payment History</h2>
@@ -436,9 +455,44 @@
         showSection('login-section');
     }
 
+    // --- Notification prefs ---
+    function loadNotifPrefs() {
+        if (!authToken) return;
+        fetch('/api/notifications/subscriber-prefs/?token=' + encodeURIComponent(authToken))
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (!data) return;
+            document.getElementById('pref-alerts').checked = !!data.receive_alerts;
+            document.getElementById('pref-promos').checked = !!data.receive_promos;
+            document.getElementById('pref-marketing').checked = !!data.receive_marketing;
+        }).catch(() => {});
+    }
+
+    function saveNotifPrefs() {
+        if (!authToken) return;
+        const payload = {
+            token: authToken,
+            receive_alerts: document.getElementById('pref-alerts').checked,
+            receive_promos: document.getElementById('pref-promos').checked,
+            receive_marketing: document.getElementById('pref-marketing').checked,
+        };
+        fetch('/api/notifications/subscriber-prefs/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).then(r => r.json()).then(data => {
+            if (data.ok) {
+                const msg = document.getElementById('notif-prefs-msg');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 2500);
+            }
+        }).catch(() => {});
+    }
+
     // --- Auto-login if token exists ---
     if (authToken) {
         loadAccount();
+        loadNotifPrefs();
     }
     </script>
 </body>

@@ -139,6 +139,10 @@ PAYSTACK_PUBLIC_KEY = config('PAYSTACK_PUBLIC_KEY', default='')
 TERMII_API_KEY = config('TERMII_API_KEY', default='')
 TERMII_SENDER_ID = config('TERMII_SENDER_ID', default='SabiWiFi')
 
+# WhatsApp sidecar (Node/Baileys)
+WA_SERVICE_URL = config('WA_SERVICE_URL', default='http://127.0.0.1:3001')
+WA_API_KEY = config('WA_API_KEY', default='')
+
 # Server infrastructure
 SERVER_IP = config('SERVER_IP', default='127.0.0.1')
 SERVER_WG_PUBLIC_KEY = config('SERVER_WG_PUBLIC_KEY', default='')

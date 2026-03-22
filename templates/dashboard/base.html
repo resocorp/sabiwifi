@@ -30,6 +30,10 @@
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'routers' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
                 <span>📡</span> Routers
             </a>
+            <a href="{% url 'dashboard-broadcasts' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'broadcasts' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
+                <span>📢</span> Broadcasts
+            </a>
             <a href="{% url 'dashboard-settings' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'settings' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
                 <span>⚙️</span> Settings

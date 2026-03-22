@@ -380,6 +380,21 @@ def _create_subscription(subscriber, plan, reseller, paystack_data=None):
             payment_method='free',
         )
 
+    # Notify reseller of payment (non-free plans only)
+    if paystack_data and not plan.is_free:
+        try:
+            from notifications.notify import notify_reseller, notify_admin_contacts
+            ctx = {
+                'name': subscriber.phone,
+                'phone': subscriber.phone,
+                'plan': plan.name,
+                'amount': f'{float(plan.price_ngn):,.0f}',
+            }
+            notify_reseller(reseller, 'payment_received', ctx)
+            notify_admin_contacts(reseller, 'payment_received', ctx)
+        except Exception as _exc:
+            logger.warning(f'Payment notify failed: {_exc}')
+
     return sub
 
 
@@ -485,6 +500,23 @@ def portal_set_pin(request):
     cache.delete(f'verified_{verify_token}')
     if paystack_reference:
         cache.delete(f'pending_payment_{verify_token}')
+
+    # Send welcome message to subscriber + new subscriber alert to reseller
+    try:
+        from notifications.notify import notify_subscriber, notify_reseller, notify_admin_contacts
+        plan_name = chosen_plan.name if chosen_plan else 'Free Trial'
+        link = f'https://app.sabiwifi.com/portal/account/?r={reseller.slug}'
+        notify_subscriber(subscriber, 'welcome', {
+            'name': subscriber.phone, 'plan': plan_name, 'link': link,
+        })
+        notify_reseller(reseller, 'new_subscriber', {
+            'name': subscriber.phone, 'phone': subscriber.phone, 'plan': plan_name,
+        })
+        notify_admin_contacts(reseller, 'new_subscriber', {
+            'name': subscriber.phone, 'phone': subscriber.phone, 'plan': plan_name,
+        })
+    except Exception as _exc:
+        logger.warning(f'Signup notify failed: {_exc}')
 
     return Response({
         'message': 'Account created!',
