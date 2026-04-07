@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% block title %}SabiWiFi — Start Your Own WiFi Business{% endblock %}
+
+{% block extra_head %}
+<meta name="description" content="Sell WiFi at your hostel, estate, lodge, or plaza. Sign up free, explore the dashboard, get your router, and start earning. No technical knowledge needed.">
+<meta property="og:title" content="SabiWiFi — Start Your Own WiFi Business">
+<meta property="og:description" content="Turn your internet connection into a business. Sell WiFi to your customers. We handle the tech.">
+<meta property="og:type" content="website">
+<style>
+    .slider-thumb::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #006a36; cursor: pointer; box-shadow: 0 0 0 3px rgba(0,106,54,0.2); }
+    .slider-thumb::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #006a36; cursor: pointer; border: none; }
+    .slider-thumb { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #E5E7EB; outline: none; cursor: pointer; }
+    .slider-thumb::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; }
+    @keyframes count-up { from { opacity: 0.6; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .income-animate { animation: count-up 0.15s ease-out; }
+</style>
+{% endblock %}
+
+{% block body %}
+
+<!-- ═══════════════ STICKY HEADER ═══════════════ -->
+<header class="sticky top-0 z-50 bg-surface-container-lowest/80 backdrop-blur-lg shadow-ambient-sm">
+    <div class="max-w-4xl mx-auto px-4 h-12 flex items-center justify-between">
+        <span class="flex items-center gap-1.5 font-headline font-bold text-primary text-lg italic">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">wifi_tethering</span>
+            SabiWiFi
+        </span>
+        <nav class="hidden md:flex items-center gap-6 text-sm text-on-surface-variant">
+            <a href="#how-it-works" class="hover:text-primary transition">How It Works</a>
+            <a href="#use-cases" class="hover:text-primary transition">Perfect For</a>
+            <a href="#earn" class="hover:text-primary transition">Earn</a>
+            <a href="{% url 'shop-home' %}" class="hover:text-primary transition font-medium">Shop</a>
+        </nav>
+        <button id="theme-toggle" onclick="SabiTheme.cycle(); this.querySelector('span').textContent = SabiTheme.icon();"
+                class="text-on-surface-variant hover:text-on-surface p-1.5 rounded-lg hover:bg-surface-container transition">
+            <span class="material-symbols-outlined text-[20px]">brightness_auto</span>
+        </button>
+        <a href="{% url 'login' %}" class="text-sm font-medium text-primary hover:underline">Log in →</a>
+    </div>
+</header>
+<script>document.querySelector('#theme-toggle span').textContent = SabiTheme.icon();</script>
+
+<!-- ═══════════════ HERO ═══════════════ -->
+<section class="max-w-4xl mx-auto px-4 pt-14 pb-12 text-center">
+    <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-6 text-on-surface">
+        Imagine Running Your Own<br class="hidden md:block">
+        <span class="text-primary">Internet Business.</span>
+    </h1>
+    <p class="text-on-surface-variant text-base md:text-lg mb-3 leading-relaxed">
+        That hostel down the road.<br>
+        That shopping plaza.<br>
+        Your estate. Your lodge.
+    </p>
+    <p class="text-on-surface text-lg md:text-xl font-semibold mb-10">
+        What if everyone there was paying <span class="text-secondary">YOU</span> for WiFi?
+    </p>
+
+    <a href="{% url 'signup' %}"
+       class="inline-block bg-primary text-on-primary px-8 py-4 rounded-xl text-base font-bold hover:bg-primary-dim transition shadow-ambient w-full md:w-auto">
+        Sign Up Free — Explore the App
+    </a>
+    <p class="text-sm text-on-surface-variant mt-4">
+        Already a reseller? <a href="{% url 'login' %}" class="text-primary hover:underline">Log in</a>
+    </p>
+</section>
+
+<!-- ═══════════════ EMPATHY ═══════════════ -->
+<section class="bg-surface-container-low py-12">
+    <div class="max-w-xl mx-auto px-4 text-center">
+        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6 text-left mb-6">
+            <p class="text-on-surface-variant text-base leading-relaxed italic">
+                "I could sell WiFi here. The demand is there.<br>
+                But who will configure the routers?<br>
+                How do I collect payments?<br>
+                What about billing, data caps, customer management?"
+            </p>
+        </div>
+        <p class="font-headline font-bold text-xl text-on-surface">We took care of all that.</p>
+    </div>
+</section>
+
+<!-- ═══════════════ HOW IT WORKS ═══════════════ -->
+<section id="how-it-works" class="py-14 max-w-4xl mx-auto px-4">
+    <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-10 text-on-surface">What if it was this easy?</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">1</span>
+                <h3 class="font-headline font-bold text-base text-on-surface">Sign up free</h3>
+            </div>
+            <p class="text-on-surface-variant text-sm leading-relaxed">
+                Create your account on SabiWiFi. It takes 30 seconds. Look around. See how it works.
+            </p>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">2</span>
+                <h3 class="font-headline font-bold text-base text-on-surface">Get your SabiWiFi router</h3>
+            </div>
+            <p class="text-on-surface-variant text-sm leading-relaxed">
+                <a href="{% url 'shop-home' %}" class="text-primary hover:underline font-medium">Order from our shop</a>. We ship it straight to your door.
+            </p>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">3</span>
+                <h3 class="font-headline font-bold text-base text-on-surface">Enter your serial &amp; plug in</h3>
+            </div>
+            <p class="text-on-surface-variant text-sm leading-relaxed">
+                Type in the serial number from your router. Plug one cable to your modem, one to power. You're live in minutes.
+            </p>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="w-9 h-9 rounded-full bg-secondary-container text-on-secondary-container font-bold text-sm flex items-center justify-center">4</span>
+                <h3 class="font-headline font-bold text-base text-on-surface">Set your prices &amp; earn</h3>
+            </div>
+            <p class="text-on-surface-variant text-sm leading-relaxed">
+                Create plans from your phone — daily, weekly, monthly, any price you want. Customers connect, pay, and money goes straight to your bank.
+            </p>
+        </div>
+
+    </div>
+</section>
+
+<!-- ═══════════════ USE CASES ═══════════════ -->
+<section id="use-cases" class="bg-surface-container-low py-14">
+    <div class="max-w-4xl mx-auto px-4">
+        <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-8 text-on-surface">Perfect For</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex gap-4">
+                <span class="material-symbols-outlined text-3xl text-primary">apartment</span>
+                <div>
+                    <h3 class="font-headline font-bold text-sm text-on-surface mb-1">Hostels &amp; student accommodation</h3>
+                    <p class="text-on-surface-variant text-sm">Students will pay for fast, cost-effective WiFi.</p>
+                </div>
+            </div>
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex gap-4">
+                <span class="material-symbols-outlined text-3xl text-primary">storefront</span>
+                <div>
+                    <h3 class="font-headline font-bold text-sm text-on-surface mb-1">Shopping plazas &amp; markets</h3>
+                    <p class="text-on-surface-variant text-sm">Shop owners and their customers need internet. Be the one who provides it.</p>
+                </div>
+            </div>
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex gap-4">
+                <span class="material-symbols-outlined text-3xl text-primary">home</span>
+                <div>
+                    <h3 class="font-headline font-bold text-sm text-on-surface mb-1">Estates &amp; residential complexes</h3>
+                    <p class="text-on-surface-variant text-sm">Why should every tenant struggle with their own data? Offer them a shared connection at a fraction of the cost.</p>
+                </div>
+            </div>
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex gap-4">
+                <span class="material-symbols-outlined text-3xl text-primary">hotel</span>
+                <div>
+                    <h3 class="font-headline font-bold text-sm text-on-surface mb-1">Hotels, lodges &amp; guest houses</h3>
+                    <p class="text-on-surface-variant text-sm">"What's the WiFi password?" — turn that question into revenue.</p>
+                </div>
+            </div>
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex gap-4 md:col-span-2">
+                <span class="material-symbols-outlined text-3xl text-primary">local_cafe</span>
+                <div>
+                    <h3 class="font-headline font-bold text-sm text-on-surface mb-1">Cafes, lounges &amp; co-working spaces</h3>
+                    <p class="text-on-surface-variant text-sm">Fast WiFi is why people come back.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════ REVENUE SLIDER ═══════════════ -->
+<section id="earn" class="py-14 max-w-4xl mx-auto px-4">
+    <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-2 text-on-surface">See What You Could Earn</h2>
+    <p class="text-center text-on-surface-variant text-sm mb-10">Slide to set your numbers</p>
+
+    <div class="max-w-md mx-auto">
+
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-2">
+                <label class="text-sm font-medium text-on-surface-variant">How many customers?</label>
+                <span id="cus-out" class="font-headline font-bold text-primary text-base">50</span>
+            </div>
+            <input type="range" id="customers" min="10" max="500" step="10" value="50"
+                   class="slider-thumb w-full">
+        </div>
+
+        <div class="mb-8">
+            <div class="flex justify-between items-center mb-2">
+                <label class="text-sm font-medium text-on-surface-variant">Average plan price?</label>
+                <span id="pri-out" class="font-headline font-bold text-primary text-base">₦3,000</span>
+            </div>
+            <input type="range" id="price" min="500" max="150000" step="500" value="3000"
+                   class="slider-thumb w-full">
+        </div>
+
+        <div class="bg-primary-container/30 rounded-2xl p-7 text-center shadow-ambient-sm">
+            <p class="text-on-surface-variant text-sm mb-1">Your monthly income</p>
+            <p id="income" class="font-headline font-extrabold text-4xl text-primary mb-2">₦127,500</p>
+            <p class="text-on-surface-variant text-sm">
+                That's <span id="yearly" class="font-semibold text-on-surface">₦1,530,000</span> per year.
+            </p>
+            <p class="text-on-surface-variant text-xs mt-1">From one location.</p>
+        </div>
+
+        <p class="text-center text-on-surface-variant text-xs mt-4 mb-8">Slide higher. Imagine two locations. Three.</p>
+
+        <a href="{% url 'signup' %}"
+           class="block bg-primary text-on-primary text-center py-4 px-6 rounded-xl font-bold text-base hover:bg-primary-dim transition shadow-ambient">
+            Sign Up Free — See the Dashboard
+        </a>
+    </div>
+</section>
+
+<!-- ═══════════════ OBJECTION BUSTER ═══════════════ -->
+<section class="bg-surface-container-low py-14">
+    <div class="max-w-xl mx-auto px-4 text-center">
+        <h2 class="font-headline font-bold text-2xl md:text-3xl mb-3 text-on-surface">"But I'm not technical"</h2>
+        <p class="text-primary font-semibold text-base mb-6">We designed SabiWiFi with you in mind.</p>
+
+        <p class="text-on-surface-variant text-base leading-relaxed mb-4">
+            You don't need to know anything<br>about routers or networking.
+        </p>
+
+        <div class="bg-primary-container/20 rounded-xl px-6 py-4 mb-6 inline-block text-left">
+            <p class="text-on-surface text-base font-medium">
+                If you can fill a form on your phone<br>and plug in a cable, you can set up SabiWiFi.
+            </p>
+        </div>
+
+        <p class="text-on-surface-variant text-base leading-relaxed">
+            Everything else — billing, speed control,<br>
+            customer accounts, payments, branded login page — we handle it.
+        </p>
+        <p class="text-on-surface-variant text-base mt-4 leading-relaxed">
+            You manage your business from your phone.<br>
+            Create plans, check your earnings, see who's connected.
+        </p>
+    </div>
+</section>
+
+<!-- ═══════════════ FEATURE LIST ═══════════════ -->
+<section class="py-14 max-w-xl mx-auto px-4">
+    <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-8 text-on-surface">Everything You Need</h2>
+    <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6">
+        <ul class="space-y-4">
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>SabiWiFi Router</strong> — fast, powerful, yours to keep</span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>Your own branded WiFi login page</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>Customer sign-up &amp; automatic billing</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>Payments straight to your bank account</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>You control the speed and data</strong> for each plan</span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>Manage everything from your phone</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>Customers can renew from anywhere</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>WhatsApp &amp; SMS notifications</strong> to your customers</span>
+            </li>
+            <li class="flex items-start gap-3 border-t border-surface-container-high pt-4">
+                <span class="material-symbols-outlined text-primary mt-0.5" style="font-size: 20px;">check_circle</span>
+                <span class="text-on-surface text-sm"><strong>No monthly platform fees</strong> — we only earn a small % when you earn</span>
+            </li>
+        </ul>
+    </div>
+</section>
+
+<!-- ═══════════════ FINAL CTA ═══════════════ -->
+<section class="bg-primary py-16">
+    <div class="max-w-xl mx-auto px-4 text-center">
+        <h2 class="font-headline font-bold text-2xl md:text-3xl text-on-primary mb-3">Ready to start your WiFi business?</h2>
+        <p class="text-on-primary/70 text-sm mb-8">No technical knowledge needed. No upfront commitment.</p>
+
+        <a href="{% url 'signup' %}"
+           class="block bg-surface-container-lowest text-primary font-bold text-base py-4 px-8 rounded-xl hover:bg-surface-container-low transition shadow-ambient mb-4">
+            Sign Up Free — It Takes 30 Seconds
+        </a>
+
+        {% if wa_number %}
+        <a href="https://wa.me/{{ wa_number }}"
+           class="block border border-on-primary/30 text-on-primary font-medium text-sm py-3 px-6 rounded-xl hover:bg-on-primary/10 transition">
+            Chat With Us on WhatsApp
+        </a>
+        <p class="text-on-primary/50 text-xs mt-3">No pressure. Ask us anything.</p>
+        {% endif %}
+    </div>
+</section>
+
+<!-- ═══════════════ FOOTER ═══════════════ -->
+<footer class="bg-surface-container-low py-6 text-center text-xs text-on-surface-variant">
+    <p>&copy; 2026 SabiWiFi &nbsp;&middot;&nbsp; Powered by PHSWEB LTD</p>
+</footer>
+
+<!-- ═══════════════ REVENUE SLIDER JS ═══════════════ -->
+<script>
+const cusEl = document.getElementById('customers');
+const priEl = document.getElementById('price');
+const incEl = document.getElementById('income');
+const yearEl = document.getElementById('yearly');
+const cusOut = document.getElementById('cus-out');
+const priOut = document.getElementById('pri-out');
+
+function fmt(n) { return '₦' + Math.round(n).toLocaleString('en-NG'); }
+
+let animFrame = null;
+function animateTo(el, target, prefix) {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    const start = performance.now();
+    const from = parseInt(el.textContent.replace(/[^0-9]/g, '')) || 0;
+    const duration = 160;
+    function step(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const val = Math.round(from + (target - from) * t);
+        el.textContent = prefix ? fmt(val) : fmt(val);
+        if (t < 1) animFrame = requestAnimationFrame(step);
+    }
+    animFrame = requestAnimationFrame(step);
+}
+
+function update() {
+    const c = parseInt(cusEl.value);
+    const p = parseInt(priEl.value);
+    const monthly = Math.round(c * p * 0.85);
+    const yearly = monthly * 12;
+
+    cusOut.textContent = c;
+    priOut.textContent = fmt(p).replace('₦', '₦');
+
+    animateTo(incEl, monthly);
+    yearEl.textContent = fmt(yearly);
+}
+
+cusEl.addEventListener('input', update);
+priEl.addEventListener('input', update);
+update();
+</script>
+
+{% endblock %}

@@ -4,9 +4,14 @@ from simple_history.models import HistoricalRecords
 
 class Payment(models.Model):
     """
-    A payment record for a subscriber purchasing a plan.
+    A payment record for a subscriber purchasing a plan or paying a signup fee.
     Snapshots commission/fee config at time of transaction for audit trail.
     """
+    PAYMENT_TYPE_CHOICES = [
+        ('plan', 'Plan Purchase'),
+        ('signup_fee', 'Account Creation Fee'),
+    ]
+
     PAYMENT_METHOD_CHOICES = [
         ('card', 'Card'),
         ('bank_transfer', 'Bank Transfer'),
@@ -24,10 +29,14 @@ class Payment(models.Model):
         'accounts.Subscriber', on_delete=models.CASCADE, related_name='payments'
     )
     plan = models.ForeignKey(
-        'plans.ServicePlan', on_delete=models.SET_NULL, null=True, related_name='payments'
+        'plans.ServicePlan', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments'
     )
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.CASCADE, related_name='payments'
+    )
+
+    payment_type = models.CharField(
+        max_length=20, choices=PAYMENT_TYPE_CHOICES, default='plan'
     )
 
     # Amount

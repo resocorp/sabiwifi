@@ -5,53 +5,53 @@
 {% with active_tab='subscribers' %}
 
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-heading font-bold">Subscribers ({{ total_count }})</h1>
+    <h1 class="text-xl font-headline font-bold">Subscribers ({{ total_count }})</h1>
 </div>
 
 <!-- Search & Filter -->
 <div class="flex flex-col sm:flex-row gap-3 mb-4">
     <form method="get" class="flex-1">
         <input type="text" name="q" value="{{ search }}" placeholder="🔍 Search phone number..."
-               class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+               class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
         {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
     </form>
     <div class="flex gap-2">
         <a href="{% url 'dashboard-subscribers' %}"
-           class="px-3 py-2 rounded-lg text-sm border {% if not status_filter %}bg-primary text-white border-primary{% else %}border-border text-text-secondary hover:bg-gray-50{% endif %}">All</a>
+           class="px-3 py-2 rounded-lg text-sm {% if not status_filter %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">All</a>
         <a href="{% url 'dashboard-subscribers' %}?status=active{% if search %}&q={{ search }}{% endif %}"
-           class="px-3 py-2 rounded-lg text-sm border {% if status_filter == 'active' %}bg-primary text-white border-primary{% else %}border-border text-text-secondary hover:bg-gray-50{% endif %}">Active</a>
+           class="px-3 py-2 rounded-lg text-sm {% if status_filter == 'active' %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">Active</a>
         <a href="{% url 'dashboard-subscribers' %}?status=expired{% if search %}&q={{ search }}{% endif %}"
-           class="px-3 py-2 rounded-lg text-sm border {% if status_filter == 'expired' %}bg-primary text-white border-primary{% else %}border-border text-text-secondary hover:bg-gray-50{% endif %}">Expired</a>
+           class="px-3 py-2 rounded-lg text-sm {% if status_filter == 'expired' %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">Expired</a>
     </div>
 </div>
 
 <!-- Subscriber Cards -->
 <div class="space-y-3">
     {% for item in subscribers %}
-    <a href="{% url 'dashboard-subscriber-detail' item.subscriber.pk %}" class="block bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition">
+    <a href="{% url 'dashboard-subscriber-detail' item.subscriber.pk %}" class="block bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 hover:shadow-ambient transition">
         <div class="flex items-start justify-between mb-1">
             <span class="font-mono text-sm font-medium">{{ item.subscriber.phone }}</span>
             {% if item.subscription %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium text-accent">
-                <span class="w-1.5 h-1.5 bg-accent rounded-full"></span> Active
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                <span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Active
             </span>
             {% else %}
-            <span class="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-on-surface-variant">
                 <span class="w-1.5 h-1.5 bg-gray-300 rounded-full"></span> Expired
             </span>
             {% endif %}
         </div>
         {% if item.subscription %}
-        <p class="text-sm text-text-secondary">
+        <p class="text-sm text-on-surface-variant">
             {{ item.subscription.plan.name }} · Expires {{ item.subscription.expiry_date|date:"M j" }}
         </p>
         {% else %}
-        <p class="text-sm text-text-secondary">No active plan</p>
+        <p class="text-sm text-on-surface-variant">No active plan</p>
         {% endif %}
     </a>
     {% empty %}
-    <div class="bg-white rounded-xl border border-border p-8 text-center">
-        <p class="text-text-secondary">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-8 text-center">
+        <p class="text-on-surface-variant">
             {% if search %}No subscribers matching "{{ search }}"{% else %}No subscribers yet. They'll appear here once people connect to your WiFi.{% endif %}
         </p>
     </div>

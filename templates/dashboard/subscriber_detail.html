@@ -5,54 +5,54 @@
 {% with active_tab='subscribers' %}
 
 <div class="mb-6">
-    <a href="{% url 'dashboard-subscribers' %}" class="text-sm text-text-secondary hover:text-primary">← Subscribers</a>
-    <h1 class="text-xl font-heading font-bold mt-2 font-mono">{{ subscriber.phone }}</h1>
-    <p class="text-sm text-text-secondary">Joined {{ subscriber.created_at|date:"M j, Y" }}</p>
+    <a href="{% url 'dashboard-subscribers' %}" class="text-sm text-on-surface-variant hover:text-primary">← Subscribers</a>
+    <h1 class="text-xl font-headline font-bold mt-2 font-mono">{{ subscriber.phone }}</h1>
+    <p class="text-sm text-on-surface-variant">Joined {{ subscriber.created_at|date:"M j, Y" }}</p>
 </div>
 
 <!-- Current Plan -->
-<div class="bg-white rounded-xl border border-border p-4 mb-4">
-    <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Current Plan</h2>
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-4">
+    <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-3">Current Plan</h2>
     {% if current_subscription %}
     <div class="flex items-start justify-between mb-2">
-        <h3 class="font-heading font-semibold">{{ current_subscription.plan.name }}</h3>
-        <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">Active</span>
+        <h3 class="font-headline font-semibold">{{ current_subscription.plan.name }}</h3>
+        <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-container/30 text-on-primary-container">Active</span>
     </div>
-    <p class="text-sm text-text-secondary">{{ current_subscription.plan.speed_display }}</p>
-    <p class="text-sm text-text-secondary">Expires {{ current_subscription.expiry_date|date:"M j, Y" }}</p>
+    <p class="text-sm text-on-surface-variant">{{ current_subscription.plan.speed_display }}</p>
+    <p class="text-sm text-on-surface-variant">Expires {{ current_subscription.expiry_date|date:"M j, Y" }}</p>
     <div class="mt-3">
-        <p class="text-sm text-text-secondary">Devices: {{ current_subscription.plan.max_devices }}</p>
+        <p class="text-sm text-on-surface-variant">Devices: {{ current_subscription.plan.max_devices }}</p>
     </div>
     {% else %}
-    <p class="text-text-secondary text-sm">No active plan</p>
+    <p class="text-on-surface-variant text-sm">No active plan</p>
     {% endif %}
 </div>
 
 <!-- Payment History -->
-<div class="bg-white rounded-xl border border-border">
-    <div class="p-4 border-b border-border">
-        <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Payment History</h2>
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm">
+    <div class="p-4">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant">Payment History</h2>
     </div>
-    <div class="divide-y divide-border">
+    <div class="bg-surface-container rounded-b-xl">
         {% for payment in payments %}
-        <div class="px-4 py-3 flex items-center justify-between text-sm">
+        <div class="bg-surface-container-lowest px-4 py-3 flex items-center justify-between text-sm {% if not forloop.last %}mb-px{% endif %} {% if forloop.last %}rounded-b-xl{% endif %}">
             <div>
-                <span class="text-text-secondary">{{ payment.created_at|date:"M j" }}</span>
+                <span class="text-on-surface-variant">{{ payment.created_at|date:"M j" }}</span>
                 <span class="ml-2">{{ payment.plan.name|default:"—" }}</span>
             </div>
             <div class="flex items-center gap-2">
                 <span class="font-mono font-medium">{% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% else %}Free{% endif %}</span>
                 {% if payment.paystack_status == 'success' %}
-                <span class="text-accent text-xs">✓ Paid</span>
+                <span class="text-primary text-xs">✓ Paid</span>
                 {% elif payment.paystack_status == 'failed' %}
-                <span class="text-danger text-xs">✗ Failed</span>
+                <span class="text-error text-xs">✗ Failed</span>
                 {% else %}
-                <span class="text-text-secondary text-xs">Pending</span>
+                <span class="text-on-surface-variant text-xs">Pending</span>
                 {% endif %}
             </div>
         </div>
         {% empty %}
-        <div class="px-4 py-6 text-center text-text-secondary text-sm">No payments yet.</div>
+        <div class="bg-surface-container-lowest px-4 py-6 text-center text-on-surface-variant text-sm rounded-b-xl">No payments yet.</div>
         {% endfor %}
     </div>
 </div>

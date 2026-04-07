@@ -16,7 +16,7 @@ PROVISION_TEMPLATE = """\
 # Generated: {timestamp}
 # ============================================
 
-# --- 0. Remove Stage 1 bootstrap artifacts (not in our call chain, safe) ---
+# --- 0. Remove bootstrap artifacts (NOT phone-home — it self-removes after /import returns) ---
 :do {{ /system scheduler remove [find name=sabiwifi-setup] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-setup] }} on-error={{}}
 
@@ -42,12 +42,21 @@ PROVISION_TEMPLATE = """\
 
 # --- 5. WireGuard tunnel to SabiWiFi server ---
 :do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
-:do {{ /interface wireguard peers remove [find interface=wg0] }} on-error={{}}
-/interface wireguard peers add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
-:do {{ /ip address remove [find interface=wg0] }} on-error={{}}
-/ip address add address={wg_tunnel_ip}/32 interface=wg0
-:do {{ /ip route remove [find comment="SabiWiFi WG"] }} on-error={{}}
-/ip route add dst-address=10.99.0.0/16 gateway=wg0 comment="SabiWiFi WG"
+# Idempotent peer: update if exists, add if not (avoids tearing down active handshake)
+:if ([:len [/interface wireguard peers find interface=wg0 public-key="{server_wg_public_key}"]] > 0) do={{
+  /interface wireguard peers set [find interface=wg0 public-key="{server_wg_public_key}"] endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
+}} else={{
+  :do {{ /interface wireguard peers remove [find interface=wg0] }} on-error={{}}
+  /interface wireguard peers add interface=wg0 public-key="{server_wg_public_key}" endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
+}}
+# Idempotent IP + route
+:if ([:len [/ip address find interface=wg0 address="{wg_tunnel_ip}/32"]] = 0) do={{
+  :do {{ /ip address remove [find interface=wg0] }} on-error={{}}
+  /ip address add address={wg_tunnel_ip}/32 interface=wg0
+}}
+:if ([:len [/ip route find comment="SabiWiFi WG"]] = 0) do={{
+  /ip route add dst-address=10.99.0.0/16 gateway=wg0 comment="SabiWiFi WG"
+}}
 
 # --- 6. Download hotspot redirect HTML files ---
 :do {{ /tool fetch url="https://{platform_domain}/static/hotspot/login.html" dst-path=hotspot/login.html mode=https check-certificate=no }} on-error={{}}

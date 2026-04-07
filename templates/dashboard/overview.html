@@ -6,17 +6,17 @@
 
 <!-- Greeting -->
 <div class="mb-6">
-    <h1 class="text-xl md:text-2xl font-heading font-bold">
+    <h1 class="text-xl md:text-2xl font-headline font-bold text-on-surface">
         {% now "H" as hour %}
         {% if hour|add:"0" < 12 %}Good morning{% elif hour|add:"0" < 17 %}Good afternoon{% else %}Good evening{% endif %}, {{ reseller.owner_name|truncatewords:1 }} 👋
     </h1>
-    <p class="text-text-secondary text-sm mt-1">{{ reseller.name }}{% if reseller.location %} · {{ reseller.location }}{% endif %}</p>
+    <p class="text-on-surface-variant text-sm mt-1">{{ reseller.name }}{% if reseller.location %} · {{ reseller.location }}{% endif %}</p>
 </div>
 
 {% if show_getting_started %}
 <!-- ===== GETTING STARTED STATE ===== -->
 <div class="mb-6">
-    <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">
+    <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-3">
         Let's get your WiFi business running.
     </h2>
 
@@ -24,68 +24,74 @@
     <div class="space-y-2 mb-6">
         <div class="flex items-center gap-2 text-sm">
             {% if has_router %}
-                <span class="text-accent">✅</span> <span class="text-text-secondary line-through">Add your router</span>
+                <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                <span class="text-on-surface-variant line-through">Add your router</span>
             {% else %}
-                <span>☐</span> <span>Add your router</span>
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
+                <span class="text-on-surface">Add your router</span>
             {% endif %}
         </div>
         <div class="flex items-center gap-2 text-sm">
             {% if has_plans %}
-                <span class="text-accent">✅</span> <span class="text-text-secondary line-through">Create your first plan</span>
+                <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                <span class="text-on-surface-variant line-through">Create your first plan</span>
             {% else %}
-                <span>☐</span> <span>Create your first plan</span>
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
+                <span class="text-on-surface">Create your first plan</span>
             {% endif %}
         </div>
         <div class="flex items-center gap-2 text-sm">
             {% if reseller.payment_verified %}
-                <span class="text-accent">✅</span> <span class="text-text-secondary line-through">Add bank account (for paid plans)</span>
+                <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+                <span class="text-on-surface-variant line-through">Add bank account (for paid plans)</span>
             {% else %}
-                <span>☐</span> <span>Add bank account (for paid plans)</span>
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
+                <span class="text-on-surface">Add bank account (for paid plans)</span>
             {% endif %}
         </div>
     </div>
 
     {% if not has_router %}
     <!-- No Router — Add Router Card -->
-    <div class="bg-white rounded-xl border border-border p-5 mb-4">
-        <h3 class="font-heading font-semibold text-base mb-3">Add Your Router</h3>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient p-5 mb-4">
+        <h3 class="font-headline font-semibold text-base text-on-surface mb-3">Add Your Router</h3>
         <form method="post" action="{% url 'dashboard-router-add' %}">
             {% csrf_token %}
-            <p class="text-sm text-text-secondary mb-3">
+            <p class="text-sm text-on-surface-variant mb-3">
                 Enter the serial number from the sticker on your MikroTik router.
             </p>
             <div class="mb-3">
                 <input type="text" name="serial_number" placeholder="e.g. HFG30A9B72C"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
             <button type="submit"
-                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
                 Add Router
             </button>
-            <p class="text-xs text-text-secondary mt-3">
+            <p class="text-xs text-on-surface-variant mt-3">
                 Don't have a router yet?
-                <a href="https://wa.me/234XXXXXXXXXX" class="text-primary hover:underline">Chat on WhatsApp to order →</a>
+                <a href="{% url 'shop-home' %}" class="text-primary hover:underline font-medium">Get one from our Shop →</a>
             </p>
         </form>
     </div>
 
     {% elif pending_router %}
     <!-- Router Pending — Waiting -->
-    <div class="bg-white rounded-xl border border-border p-5 mb-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient p-5 mb-4">
         <div class="flex items-center gap-2 mb-2">
-            <span class="text-lg">⏳</span>
-            <h3 class="font-heading font-semibold text-base">Waiting for router...</h3>
+            <span class="material-symbols-outlined text-secondary">hourglass_top</span>
+            <h3 class="font-headline font-semibold text-base text-on-surface">Waiting for router...</h3>
         </div>
-        <p class="text-sm text-text-secondary mb-3">
+        <p class="text-sm text-on-surface-variant mb-3">
             Serial: <span class="font-mono">{{ pending_router.serial_number }}</span>
         </p>
-        <div class="bg-bg-gray rounded-lg p-3 text-sm text-text-secondary space-y-1">
+        <div class="bg-surface-container-low rounded-lg p-3 text-sm text-on-surface-variant space-y-1">
             <p>Make sure your router is:</p>
             <p>1. Connected to your modem (ethernet cable to Port 1)</p>
             <p>2. Plugged into power</p>
             <p>3. Give it 2-3 minutes</p>
         </div>
-        <div class="flex items-center gap-2 mt-3 text-sm text-text-secondary">
+        <div class="flex items-center gap-2 mt-3 text-sm text-on-surface-variant">
             <span class="animate-pulse">●</span> Checking... (auto-refreshes)
         </div>
     </div>
@@ -93,17 +99,17 @@
 
     {% elif has_online_router %}
     <!-- Router Online! -->
-    <div class="bg-green-50 rounded-xl border border-green-200 p-5 mb-4">
+    <div class="bg-primary-container/20 rounded-xl p-5 mb-4">
         <div class="flex items-center gap-2 mb-2">
-            <span class="text-lg">🎉</span>
-            <h3 class="font-heading font-semibold text-base text-green-800">You're live!</h3>
+            <span class="material-symbols-outlined text-primary">celebration</span>
+            <h3 class="font-headline font-semibold text-base text-on-primary-container">You're live!</h3>
         </div>
-        <p class="text-sm text-green-700 mb-1">
-            <span class="inline-block w-2 h-2 bg-accent rounded-full mr-1"></span>
+        <p class="text-sm text-on-primary-container mb-1">
+            <span class="inline-block w-2 h-2 bg-primary rounded-full mr-1"></span>
             Router Online — Serial: <span class="font-mono">{{ online_router.serial_number }}</span>
         </p>
         {% if has_plans %}
-        <p class="text-sm text-green-700">
+        <p class="text-sm text-on-primary-container">
             A "Free Trial" plan was created for you automatically.
             You can serve up to 5 subscribers on free plans right now!
         </p>
@@ -114,11 +120,11 @@
     <!-- Quick links -->
     <div class="flex flex-wrap gap-3 mt-4">
         {% if has_router and not has_plans %}
-        <a href="{% url 'dashboard-plan-create' %}" class="inline-flex items-center px-4 py-2 bg-white border border-border rounded-lg text-sm font-medium text-text-primary hover:bg-gray-50">
+        <a href="{% url 'dashboard-plan-create' %}" class="inline-flex items-center px-4 py-2 bg-surface-container-low rounded-lg text-sm font-medium text-on-surface hover:bg-surface-container transition">
             Create Your First Plan →
         </a>
         {% endif %}
-        <a href="{% url 'dashboard-settings' %}" class="inline-flex items-center px-4 py-2 bg-white border border-border rounded-lg text-sm font-medium text-text-primary hover:bg-gray-50">
+        <a href="{% url 'dashboard-settings' %}" class="inline-flex items-center px-4 py-2 bg-surface-container-low rounded-lg text-sm font-medium text-on-surface hover:bg-surface-container transition">
             Set Up Branding →
         </a>
     </div>
@@ -129,51 +135,51 @@
 
 <!-- Stats Cards -->
 <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">₦{{ monthly_revenue|floatformat:0|default:"0" }}</p>
-        <p class="text-text-secondary text-xs mt-1">Revenue this mo.</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">₦{{ monthly_revenue|floatformat:0|default:"0" }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Revenue this mo.</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">{{ active_subs }}</p>
-        <p class="text-text-secondary text-xs mt-1">Active subs</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ active_subs }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Active subs</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">{{ routers_online }}/{{ routers_total }}</p>
-        <p class="text-text-secondary text-xs mt-1">Routers online</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ routers_online }}/{{ routers_total }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Routers online</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">₦{{ monthly_earnings|floatformat:0|default:"0" }}</p>
-        <p class="text-text-secondary text-xs mt-1">Your earnings</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-primary">₦{{ monthly_earnings|floatformat:0|default:"0" }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Your earnings</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">₦{{ today_payments|floatformat:0|default:"0" }}</p>
-        <p class="text-text-secondary text-xs mt-1">Payments today</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">₦{{ today_payments|floatformat:0|default:"0" }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Payments today</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl">{{ today_signups }}</p>
-        <p class="text-text-secondary text-xs mt-1">New signups today</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ today_signups }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">New signups today</p>
     </div>
 </div>
 
 <!-- Recent Activity -->
-<div class="bg-white rounded-xl border border-border">
-    <div class="p-4 border-b border-border">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary">Recent Activity</h2>
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient">
+    <div class="p-4">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant">Recent Activity</h2>
     </div>
-    <div class="divide-y divide-border">
+    <div>
         {% for payment in recent_payments %}
         <div class="px-4 py-3 flex items-center justify-between text-sm">
             <div>
-                <span class="text-text-secondary text-xs">{{ payment.created_at|time:"H:i" }}</span>
-                <span class="ml-2 font-mono text-xs">{{ payment.subscriber.phone }}</span>
-                <span class="ml-2">→ {{ payment.plan.name|default:"—" }}</span>
+                <span class="text-on-surface-variant text-xs">{{ payment.created_at|time:"H:i" }}</span>
+                <span class="ml-2 font-mono text-xs text-on-surface">{{ payment.subscriber.phone }}</span>
+                <span class="ml-2 text-on-surface">→ {{ payment.plan.name|default:"—" }}</span>
             </div>
-            <div class="font-mono font-medium {% if payment.paystack_status == 'success' %}text-accent{% elif payment.paystack_status == 'failed' %}text-danger{% else %}text-text-secondary{% endif %}">
+            <div class="font-mono font-medium {% if payment.paystack_status == 'success' %}text-primary{% elif payment.paystack_status == 'failed' %}text-error{% else %}text-on-surface-variant{% endif %}">
                 {% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% endif %}
             </div>
         </div>
         {% empty %}
-        <div class="px-4 py-8 text-center text-text-secondary text-sm">
+        <div class="px-4 py-8 text-center text-on-surface-variant text-sm">
             No activity yet. Subscribers will appear here once they start connecting.
         </div>
         {% endfor %}

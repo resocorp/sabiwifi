@@ -4,34 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connected — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}WiFi{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+        }
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#111;min-height:100vh;padding:40px 24px}
-        .container{max-width:320px;margin:0 auto}
-        h1{font-size:20px;font-weight:600;margin-bottom:4px}
-        .subtitle{font-size:13px;color:#666;margin-bottom:28px}
-        .check{font-size:36px;margin-bottom:12px}
-        .info-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eee;font-size:13px}
-        .info-row:last-child{border-bottom:none}
-        .info-label{color:#888}
-        .info-value{font-weight:600;text-align:right;max-width:58%}
-        .badge{display:inline-block;padding:1px 6px;border:1px solid #111;font-size:10px;font-weight:700;margin-left:4px;letter-spacing:.3px}
-        hr{border:none;border-top:1px solid #eee;margin:20px 0}
-        .note{font-size:12px;color:#666;line-height:1.6;margin-bottom:20px}
-        .note a{color:#111;font-weight:700}
-        .bar-wrap{background:#eee;height:2px;margin-bottom:8px}
-        .bar{height:2px;background:#111;width:100%;transition:width 1s linear}
-        .countdown-text{font-size:11px;color:#999;margin-bottom:20px;text-transform:uppercase;letter-spacing:.5px}
-        .btn{display:block;width:100%;padding:13px;border:2px solid #111;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;background:#111;color:#fff;border-radius:0}
-        .skeleton{background:#eee;height:12px;margin:9px 0;border-radius:2px;animation:shimmer 1.2s ease-in-out infinite}
+        body{font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--surface);color:var(--on-surface);min-height:100vh;padding:40px 24px}
+        .container{max-width:360px;margin:0 auto;background:var(--surface-container-lowest);border-radius:1.25rem;padding:32px 28px;box-shadow:0 2px 16px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.02)}
+        h1{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:22px;font-weight:700;margin-bottom:4px;color:var(--on-surface)}
+        .subtitle{font-size:13px;color:var(--on-surface-variant);margin-bottom:28px}
+        .check{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:var(--primary);color:#fff;font-size:24px;margin-bottom:14px}
+        .info-row{display:flex;justify-content:space-between;padding:11px 0;font-size:13px}
+        .info-row+.info-row{background-image:linear-gradient(var(--surface-container),var(--surface-container));background-size:100% 1px;background-repeat:no-repeat;background-position:top}
+        .info-label{color:var(--on-surface-variant)}
+        .info-value{font-weight:600;text-align:right;max-width:58%;color:var(--on-surface)}
+        .badge{display:inline-block;padding:2px 8px;background:var(--surface-container-low);font-size:10px;font-weight:700;margin-left:4px;letter-spacing:.3px;border-radius:.5rem;color:var(--on-surface-variant)}
+        .spacer{height:1px;background:var(--surface-container);margin:24px 0;border-radius:1px}
+        .note{font-size:12px;color:var(--on-surface-variant);line-height:1.6;margin-bottom:20px}
+        .note a{color:var(--primary);font-weight:700;text-decoration:none}
+        .note a:hover{text-decoration:underline}
+        .bar-wrap{background:var(--surface-container);height:3px;margin-bottom:8px;border-radius:2px;overflow:hidden}
+        .bar{height:3px;background:var(--primary);width:100%;transition:width 1s linear;border-radius:2px}
+        .countdown-text{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:11px;color:var(--on-surface-variant);margin-bottom:20px;text-transform:uppercase;letter-spacing:.5px}
+        .btn{display:block;width:100%;padding:14px;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;background:var(--primary);color:#fff;border:none;border-radius:1rem;font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;transition:background .15s}
+        .btn:hover{background:var(--primary-dim)}
+        .skeleton{background:var(--surface-container);height:12px;margin:9px 0;border-radius:.5rem;animation:shimmer 1.2s ease-in-out infinite}
         @keyframes shimmer{0%,100%{opacity:1}50%{opacity:.35}}
     </style>
 </head>
 <body>
     <div class="container">
         {% if branding.logo %}<div style="margin-bottom:16px"><img src="{{ branding.logo }}" alt="Logo" style="max-width:100px;max-height:50px"></div>{% endif %}
-        <div class="check">✓</div>
-        <h1>Connected</h1>
+        <div class="check">&#10003;</div>
+        <h1>You're Connected</h1>
         <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}You're online.{% endif %}</p>
 
         <div id="account-info">
@@ -40,7 +57,7 @@
             <div class="skeleton" style="width:65%"></div>
         </div>
 
-        <hr>
+        <div class="spacer"></div>
 
         <p class="note">Manage your plan, change your PIN, or top up at <a id="account-link" href="/portal/account/?r={{ serial|urlencode }}">My Account</a>.</p>
 
@@ -86,7 +103,7 @@
                       + '<div class="info-row"><span class="info-label">Speed</span><span class="info-value">' + s.speed_display + '</span></div>'
                       + '<div class="info-row"><span class="info-label">Expires</span><span class="info-value">' + exp + '</span></div>';
             } else {
-                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value" style="color:#999;">No active plan</span></div>';
+                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value" style="color:var(--on-surface-variant);">No active plan</span></div>';
             }
             document.getElementById('account-info').innerHTML = html;
         })

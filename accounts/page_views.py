@@ -12,7 +12,14 @@ def landing_page(request):
     """Public landing page — sales page for potential resellers."""
     if request.user.is_authenticated and hasattr(request.user, 'reseller'):
         return redirect('dashboard-overview')
-    return render(request, 'landing.html')
+    from operator_panel.models import PlatformSettings
+    settings_obj = PlatformSettings.load()
+    # Use first phone in notification_phones as WA contact (stripped of non-digits)
+    wa_number = ''
+    phones = settings_obj.notification_phones or []
+    if phones:
+        wa_number = re.sub(r'[^\d]', '', str(phones[0]))
+    return render(request, 'public/landing.html', {'wa_number': wa_number})
 
 
 def signup_page(request):

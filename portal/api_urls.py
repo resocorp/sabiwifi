@@ -15,4 +15,5 @@ urlpatterns = [
     path('account/change-plan/', views.portal_change_plan, name='api-portal-change-plan'),
     path('disconnect/', views.portal_disconnect, name='api-portal-disconnect'),
     path('initiate-payment/', views.portal_initiate_payment, name='api-portal-initiate-payment'),
+    path('initiate-signup-payment/', views.portal_initiate_signup_payment, name='api-portal-initiate-signup-payment'),
 ]

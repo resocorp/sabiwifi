@@ -42,6 +42,10 @@ urlpatterns = [
 
     # Notifications (WA webhook + reseller config + broadcasts)
     path('api/notifications/', include('notifications.urls')),
+
+    # Shop (public storefront)
+    path('shop/', include('shop.urls')),
+    path('api/shop/', include('shop.api_urls')),
 ]
 
 if settings.DEBUG:

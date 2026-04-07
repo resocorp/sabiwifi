@@ -112,6 +112,10 @@ class Reseller(models.Model):
         help_text="Override default free subscriber limit. Null = use platform default."
     )
 
+    # Account creation fee
+    signup_fee_enabled = models.BooleanField(default=False)
+    signup_fee_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     # Future multi-gateway
     flutterwave_subaccount_id = models.CharField(max_length=100, blank=True, default='')
     monnify_subaccount_code = models.CharField(max_length=100, blank=True, default='')
@@ -175,6 +179,7 @@ class Subscriber(models.Model):
     pin_hash = models.CharField(max_length=255, blank=True, default='')
     auth_token = models.CharField(max_length=64, blank=True, default='')
     verified = models.BooleanField(default=False)
+    signup_fee_paid = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

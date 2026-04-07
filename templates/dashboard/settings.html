@@ -4,13 +4,13 @@
 {% block content %}
 {% with active_tab='settings' %}
 
-<h1 class="text-xl font-heading font-bold mb-6">Settings</h1>
+<h1 class="text-xl font-headline font-bold mb-6">Settings</h1>
 
 <div class="max-w-lg space-y-6">
 
     <!-- Portal Branding -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Portal Branding</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Portal Branding</h2>
         <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="section" value="branding">
@@ -18,8 +18,8 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">WiFi Network Name (SSID)</label>
                 <input type="text" name="ssid" value="{{ reseller.branding.ssid|default:reseller.name }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                <p class="text-xs text-text-secondary mt-1">This is what customers see on their phone</p>
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <p class="text-xs text-on-surface-variant mt-1">This is what customers see on their phone</p>
             </div>
 
             <div class="mb-4">
@@ -29,23 +29,23 @@
                     <label class="cursor-pointer">
                         <input type="radio" name="template" value="modern" class="sr-only peer"
                                {% if reseller.branding.template == 'modern' or not reseller.branding.template %}checked{% endif %}>
-                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
-                            Modern<br><span class="text-xs text-text-secondary">Clean &amp; cards</span>
-                            <span class="block text-primary text-xs mt-1 peer-checked:visible invisible">✅</span>
+                        <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm">
+                            Modern<br><span class="text-xs text-on-surface-variant">Clean &amp; cards</span>
+                            <span class="block text-primary text-xs mt-1 peer-checked:visible invisible"><span class="material-symbols-outlined text-primary text-sm">check_circle</span></span>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="template" value="bold" class="sr-only peer"
                                {% if reseller.branding.template == 'bold' %}checked{% endif %}>
-                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
-                            Bold<br><span class="text-xs text-text-secondary">Dark overlay</span>
+                        <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm">
+                            Bold<br><span class="text-xs text-on-surface-variant">Dark overlay</span>
                         </div>
                     </label>
                     <label class="cursor-pointer">
                         <input type="radio" name="template" value="minimal" class="sr-only peer"
                                {% if reseller.branding.template == 'minimal' %}checked{% endif %}>
-                        <div class="border-2 rounded-lg p-3 text-center text-sm peer-checked:border-primary peer-checked:bg-primary/5 border-border">
-                            Minimal<br><span class="text-xs text-text-secondary">Text-only</span>
+                        <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm">
+                            Minimal<br><span class="text-xs text-on-surface-variant">Text-only</span>
                         </div>
                     </label>
                 </div>
@@ -54,33 +54,33 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Portal Title</label>
                 <input type="text" name="portal_title" value="{{ reseller.branding.portal_title|default:'' }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
 
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Welcome Message</label>
                 <input type="text" name="welcome_text" value="{{ reseller.branding.welcome_text|default:'' }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
 
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Primary Color</label>
                 <div class="flex items-center gap-2">
-                    <input type="color" name="primary_color" value="{{ reseller.branding.primary_color|default:'#0052CC' }}"
-                           class="w-10 h-10 border border-border rounded cursor-pointer">
-                    <span class="text-sm text-text-secondary font-mono">{{ reseller.branding.primary_color|default:'#0052CC' }}</span>
+                    <input type="color" name="primary_color" value="{{ reseller.branding.primary_color|default:'#006a36' }}"
+                           class="w-10 h-10 rounded-lg cursor-pointer">
+                    <span class="text-sm text-on-surface-variant font-mono">{{ reseller.branding.primary_color|default:'#006a36' }}</span>
                 </div>
             </div>
 
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Logo (optional)</label>
                 <input type="file" name="logo" accept="image/png,image/jpeg"
-                       class="w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-border file:text-sm file:bg-white file:text-text-primary hover:file:bg-gray-50">
-                <p class="text-xs text-text-secondary mt-1">Max 50KB, PNG or JPG</p>
+                       class="w-full text-sm text-on-surface-variant file:mr-3 file:py-2 file:px-3 file:rounded-lg file:text-sm file:bg-surface-container-low file:text-on-surface hover:file:bg-surface-container">
+                <p class="text-xs text-on-surface-variant mt-1">Max 50KB, PNG or JPG</p>
                 {% if reseller.branding.logo %}
                 <div class="flex items-center gap-2 mt-2 text-sm">
-                    <span class="text-text-secondary">Current: {{ reseller.branding.logo|cut:"/media/resellers/" }}</span>
-                    <label class="text-danger cursor-pointer text-xs"><input type="checkbox" name="remove_logo" value="1" class="mr-1">Remove</label>
+                    <span class="text-on-surface-variant">Current: {{ reseller.branding.logo|cut:"/media/resellers/" }}</span>
+                    <label class="text-error cursor-pointer text-xs"><input type="checkbox" name="remove_logo" value="1" class="mr-1">Remove</label>
                 </div>
                 {% endif %}
             </div>
@@ -88,26 +88,26 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Background Image (Bold template)</label>
                 <input type="file" name="bg_image" accept="image/png,image/jpeg"
-                       class="w-full text-sm text-text-secondary file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-border file:text-sm file:bg-white file:text-text-primary hover:file:bg-gray-50">
-                <p class="text-xs text-text-secondary mt-1">Max 200KB, JPG or PNG. Used by Bold template only.</p>
+                       class="w-full text-sm text-on-surface-variant file:mr-3 file:py-2 file:px-3 file:rounded-lg file:text-sm file:bg-surface-container-low file:text-on-surface hover:file:bg-surface-container">
+                <p class="text-xs text-on-surface-variant mt-1">Max 200KB, JPG or PNG. Used by Bold template only.</p>
                 {% if reseller.branding.bg_image %}
                 <div class="flex items-center gap-2 mt-2 text-sm">
-                    <span class="text-text-secondary">Current: {{ reseller.branding.bg_image|cut:"/media/resellers/" }}</span>
-                    <label class="text-danger cursor-pointer text-xs"><input type="checkbox" name="remove_bg" value="1" class="mr-1">Remove</label>
+                    <span class="text-on-surface-variant">Current: {{ reseller.branding.bg_image|cut:"/media/resellers/" }}</span>
+                    <label class="text-error cursor-pointer text-xs"><input type="checkbox" name="remove_bg" value="1" class="mr-1">Remove</label>
                 </div>
                 {% endif %}
             </div>
 
             <button type="submit"
-                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
                 Save Branding
             </button>
         </form>
     </div>
 
     <!-- Account Settings -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Account</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Account</h2>
         <form method="post">
             {% csrf_token %}
             <input type="hidden" name="section" value="account">
@@ -115,47 +115,47 @@
             <div class="mb-3">
                 <label class="block text-sm font-medium mb-1">Business Name</label>
                 <input type="text" name="business_name" value="{{ reseller.name }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-medium mb-1">Email</label>
                 <input type="email" name="email" value="{{ reseller.email }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-medium mb-1">Phone</label>
                 <input type="tel" name="phone" value="{{ reseller.phone }}"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Location</label>
                 <input type="text" name="location" value="{{ reseller.location }}" placeholder="e.g. Lagos, Lekki"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
 
             <button type="submit"
-                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
                 Save Account
             </button>
         </form>
     </div>
 
     <!-- Bank Account -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Bank Account</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Bank Account</h2>
 
         {% if reseller.payment_verified %}
         <div class="space-y-2 text-sm">
             <p class="font-medium">{{ reseller.bank_name }} - {{ reseller.account_number }}</p>
             <p>{{ reseller.account_name }}</p>
-            <p class="text-accent flex items-center gap-1">✅ Verified</p>
+            <p class="text-primary flex items-center gap-1"><span class="material-symbols-outlined text-primary text-[16px]">verified</span> Verified</p>
             <button onclick="document.getElementById('bank-change-form').style.display='block'; this.style.display='none';"
                     class="mt-2 text-sm text-primary hover:underline">Change Bank</button>
         </div>
         <div id="bank-change-form" style="display:none;" class="mt-4"></div>
         {% else %}
-        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-            <p class="text-sm text-amber-800">
+        <div class="bg-secondary-container/30 rounded-lg p-3 mb-4">
+            <p class="text-sm text-on-secondary-container">
                 Add your bank account to enable paid plans and get paid directly.
             </p>
         </div>
@@ -165,7 +165,7 @@
         <div id="bank-setup">
             <div class="mb-3">
                 <label class="block text-sm font-medium mb-1">Select your bank</label>
-                <select id="bank-select" class="w-full px-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <select id="bank-select" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="">Loading banks...</option>
                 </select>
             </div>
@@ -173,25 +173,25 @@
             <div class="mb-3">
                 <label class="block text-sm font-medium mb-1">Account number</label>
                 <input type="text" id="account-number" maxlength="10" placeholder="0123456789"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
 
-            <div id="resolve-result" style="display:none;" class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
-                <p class="text-sm text-green-800">✅ Account found:</p>
-                <p class="font-semibold text-green-900" id="resolved-name"></p>
-                <p class="text-xs text-green-700" id="resolved-bank"></p>
-                <p class="text-sm text-green-800 mt-2">Is this your account?</p>
+            <div id="resolve-result" style="display:none;" class="bg-primary-container/20 rounded-lg p-3 mb-3">
+                <p class="text-sm text-on-primary-container">Account found:</p>
+                <p class="font-semibold text-on-primary-container" id="resolved-name"></p>
+                <p class="text-xs text-on-primary-container" id="resolved-bank"></p>
+                <p class="text-sm text-on-primary-container mt-2">Is this your account?</p>
             </div>
 
-            <div id="resolve-error" style="display:none;" class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-800"></div>
+            <div id="resolve-error" style="display:none;" class="bg-error-container/20 rounded-lg p-3 mb-3 text-sm text-on-error-container"></div>
 
             <button id="btn-resolve" onclick="resolveAccount()"
-                    class="w-full bg-white border border-border text-text-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition mb-2">
+                    class="w-full bg-surface-container-low text-on-surface py-2.5 rounded-lg text-sm font-semibold hover:bg-surface-container transition mb-2">
                 Verify Account
             </button>
 
             <button id="btn-save-bank" onclick="saveBankAccount()" style="display:none;"
-                    class="w-full bg-accent text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-green-600 transition">
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
                 Yes, Save Bank Account
             </button>
         </div>
@@ -282,41 +282,43 @@
 
 
     <!-- Notifications -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">Notifications</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Notifications</h2>
 
         <!-- WhatsApp Connection -->
-        <div class="mb-5 pb-5 border-b border-border">
+        <div class="mb-5 pb-5">
             <div class="flex items-center justify-between mb-3">
                 <div>
                     <p class="font-medium text-sm">WhatsApp</p>
-                    <p class="text-xs text-text-secondary mt-0.5" id="wa-status-text">Checking...</p>
+                    <p class="text-xs text-on-surface-variant mt-0.5" id="wa-status-text">Checking...</p>
                 </div>
                 <div class="flex gap-2">
                     <button id="wa-connect-btn" onclick="waConnect()"
-                        class="px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hidden">
+                        class="px-3 py-1.5 bg-primary text-on-primary text-xs font-semibold rounded-lg hidden">
                         Connect
                     </button>
                     <button id="wa-disconnect-btn" onclick="waDisconnect()"
-                        class="px-3 py-1.5 border border-danger text-danger text-xs font-semibold rounded-lg hidden">
+                        class="px-3 py-1.5 bg-error-container/20 text-error text-xs font-semibold rounded-lg hidden">
                         Disconnect
                     </button>
                     <button id="wa-test-btn" onclick="waTest()"
-                        class="px-3 py-1.5 border border-border text-text-secondary text-xs rounded-lg hidden">
+                        class="px-3 py-1.5 bg-surface-container-low text-on-surface-variant text-xs rounded-lg hover:bg-surface-container hidden">
                         Send Test
                     </button>
                 </div>
             </div>
             <!-- QR code area -->
             <div id="wa-qr-wrap" class="hidden text-center py-4">
-                <p class="text-xs text-text-secondary mb-3">Scan this QR code with WhatsApp on your phone<br><span class="font-medium">Settings → Linked Devices → Link a Device</span></p>
-                <img id="wa-qr-img" src="" alt="QR Code" class="inline-block border border-border rounded-lg" style="max-width:220px">
-                <p class="text-xs text-text-secondary mt-2">QR refreshes automatically. Waiting for scan...</p>
+                <p class="text-xs text-on-surface-variant mb-3">Scan this QR code with WhatsApp on your phone<br><span class="font-medium">Settings → Linked Devices → Link a Device</span></p>
+                <img id="wa-qr-img" src="" alt="QR Code" class="inline-block rounded-lg shadow-ambient-sm" style="max-width:220px">
+                <p class="text-xs text-on-surface-variant mt-2">QR refreshes automatically. Waiting for scan...</p>
             </div>
         </div>
 
+        <div class="h-px bg-surface-container"></div>
+
         <!-- What to send subscribers -->
-        <div class="mb-5 pb-5 border-b border-border">
+        <div class="mb-5 pb-5 mt-5">
             <p class="font-medium text-sm mb-3">Messages to your subscribers</p>
             <div class="space-y-2" id="sub-toggles">
                 <label class="flex items-center justify-between text-sm py-1">
@@ -337,8 +339,8 @@
                 </label>
             </div>
             <div class="mt-3">
-                <label class="text-xs text-text-secondary font-medium">Channel for subscriber messages</label>
-                <select id="sub-channel" class="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm">
+                <label class="text-xs text-on-surface-variant font-medium">Channel for subscriber messages</label>
+                <select id="sub-channel" class="mt-1 w-full px-3 py-2 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="sms">SMS only</option>
                     <option value="whatsapp">WhatsApp only</option>
                     <option value="both">WhatsApp + SMS</option>
@@ -346,8 +348,10 @@
             </div>
         </div>
 
+        <div class="h-px bg-surface-container"></div>
+
         <!-- What notifies me -->
-        <div class="mb-5 pb-5 border-b border-border">
+        <div class="mb-5 pb-5 mt-5">
             <p class="font-medium text-sm mb-3">Alerts for you</p>
             <div class="space-y-2">
                 <label class="flex items-center justify-between text-sm py-1">
@@ -368,8 +372,8 @@
                 </label>
             </div>
             <div class="mt-3">
-                <label class="text-xs text-text-secondary font-medium">Channel for your alerts</label>
-                <select id="me-channel" class="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm">
+                <label class="text-xs text-on-surface-variant font-medium">Channel for your alerts</label>
+                <select id="me-channel" class="mt-1 w-full px-3 py-2 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="sms">SMS only</option>
                     <option value="whatsapp">WhatsApp only</option>
                     <option value="both">WhatsApp + SMS</option>
@@ -377,32 +381,36 @@
             </div>
         </div>
 
+        <div class="h-px bg-surface-container"></div>
+
         <!-- Admin contacts -->
-        <div class="mb-5 pb-5 border-b border-border">
-            <p class="font-medium text-sm mb-3">Admin Contacts <span class="text-xs text-text-secondary font-normal">(also receive operational alerts)</span></p>
+        <div class="mb-5 pb-5 mt-5">
+            <p class="font-medium text-sm mb-3">Admin Contacts <span class="text-xs text-on-surface-variant font-normal">(also receive operational alerts)</span></p>
             <div id="contacts-list" class="space-y-2 mb-3"></div>
             <div class="flex gap-2">
-                <input id="contact-name" type="text" placeholder="Name" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm">
-                <input id="contact-phone" type="tel" placeholder="Phone" class="flex-1 px-3 py-2 border border-border rounded-lg text-sm">
-                <select id="contact-channel" class="px-3 py-2 border border-border rounded-lg text-sm">
+                <input id="contact-name" type="text" placeholder="Name" class="flex-1 px-3 py-2 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <input id="contact-phone" type="tel" placeholder="Phone" class="flex-1 px-3 py-2 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <select id="contact-channel" class="px-3 py-2 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     <option value="sms">SMS</option>
                     <option value="whatsapp">WA</option>
                     <option value="both">Both</option>
                 </select>
-                <button onclick="addContact()" class="px-3 py-2 bg-primary text-white text-sm font-semibold rounded-lg">Add</button>
+                <button onclick="addContact()" class="px-3 py-2 bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary-dim">Add</button>
             </div>
         </div>
 
+        <div class="h-px bg-surface-container"></div>
+
         <!-- Message templates -->
-        <div class="mb-5 pb-5 border-b border-border">
+        <div class="mb-5 pb-5 mt-5">
             <p class="font-medium text-sm mb-1">Message Templates</p>
-            <p class="text-xs text-text-secondary mb-3">Customise the text your subscribers receive. Variables: <code class="bg-gray-100 px-1 rounded">&#123;&#123;name&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;plan&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;expiry_date&#125;&#125;</code> <code class="bg-gray-100 px-1 rounded">&#123;&#123;link&#125;&#125;</code></p>
+            <p class="text-xs text-on-surface-variant mb-3">Customise the text your subscribers receive. Variables: <code class="bg-surface-container px-1 rounded">&#123;&#123;name&#125;&#125;</code> <code class="bg-surface-container px-1 rounded">&#123;&#123;plan&#125;&#125;</code> <code class="bg-surface-container px-1 rounded">&#123;&#123;expiry_date&#125;&#125;</code> <code class="bg-surface-container px-1 rounded">&#123;&#123;link&#125;&#125;</code></p>
             <div id="templates-list" class="space-y-3"></div>
         </div>
 
-        <p id="notif-save-msg" class="text-xs text-accent mb-3 hidden">Settings saved.</p>
+        <p id="notif-save-msg" class="text-xs text-primary mb-3 hidden">Settings saved.</p>
         <button onclick="saveNotifConfig()"
-            class="w-full py-2.5 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary-dark transition">
+            class="w-full py-2.5 bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary-dim transition">
             Save Notification Settings
         </button>
     </div>
@@ -424,20 +432,20 @@ function waUpdateUI(status, phone) {
     const qrWrap = document.getElementById('wa-qr-wrap');
 
     if (status === 'connected') {
-        statusText.innerHTML = '<span class="text-accent font-medium">&#9679; Connected</span> as ' + phone;
+        statusText.innerHTML = '<span class="text-primary font-medium">&#9679; Connected</span> as ' + phone;
         connectBtn.classList.add('hidden');
         disconnectBtn.classList.remove('hidden');
         testBtn.classList.remove('hidden');
         qrWrap.classList.add('hidden');
         stopWaPoller();
     } else if (status === 'connecting') {
-        statusText.innerHTML = '<span class="text-warning font-medium">&#9679; Connecting...</span> Scan QR code below';
+        statusText.innerHTML = '<span class="text-secondary font-medium">&#9679; Connecting...</span> Scan QR code below';
         connectBtn.classList.add('hidden');
         disconnectBtn.classList.add('hidden');
         testBtn.classList.add('hidden');
         qrWrap.classList.remove('hidden');
     } else {
-        statusText.innerHTML = '<span class="text-text-secondary">&#9679; Not connected</span>';
+        statusText.innerHTML = '<span class="text-on-surface-variant">&#9679; Not connected</span>';
         connectBtn.classList.remove('hidden');
         disconnectBtn.classList.add('hidden');
         testBtn.classList.add('hidden');
@@ -529,13 +537,13 @@ function loadNotifConfig() {
 
 function renderContacts(contacts) {
     const el = document.getElementById('contacts-list');
-    if (!contacts.length) { el.innerHTML = '<p class="text-xs text-text-secondary">No admin contacts yet.</p>'; return; }
+    if (!contacts.length) { el.innerHTML = '<p class="text-xs text-on-surface-variant">No admin contacts yet.</p>'; return; }
     el.innerHTML = contacts.map(c => `
-        <div class="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+        <div class="flex items-center justify-between text-sm bg-surface-container-low rounded-lg px-3 py-2">
             <span class="font-medium">${c.name}</span>
-            <span class="text-text-secondary">${c.phone}</span>
-            <span class="text-xs text-text-secondary">${c.channel.toUpperCase()}</span>
-            <button onclick="deleteContact(${c.id})" class="text-danger text-xs hover:underline ml-2">Remove</button>
+            <span class="text-on-surface-variant">${c.phone}</span>
+            <span class="text-xs text-on-surface-variant">${c.channel.toUpperCase()}</span>
+            <button onclick="deleteContact(${c.id})" class="text-error text-xs hover:underline ml-2">Remove</button>
         </div>`).join('');
 }
 
@@ -549,7 +557,7 @@ function renderTemplates(templates) {
     const el = document.getElementById('templates-list');
     el.innerHTML = Object.entries(labels).map(([key, label]) => {
         const t = templates[key] || { body: '', is_enabled: true };
-        return `<div class="border border-border rounded-lg p-3">
+        return `<div class="bg-surface-container-low rounded-lg p-3">
             <div class="flex items-center justify-between mb-1">
                 <span class="text-xs font-medium">${label}</span>
                 <label class="flex items-center gap-1 text-xs">
@@ -557,7 +565,7 @@ function renderTemplates(templates) {
                 </label>
             </div>
             <textarea data-tmpl-body="${key}" rows="2"
-                class="w-full text-xs px-2 py-1.5 border border-border rounded-lg resize-none">${t.body}</textarea>
+                class="w-full text-xs px-2 py-1.5 bg-surface-container-highest rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary/40">${t.body}</textarea>
         </div>`;
     }).join('');
 }
@@ -617,6 +625,53 @@ function deleteContact(id) {
 
 loadNotifConfig();
 </script>
+
+<!-- Account Creation Fee -->
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+    <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-1">Account Creation Fee</h2>
+    <p class="text-xs text-on-surface-variant mb-4">Charge new subscribers a one-time fee to create an account. The same commission split applies.</p>
+
+    {% if not reseller.payment_verified %}
+    <div class="bg-secondary-container/30 rounded-lg p-3 text-sm text-on-secondary-container">
+        Verify your bank account first to enable signup fees.
+    </div>
+    {% else %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="section" value="signup_fee">
+
+        <label class="flex items-center gap-3 mb-4 cursor-pointer">
+            <div class="relative">
+                <input type="checkbox" name="signup_fee_enabled" value="1" id="signup-fee-toggle"
+                       {% if reseller.signup_fee_enabled %}checked{% endif %}
+                       class="sr-only peer">
+                <div class="w-10 h-6 bg-surface-container-high rounded-full peer-checked:bg-primary transition-colors"></div>
+                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-transform peer-checked:translate-x-4"></div>
+            </div>
+            <span class="text-sm font-medium">Charge new subscribers to create account</span>
+        </label>
+
+        <div id="signup-fee-amount-row" class="mb-4 {% if not reseller.signup_fee_enabled %}hidden{% endif %}">
+            <label class="block text-sm font-medium mb-1">Fee amount (₦)</label>
+            <input type="number" name="signup_fee_amount" min="0" step="50"
+                   value="{{ reseller.signup_fee_amount|floatformat:0 }}"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                   placeholder="e.g. 500">
+            <p class="text-xs text-on-surface-variant mt-1">Set to 0 to disable the fee without turning off the toggle.</p>
+        </div>
+
+        <button type="submit"
+                class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+            Save
+        </button>
+    </form>
+    <script>
+    document.getElementById('signup-fee-toggle').addEventListener('change', function() {
+        document.getElementById('signup-fee-amount-row').classList.toggle('hidden', !this.checked);
+    });
+    </script>
+    {% endif %}
+</div>
 
 {% endwith %}
 {% endblock %}

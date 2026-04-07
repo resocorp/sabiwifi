@@ -34,6 +34,8 @@ INSTALLED_APPS = [
     'portal',
     'dashboard',
     'notifications',
+    'shop',
+    'integrations',
 ]
 
 MIDDLEWARE = [
@@ -142,13 +144,17 @@ TERMII_SENDER_ID = config('TERMII_SENDER_ID', default='SabiWiFi')
 # WhatsApp sidecar (Node/Baileys)
 WA_SERVICE_URL = config('WA_SERVICE_URL', default='http://127.0.0.1:3001')
 WA_API_KEY = config('WA_API_KEY', default='')
+OPENWISP_WEBHOOK_SECRET = config('OPENWISP_WEBHOOK_SECRET', default='')
 
 # Server infrastructure
 SERVER_IP = config('SERVER_IP', default='127.0.0.1')
 SERVER_WG_PUBLIC_KEY = config('SERVER_WG_PUBLIC_KEY', default='')
 
 # Platform
-PLATFORM_DOMAIN = config('PLATFORM_DOMAIN', default='sabiwifi.ng')
+PLATFORM_DOMAIN = config('PLATFORM_DOMAIN', default='app.sabiwifi.com')
+
+# OpenWrt firmware image path (built by manage.py build_openwrt_firmware)
+OPENWRT_FIRMWARE_PATH = '/opt/openwrt-imagebuilder/bin/firmware-latest.bin'
 
 # Login URL for @login_required redirects
 TEST_RUNNER = 'tests.test_runner.SabiWiFiTestRunner'

@@ -1,0 +1,108 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}SabiWiFi Shop — Routers & Networking Equipment{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+
+  <!-- Hero strip -->
+  <div class="bg-primary rounded-2xl px-6 py-8 mb-8 text-on-primary flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-headline font-bold mb-1">WiFi Equipment Store</h1>
+      <p class="text-on-primary/70 text-sm md:text-base">MikroTik routers, cables, accessories — delivered nationwide.</p>
+    </div>
+    <a href="/shop/cart/" class="self-start md:self-auto bg-surface-container-lowest text-primary font-semibold px-5 py-2.5 rounded-lg text-sm hover:bg-surface-container-low transition-colors whitespace-nowrap">
+      View Cart →
+    </a>
+  </div>
+
+  <!-- Category tabs -->
+  {% if categories %}
+  <div class="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+    <a href="/shop/"
+       class="whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors
+              {% if not active_category %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">
+      All Products
+    </a>
+    {% for cat in categories %}
+    <a href="/shop/?cat={{ cat.slug }}"
+       class="whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors
+              {% if active_category.slug == cat.slug %}bg-primary text-on-primary{% else %}bg-surface-container-low text-on-surface-variant hover:bg-surface-container{% endif %}">
+      {{ cat.name }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Product grid -->
+  {% if products %}
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    {% for product in products %}
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden hover:shadow-ambient transition-shadow group">
+      <a href="/shop/product/{{ product.slug }}/" class="block aspect-square bg-surface-container-low overflow-hidden">
+        {% if product.image_url %}
+        <img src="{{ product.image_url }}" alt="{{ product.name }}"
+             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+        {% else %}
+        <div class="w-full h-full flex items-center justify-center">
+          <span class="material-symbols-outlined text-5xl text-on-surface-variant/40">package_2</span>
+        </div>
+        {% endif %}
+      </a>
+      <div class="p-3">
+        {% if product.is_featured %}
+        <span class="text-[10px] font-bold text-secondary uppercase tracking-wider">Featured</span>
+        {% endif %}
+        <a href="/shop/product/{{ product.slug }}/" class="block">
+          <h2 class="font-headline font-semibold text-sm leading-tight mt-0.5 hover:text-primary transition-colors line-clamp-2">{{ product.name }}</h2>
+        </a>
+        <p class="text-primary font-bold mt-1 text-sm">{{ product.price_display }}</p>
+        {% if not product.in_stock %}
+        <p class="text-xs text-error mt-0.5">Out of stock</p>
+        {% endif %}
+        <button
+          onclick="addToCart({{ product.id }}, '{{ product.name|escapejs }}', {{ product.price_ngn }}, '{{ product.image_url|escapejs }}')"
+          {% if not product.in_stock %}disabled{% endif %}
+          class="mt-2 w-full py-1.5 rounded-lg text-xs font-semibold transition-colors
+                 {% if product.in_stock %}bg-primary text-on-primary hover:bg-primary-dim{% else %}bg-surface-container text-on-surface-variant/40 cursor-not-allowed{% endif %}">
+          {% if product.in_stock %}Add to Cart{% else %}Out of Stock{% endif %}
+        </button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-16 text-on-surface-variant">
+    <span class="material-symbols-outlined text-5xl text-on-surface-variant/40 mb-4 block">package_2</span>
+    <p class="font-headline font-semibold text-lg text-on-surface">No products yet</p>
+    <p class="text-sm mt-1">Check back soon — we're stocking up.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addToCart(id, name, price, image) {
+  const cart = JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+  const existing = cart.find(i => i.id === id);
+  if (existing) {
+    existing.qty = (existing.qty || 1) + 1;
+  } else {
+    cart.push({ id, name, price, image, qty: 1 });
+  }
+  localStorage.setItem('sabiwifi_cart', JSON.stringify(cart));
+  updateCartBadge();
+  showToast(name + ' added to cart');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-on-surface text-surface text-sm font-medium px-5 py-2.5 rounded-full shadow-ambient z-50 transition-all';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+</script>
+{% endblock %}

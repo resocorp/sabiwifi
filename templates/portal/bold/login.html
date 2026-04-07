@@ -4,39 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+        }
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:#1A1A2E}
+        body{font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;background:linear-gradient(135deg, var(--primary), #004621)}
         .bg{position:fixed;top:0;left:0;right:0;bottom:0;z-index:0}
         .bg img{width:100%;height:100%;object-fit:cover}
-        .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:1}
+        .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(11,15,14,0.65);z-index:1}
         .container{position:relative;z-index:2;width:100%;max-width:360px}
+        .card{background:rgba(255,255,255,0.7);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:1.5rem;padding:32px 24px;box-shadow:0px 20px 40px rgba(43,47,46,0.06)}
         .logo{text-align:center;margin-bottom:16px}
         .logo img{max-width:120px;max-height:60px}
-        h1{font-size:24px;font-weight:700;text-align:center;margin-bottom:4px;text-shadow:0 2px 8px rgba(0,0,0,.3)}
+        h1{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:24px;font-weight:700;text-align:center;margin-bottom:4px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.3)}
         .subtitle{font-size:14px;color:rgba(255,255,255,.75);text-align:center;margin-bottom:28px}
-        label{display:block;font-size:13px;font-weight:500;margin-bottom:4px;color:rgba(255,255,255,.9)}
-        input[type="tel"],input[type="password"]{width:100%;padding:12px 14px;border:1px solid rgba(255,255,255,.25);border-radius:10px;font-size:15px;outline:none;margin-bottom:16px;background:rgba(255,255,255,.12);color:#fff;backdrop-filter:blur(4px)}
-        input::placeholder{color:rgba(255,255,255,.35)}
-        input:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.18)}
-        .btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
-        .btn-primary{background:{{ branding.primary_color|default:"#00B341" }};color:#fff}
+        .card-title{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:18px;font-weight:700;text-align:center;margin-bottom:20px;color:var(--on-surface)}
+        label{display:block;font-size:13px;font-weight:500;margin-bottom:4px;color:var(--on-surface-variant)}
+        input[type="tel"],input[type="password"]{width:100%;padding:12px 14px;border:none;border-radius:10px;font-size:15px;font-family:'Be Vietnam Pro',sans-serif;outline:none;margin-bottom:16px;background:rgba(255,255,255,0.5);color:var(--on-surface);backdrop-filter:blur(4px)}
+        input::placeholder{color:var(--on-surface-variant)}
+        input:focus{box-shadow:0 0 0 2px rgba(0,106,54,0.25);background:rgba(255,255,255,0.65)}
+        .btn{display:block;width:100%;padding:14px;border:none;border-radius:1rem;font-size:15px;font-family:'Be Vietnam Pro',sans-serif;font-weight:700;cursor:pointer;text-align:center;text-decoration:none}
+        .btn-primary{background:var(--primary);color:#fff}
         .btn-primary:disabled{opacity:.5;cursor:not-allowed}
-        .btn-outline{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);color:#fff;margin-top:10px}
-        .link{color:rgba(255,255,255,.75);text-decoration:none;font-size:13px}
-        .divider{text-align:center;color:rgba(255,255,255,.4);font-size:12px;margin:18px 0;position:relative}
-        .divider::before,.divider::after{content:'';position:absolute;top:50%;width:35%;height:1px;background:rgba(255,255,255,.2)}
+        .btn-outline{background:rgba(255,255,255,0.5);color:var(--on-surface);margin-top:10px}
+        .link{color:var(--on-surface-variant);text-decoration:none;font-size:13px}
+        .divider{text-align:center;color:var(--on-surface-variant);font-size:12px;margin:18px 0;position:relative}
+        .divider::before,.divider::after{content:'';position:absolute;top:50%;width:35%;height:1px;background:var(--surface-container-highest)}
         .divider::before{left:0}.divider::after{right:0}
         .notice{border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:20px;display:flex;gap:10px;align-items:flex-start;line-height:1.5}
         .notice-icon{font-size:18px;flex-shrink:0}
-        .notice-amber{background:rgba(252,211,77,.15);border:1px solid rgba(252,211,77,.35);color:#FDE68A}
-        .notice-red{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#FCA5A5}
+        .notice-amber{background:rgba(252,211,77,.15);color:#FDE68A}
+        .notice-red{background:rgba(239,68,68,.15);color:#FCA5A5}
         .notice strong{display:block;margin-bottom:2px}
         .msg{padding:10px 14px;border-radius:10px;font-size:13px;margin-bottom:16px;display:none}
-        .msg-error{background:rgba(229,57,53,.2);border:1px solid rgba(229,57,53,.4);color:#fff}
-        .msg-success{background:rgba(0,179,65,.2);border:1px solid rgba(0,179,65,.4);color:#fff}
+        .msg-error{background:rgba(179,27,37,.15);color:var(--error)}
+        .msg-success{background:rgba(0,106,54,.15);color:var(--primary)}
         .text-center{text-align:center}
         .mt-3{margin-top:12px}
+        .header-section{margin-bottom:24px}
     </style>
 </head>
 <body>
@@ -46,39 +64,43 @@
     <div class="overlay"></div>
 
     <div class="container">
-        {% if branding.logo %}
-        <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
-        {% endif %}
+        <div class="header-section">
+            {% if branding.logo %}
+            <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
+            {% endif %}
 
-        <h1>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
-        <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected in seconds.{% endif %}</p>
-
-        <div id="msg" class="msg"></div>
-
-        {% if reason == 'session_ended' %}
-        <div class="notice notice-amber">
-            <span class="notice-icon">⏱</span>
-            <div><strong>Your session has ended</strong>Your browsing time ran out or your plan expired. Log in again to reconnect.</div>
+            <h1>{% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}WiFi{% endif %}</h1>
+            <p class="subtitle">{% if branding.welcome_text %}{{ branding.welcome_text }}{% else %}Get connected in seconds.{% endif %}</p>
         </div>
-        {% elif error %}
-        <div class="notice notice-red" id="server-notice">
-            <span class="notice-icon">⚠️</span>
-            <div id="server-notice-text"></div>
+
+        <div class="card">
+            <div id="msg" class="msg"></div>
+
+            {% if reason == 'session_ended' %}
+            <div class="notice notice-amber">
+                <span class="notice-icon">⏱</span>
+                <div><strong>Your session has ended</strong>Your browsing time ran out or your plan expired. Log in again to reconnect.</div>
+            </div>
+            {% elif error %}
+            <div class="notice notice-red" id="server-notice">
+                <span class="notice-icon">⚠️</span>
+                <div id="server-notice-text"></div>
+            </div>
+            {% endif %}
+
+            <label>Phone Number</label>
+            <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
+            <label>WiFi PIN</label>
+            <input type="password" id="pin" placeholder="••••" maxlength="4" inputmode="numeric" required>
+            <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Connect Now</button>
+
+            <p class="text-center mt-3">
+                <a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> ·
+                <a href="/portal/account/?r={{ serial }}" class="link">My Account</a>
+            </p>
+            <div class="divider">or</div>
+            <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">Get Started</a>
         </div>
-        {% endif %}
-
-        <label>Phone Number</label>
-        <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
-        <label>WiFi PIN</label>
-        <input type="password" id="pin" placeholder="••••" maxlength="4" inputmode="numeric" required>
-        <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Log In</button>
-
-        <p class="text-center mt-3">
-            <a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> ·
-            <a href="/portal/account/?r={{ serial }}" class="link">My Account</a>
-        </p>
-        <div class="divider">or</div>
-        <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">Sign Up</a>
     </div>
 
     <form id="hotspot-form" method="post" style="display:none;">
@@ -121,7 +143,7 @@
         const pin = document.getElementById('pin').value.trim();
         const btn = document.getElementById('login-btn');
         if (!phone || !pin) { showMsg('Please enter phone and PIN.', 'error'); return; }
-        btn.disabled = true; btn.textContent = 'Logging in…';
+        btn.disabled = true; btn.textContent = 'Connecting…';
 
         fetch('/api/portal/login/', {
             method: 'POST',
@@ -133,7 +155,7 @@
             if (ok) {
                 if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
                 if (data.has_active_plan === false) {
-                    btn.disabled = false; btn.textContent = 'Log In';
+                    btn.disabled = false; btn.textContent = 'Connect Now';
                     showMsg('<strong>No active plan</strong> <a href="/portal/account/?r=' + serial + '" style="color:inherit;text-decoration:underline;font-weight:700;">Go to My Account</a> to choose a plan and reconnect.', 'error');
                     return;
                 }
@@ -149,14 +171,14 @@
                     form.action = linkLogin; form.submit();
                 } else {
                     showMsg('Connected! You can now use the internet.', 'success');
-                    btn.disabled = false; btn.textContent = 'Log In';
+                    btn.disabled = false; btn.textContent = 'Connect Now';
                 }
             } else {
-                btn.disabled = false; btn.textContent = 'Log In';
+                btn.disabled = false; btn.textContent = 'Connect Now';
                 showMsg(data.error || 'Login failed.', 'error');
             }
         })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Log In'; showMsg('Network error. Please try again.', 'error'); });
+        .catch(() => { btn.disabled = false; btn.textContent = 'Connect Now'; showMsg('Network error. Please try again.', 'error'); });
     }
 
     document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });

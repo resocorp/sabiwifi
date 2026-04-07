@@ -1,0 +1,131 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}Your Cart — SabiWiFi Shop{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-8">
+
+  <h1 class="text-2xl font-headline font-bold mb-6 text-on-surface">Your Cart</h1>
+
+  <!-- Empty state (hidden when cart has items) -->
+  <div id="empty-cart" class="hidden text-center py-16">
+    <span class="material-symbols-outlined text-[64px] text-on-surface-variant mb-4">shopping_cart</span>
+    <p class="font-headline font-semibold text-lg text-on-surface">Your cart is empty</p>
+    <p class="text-sm text-on-surface-variant mt-1">Browse products and add items to get started.</p>
+    <a href="/shop/" class="inline-block mt-6 bg-primary text-on-primary font-semibold px-6 py-2.5 rounded-lg hover:bg-primary-dim transition-colors">
+      Browse Products
+    </a>
+  </div>
+
+  <!-- Cart items -->
+  <div id="cart-items" class="hidden">
+    <div id="items-list" class="space-y-3 mb-6"></div>
+
+    <!-- Totals -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 space-y-2 text-sm mb-6">
+      <div class="flex justify-between text-on-surface-variant">
+        <span>Subtotal</span>
+        <span id="subtotal-display">₦0</span>
+      </div>
+      <div class="flex justify-between text-on-surface-variant">
+        <span>Shipping</span>
+        <span class="text-xs italic">Calculated at checkout</span>
+      </div>
+      <div class="border-t border-surface-container-high pt-2 flex justify-between font-semibold text-base">
+        <span>Estimated Total</span>
+        <span id="total-display" class="text-primary">₦0</span>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <a href="/shop/" class="flex-1 text-center bg-surface-container-low text-on-surface-variant font-semibold py-2.5 rounded-lg hover:bg-surface-container transition-colors text-sm">
+        ← Continue Shopping
+      </a>
+      <a href="/shop/checkout/" id="checkout-btn"
+         class="flex-1 text-center bg-primary text-on-primary font-semibold py-2.5 rounded-lg hover:bg-primary-dim transition-colors text-sm">
+        Checkout →
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fmtPrice(n) {
+  return '₦' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function renderCart() {
+  const cart = JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+  const empty = document.getElementById('empty-cart');
+  const cartDiv = document.getElementById('cart-items');
+  const list = document.getElementById('items-list');
+
+  if (!cart.length) {
+    empty.classList.remove('hidden');
+    cartDiv.classList.add('hidden');
+    return;
+  }
+
+  empty.classList.add('hidden');
+  cartDiv.classList.remove('hidden');
+
+  list.innerHTML = '';
+  let subtotal = 0;
+
+  cart.forEach(item => {
+    const lineTotal = item.price * (item.qty || 1);
+    subtotal += lineTotal;
+
+    const row = document.createElement('div');
+    row.className = 'bg-surface-container-lowest rounded-xl shadow-ambient-sm p-3 flex items-center gap-3';
+    row.innerHTML = `
+      <div class="w-16 h-16 rounded-lg bg-surface-container-low overflow-hidden flex-shrink-0">
+        ${item.image
+          ? `<img src="${item.image}" class="w-full h-full object-cover">`
+          : '<div class="w-full h-full flex items-center justify-center text-xs text-on-surface-variant font-medium">No img</div>'}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sm leading-tight truncate text-on-surface">${item.name}</p>
+        <p class="text-primary font-bold text-sm mt-0.5">${fmtPrice(item.price)}</p>
+      </div>
+      <div class="flex items-center gap-1 bg-surface-container-low rounded-lg overflow-hidden">
+        <button onclick="updateQty(${item.id}, -1)" class="px-2 py-1 text-sm font-bold text-on-surface-variant hover:bg-surface-container">−</button>
+        <span class="px-2 py-1 text-sm font-semibold min-w-[2rem] text-center text-on-surface">${item.qty || 1}</span>
+        <button onclick="updateQty(${item.id}, 1)" class="px-2 py-1 text-sm font-bold text-on-surface-variant hover:bg-surface-container">+</button>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <p class="font-semibold text-sm text-on-surface">${fmtPrice(lineTotal)}</p>
+        <button onclick="removeItem(${item.id})" class="text-error text-xs mt-0.5 hover:underline">Remove</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+
+  document.getElementById('subtotal-display').textContent = fmtPrice(subtotal);
+  document.getElementById('total-display').textContent = fmtPrice(subtotal);
+}
+
+function updateQty(id, delta) {
+  const cart = JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+  const item = cart.find(i => i.id === id);
+  if (!item) return;
+  item.qty = Math.max(1, (item.qty || 1) + delta);
+  localStorage.setItem('sabiwifi_cart', JSON.stringify(cart));
+  renderCart();
+  updateCartBadge();
+}
+
+function removeItem(id) {
+  let cart = JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+  cart = cart.filter(i => i.id !== id);
+  localStorage.setItem('sabiwifi_cart', JSON.stringify(cart));
+  renderCart();
+  updateCartBadge();
+}
+
+renderCart();
+</script>
+{% endblock %}

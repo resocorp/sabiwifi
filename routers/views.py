@@ -11,7 +11,7 @@ from routers.models import Router
 from routers.serializers import RouterAddSerializer, RouterSerializer, RouterSSIDSerializer
 from routers.provision import generate_provision_rsc
 from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc, generate_phonehome_setup_rsc
-from routers.serial_utils import is_valid_mikrotik_serial
+from routers.serial_utils import is_valid_mikrotik_serial, is_valid_mac, normalize_mac
 from routers.wg_utils import generate_keypair, add_peer, remove_peer, WireGuardError
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def _generate_credentials(router):
 
 @api_view(['POST'])
 def router_add(request):
-    """Reseller submits a serial number to claim a router."""
+    """Reseller submits a serial number (or MAC for OpenWrt) to claim a router."""
     serializer = RouterAddSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
 
@@ -64,43 +64,82 @@ def router_add(request):
     router = Router.objects.get(serial_number=serial)
     reseller = request.user.reseller
 
-    # Generate credentials (real WireGuard keys)
-    wg_private_key = _generate_credentials(router)
+    if router.device_type == 'openwrt':
+        # OpenWrt devices generate their own WG keys on first boot.
+        # The public key is sent via heartbeat header and already stored.
+        if not router.wg_public_key:
+            return Response(
+                {'error': 'Router has not sent its WireGuard key yet. '
+                          'Ensure it is powered on and connected to the internet, '
+                          'then wait a few minutes and try again.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    # Assign to reseller
-    router.reseller = reseller
-    router.status = 'pending_provision'
-    router.save()
+        # Allocate tunnel IP and NAS secret (don't overwrite WG keys)
+        if not router.wg_tunnel_ip:
+            router.wg_tunnel_ip = _allocate_tunnel_ip()
+        if not router.nas_secret:
+            router.nas_secret = secrets.token_urlsafe(24)
 
-    # Write NAS entry for FreeRADIUS
-    from radius.models import Nas
-    Nas.objects.update_or_create(
-        nasname=router.wg_tunnel_ip,
-        defaults={
-            'shortname': router.serial_number,
-            'type': 'other',
-            'secret': router.nas_secret,
-            'description': f'SabiWiFi router {router.serial_number}',
-        }
-    )
+        router.reseller = reseller
+        router.status = 'pending_provision'
+        router.save()
 
-    # Add WireGuard peer on the server
-    try:
-        add_peer(router.wg_public_key, router.wg_tunnel_ip)
-    except WireGuardError as e:
-        logger.error(f"Failed to add WG peer for router {serial}: {e}")
-        router.status = 'failed'
-        router.save(update_fields=['status'])
-        return Response(
-            {'error': 'Router claimed but WireGuard setup failed. Contact support.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        # Add WG peer using the device's own public key
+        try:
+            add_peer(router.wg_public_key, router.wg_tunnel_ip)
+        except WireGuardError as e:
+            logger.error(f"Failed to add WG peer for OpenWrt {serial}: {e}")
+
+        # Write NAS entry for FreeRADIUS
+        from radius.models import Nas
+        Nas.objects.update_or_create(
+            nasname=router.wg_tunnel_ip,
+            defaults={
+                'shortname': router.serial_number,
+                'type': 'other',
+                'secret': router.nas_secret,
+                'description': f'SabiWiFi OpenWrt {router.serial_number}',
+            }
         )
 
-    # Store the private key temporarily for provision endpoint
-    from django.core.cache import cache
-    cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
+        logger.info(f"OpenWrt {serial} assigned to reseller {reseller.name}, "
+                     f"pending provision via heartbeat")
 
-    logger.info(f"Router {serial} assigned to reseller {reseller.name}")
+    else:
+        # MikroTik: server generates WG keys and delivers via provision .rsc
+        wg_private_key = _generate_credentials(router)
+
+        router.reseller = reseller
+        router.status = 'pending_provision'
+        router.save()
+
+        from radius.models import Nas
+        Nas.objects.update_or_create(
+            nasname=router.wg_tunnel_ip,
+            defaults={
+                'shortname': router.serial_number,
+                'type': 'other',
+                'secret': router.nas_secret,
+                'description': f'SabiWiFi router {router.serial_number}',
+            }
+        )
+
+        try:
+            add_peer(router.wg_public_key, router.wg_tunnel_ip)
+        except WireGuardError as e:
+            logger.error(f"Failed to add WG peer for router {serial}: {e}")
+            router.status = 'failed'
+            router.save(update_fields=['status'])
+            return Response(
+                {'error': 'Router claimed but WireGuard setup failed. Contact support.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        from django.core.cache import cache
+        cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
+
+        logger.info(f"Router {serial} assigned to reseller {reseller.name}")
 
     return Response({
         'status': 'Router added successfully.',
@@ -191,26 +230,87 @@ def router_provision(request, serial):
 @throttle_classes([ProvisionRateThrottle])
 def router_heartbeat(request, serial):
     """
-    Lightweight heartbeat endpoint. Called every 2 min by provisioned routers.
+    Lightweight heartbeat endpoint. Called every 2 min by all routers.
     Updates last_seen, clears offline_since, logs recovery if coming back online.
+
+    For OpenWrt devices (serial = MAC address):
+      - Auto-creates the Router record on first heartbeat
+      - Stores the WireGuard public key from X-WG-Public-Key header
+      - Returns inline provision script when status is 'pending_provision'
     """
     serial = serial.strip().upper()
     from django.utils import timezone
     from routers.models import RouterHealthLog
+    from routers.serial_utils import is_valid_mac, normalize_mac
 
-    router = Router.objects.filter(serial_number=serial).first()
+    # Detect device type by identifier format
+    if is_valid_mac(serial):
+        mac = normalize_mac(serial)
+        device_type = 'openwrt'
+        lookup_serial = mac
+    else:
+        device_type = 'mikrotik'
+        lookup_serial = serial
+
+    router = Router.objects.filter(serial_number=lookup_serial).first()
+
+    # Auto-register OpenWrt device on first heartbeat (no phone-home needed)
+    if not router and device_type == 'openwrt':
+        router, created = Router.objects.get_or_create(
+            serial_number=lookup_serial,
+            defaults={
+                'device_type': 'openwrt',
+                'status': 'available',
+            },
+        )
+        if created:
+            logger.info(f'Auto-registered OpenWrt device {lookup_serial} via heartbeat')
+
     if not router:
         return HttpResponse('# unknown', content_type='text/plain')
 
-    was_offline = router.status == 'offline'
-    router.last_seen = timezone.now()
-    router.status = 'online'
-    router.offline_since = None
-    router.save(update_fields=['last_seen', 'status', 'offline_since'])
+    # Store WireGuard public key when sent by OpenWrt device
+    wg_pub = request.META.get('HTTP_X_WG_PUBLIC_KEY', '').strip()
+    update_fields = ['last_seen', 'status', 'offline_since']
+    if wg_pub and wg_pub != router.wg_public_key:
+        old_wg_pub = router.wg_public_key
+        router.wg_public_key = wg_pub
+        update_fields.append('wg_public_key')
+        # Update server-side WG peer (e.g. after router reflash generates new keys)
+        if router.wg_tunnel_ip:
+            try:
+                if old_wg_pub:
+                    remove_peer(old_wg_pub)
+                add_peer(wg_pub, router.wg_tunnel_ip)
+            except WireGuardError as e:
+                logger.error(f"Failed to update WG peer for {lookup_serial}: {e}")
 
-    if was_offline:
+    was_offline = router.status in ('offline', 'pending_provision')
+    router.last_seen = timezone.now()
+    # Don't overwrite pending_provision — the device still needs provisioning
+    if router.status != 'pending_provision':
+        router.status = 'online'
+    router.offline_since = None
+    router.save(update_fields=update_fields)
+
+    if was_offline and router.status == 'online':
         RouterHealthLog.objects.create(router=router, event='online')
-        logger.info(f'Router {serial} recovered via heartbeat')
+        logger.info(f'Router {lookup_serial} recovered via heartbeat')
+
+    # For OpenWrt devices needing provisioning: return the full provision script
+    # inline in the heartbeat response. The heartbeat script on the router detects
+    # "#!/bin/sh" and executes it. Script is idempotent so re-delivery is safe.
+    if device_type == 'openwrt' and router.reseller and router.status == 'pending_provision':
+        from routers.openwrt_provision import generate_openwrt_provision
+        script = generate_openwrt_provision(router)
+        # Mark as provisioned + increment count
+        from django.db.models import F
+        Router.objects.filter(pk=router.pk).update(
+            status='provisioned',
+            provision_count=F('provision_count') + 1,
+        )
+        logger.info(f"Provision script delivered to OpenWrt {lookup_serial} via heartbeat")
+        return HttpResponse(script, content_type='text/plain')
 
     return HttpResponse('# ok', content_type='text/plain')
 
@@ -325,9 +425,10 @@ def router_ssid(request, pk):
 @api_view(['GET'])
 def router_stats(request, pk):
     """
-    Fetch live stats from a router via REST API over WireGuard.
-    Returns: CPU, memory, uptime, WAN traffic, connected devices, WiFi info.
-    Called via AJAX from the dashboard.
+    Fetch live stats for a router. Called via AJAX from the dashboard.
+
+    MikroTik: RouterOS REST API over WireGuard (existing path).
+    OpenWrt:  OpenWISP monitoring API (CPU, memory, uptime, clients, traffic).
     """
     reseller = request.user.reseller
     try:
@@ -340,6 +441,9 @@ def router_stats(request, pk):
             'error': 'Router is not online.',
             'status': router.status,
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    if router.device_type == 'openwrt':
+        return _router_stats_openwisp(router)
 
     from routers.routeros_utils import get_router_stats as fetch_stats, RouterOSError
     try:
@@ -355,12 +459,41 @@ def router_stats(request, pk):
         )
 
 
+def _router_stats_openwisp(router):
+    """Fetch stats for an OpenWrt router from OpenWISP monitoring API."""
+    try:
+        from integrations.models import OpenWISPBinding
+        from integrations.openwisp import OpenWISPClient, OpenWISPError
+        binding = OpenWISPBinding.objects.filter(router=router).first()
+        if not binding:
+            return Response(
+                {'error': 'Router not yet registered in OpenWISP. Claim it first.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        client = OpenWISPClient()
+        monitoring = client.get_device_monitoring(str(binding.openwisp_id))
+        stats = client.parse_metrics(monitoring)
+        stats['serial_number'] = router.serial_number
+        stats['router_status'] = router.status
+        return Response(stats)
+    except Exception as e:
+        logger.error(f"OpenWISP stats fetch failed for {router.serial_number}: {e}")
+        return Response(
+            {'error': f'Cannot reach OpenWISP monitoring: {e}'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+
 @api_view(['POST'])
 def router_wifi(request, pk):
     """
     Update WiFi settings (SSID and/or password) on a specific interface.
     Body: { "ssid": "...", "password": "...", "interface": "wifi1" }
-    Password empty string = open network (remove WPA).
+
+    MikroTik: pushed immediately via RouterOS API over WireGuard.
+    OpenWrt:  SSID updated via OpenWISP device context vars → config template
+              re-pushed by openwisp-config on next poll (≤5 min).
+              Passwords are not supported on OpenWrt (uspot guest network is open).
     """
     reseller = request.user.reseller
     try:
@@ -374,11 +507,14 @@ def router_wifi(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    if router.device_type == 'openwrt':
+        return _router_wifi_openwisp(router, request.data)
+
     from routers.routeros_utils import set_wifi_ssid, set_wifi_password, RouterOSError
 
     iface = request.data.get('interface', 'wifi1')
     new_ssid = request.data.get('ssid', '').strip()
-    new_password = request.data.get('password', None)  # None = don't change
+    new_password = request.data.get('password', None)
 
     results = []
 
@@ -407,6 +543,38 @@ def router_wifi(request, pk):
     return Response({'status': '. '.join(results) + '.'})
 
 
+def _router_wifi_openwisp(router, data):
+    """Update SSID for an OpenWrt router via OpenWISP device context vars."""
+    new_ssid = data.get('ssid', '').strip()
+    if not new_ssid:
+        return Response({'error': 'SSID is required for OpenWrt routers.'}, status=400)
+    if len(new_ssid) > 32:
+        return Response({'error': 'SSID must be 1-32 characters.'}, status=400)
+
+    try:
+        from integrations.models import OpenWISPBinding
+        from integrations.openwisp import OpenWISPClient, OpenWISPError
+        binding = OpenWISPBinding.objects.filter(router=router).first()
+        if not binding:
+            return Response({'error': 'Router not registered in OpenWISP.'}, status=503)
+        client = OpenWISPClient()
+        client.update_device_context(str(binding.openwisp_id), {
+            'ssid': new_ssid,
+            'ssid_5g': f'{new_ssid}-5G',
+        })
+        # Persist SSID in reseller branding so it survives server restarts
+        if router.reseller:
+            branding = router.reseller.branding or {}
+            branding['ssid'] = new_ssid
+            router.reseller.branding = branding
+            router.reseller.save(update_fields=['branding'])
+        logger.info(f'SSID updated via OpenWISP for {router.serial_number}: {new_ssid}')
+        return Response({'status': f'SSID updated to "{new_ssid}". Change will apply within 5 minutes.'})
+    except Exception as e:
+        logger.error(f'OpenWISP SSID update failed for {router.serial_number}: {e}')
+        return Response({'error': f'SSID update failed: {e}'}, status=502)
+
+
 @api_view(['GET'])
 def router_health_log(request, pk):
     """Return last 20 health events (online/offline transitions) for a router."""
@@ -428,3 +596,190 @@ def router_health_log(request, pk):
         for log in logs
     ]
     return Response({'logs': data})
+
+
+# ── OpenWISP Webhook ────────────────────────────────────────────────────────
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def openwisp_webhook(request):
+    """
+    Receives device status change webhooks from OpenWISP monitoring.
+
+    Configure in OpenWISP admin:
+      Monitoring → Notification Settings → Webhook URL:
+        https://app.sabiwifi.com/api/routers/openwisp-webhook/
+      Secret header: X-OpenWISP-Signature with the value of settings.OPENWISP_WEBHOOK_SECRET
+
+    Expected payload (OpenWISP sends JSON):
+      {
+        "event": "device_status_changed",
+        "device": {
+          "id": "<uuid>",
+          "name": "<name>",
+          "status": "ok" | "problem" | "unknown"
+        }
+      }
+    """
+    from django.conf import settings as django_settings
+    from django.utils import timezone
+    from routers.models import RouterHealthLog
+
+    # Verify webhook signature (required)
+    webhook_secret = getattr(django_settings, 'OPENWISP_WEBHOOK_SECRET', '')
+    if not webhook_secret:
+        logger.error('OPENWISP_WEBHOOK_SECRET not configured — rejecting webhook')
+        return Response({'error': 'Webhook not configured.'}, status=500)
+    incoming = request.META.get('HTTP_X_OPENWISP_SIGNATURE', '')
+    if not incoming or incoming != webhook_secret:
+        return Response({'error': 'Invalid signature.'}, status=403)
+
+    data = request.data
+    event = data.get('event', '')
+    device_data = data.get('device', {})
+    device_id = device_data.get('id', '')
+    device_status = device_data.get('status', '')
+
+    if not device_id or event != 'device_status_changed':
+        return Response({'ok': True})
+
+    # Find the router via OpenWISPBinding
+    try:
+        from integrations.models import OpenWISPBinding
+        binding = OpenWISPBinding.objects.filter(
+            openwisp_id=device_id,
+            openwisp_type='device',
+        ).select_related('router').first()
+    except Exception as e:
+        logger.warning(f'OpenWISP webhook: binding lookup failed: {e}')
+        return Response({'ok': True})
+
+    if not binding or not binding.router:
+        return Response({'ok': True})
+
+    router = binding.router
+    now = timezone.now()
+
+    if device_status == 'ok':
+        was_offline = router.status == 'offline'
+        router.status = 'online'
+        router.last_seen = now
+        router.offline_since = None
+        router.save(update_fields=['status', 'last_seen', 'offline_since'])
+        if was_offline:
+            RouterHealthLog.objects.create(router=router, event='online')
+            logger.info(f'Router {router.serial_number} back online via OpenWISP webhook')
+
+    elif device_status in ('problem', 'unknown'):
+        was_online = router.status in ('online', 'provisioned')
+        router.status = 'offline'
+        if not router.offline_since:
+            router.offline_since = now
+        router.save(update_fields=['status', 'offline_since'])
+        if was_online:
+            RouterHealthLog.objects.create(router=router, event='offline')
+            logger.info(f'Router {router.serial_number} went offline via OpenWISP webhook')
+
+    return Response({'ok': True})
+
+
+# ── OpenWrt Phone-Home & Provision (deprecated — kept for bench-test devices) ─
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@throttle_classes([ProvisionRateThrottle])
+def openwrt_provision(request, mac):
+    """
+    Phone-home endpoint for OpenWrt routers.
+    Called every 2 minutes by the baked-in phone-home script.
+    MAC is the device identifier (equivalent to MikroTik serial).
+
+    Headers (sent by the phone-home script):
+      X-WG-Public-Key: the router's WireGuard public key (generated on first boot)
+
+    Flow:
+      1. Auto-register unknown MACs as 'available' OpenWrt devices
+      2. Return '# not ready' until a reseller claims the device
+      3. Once claimed, return full UCI provision script
+    """
+    mac = normalize_mac(mac)
+
+    if not is_valid_mac(mac):
+        return HttpResponse('# invalid mac', content_type='text/plain')
+
+    from django.utils import timezone
+
+    try:
+        router = Router.objects.get(serial_number=mac)
+    except Router.DoesNotExist:
+        router, created = Router.objects.get_or_create(
+            serial_number=mac,
+            defaults={
+                'status': 'available',
+                'device_type': 'openwrt',
+            },
+        )
+        if created:
+            logger.info(f"Auto-registered OpenWrt device {mac} from phone-home")
+
+    # Store the WG public key from the device (generated on first boot)
+    wg_public_key = request.META.get('HTTP_X_WG_PUBLIC_KEY', '').strip()
+    if wg_public_key and wg_public_key != router.wg_public_key:
+        old_wg_pub = router.wg_public_key
+        router.wg_public_key = wg_public_key
+        router.save(update_fields=['wg_public_key'])
+        # Update server-side WG peer (e.g. after router reflash generates new keys)
+        if router.wg_tunnel_ip:
+            try:
+                if old_wg_pub:
+                    remove_peer(old_wg_pub)
+                add_peer(wg_public_key, router.wg_tunnel_ip)
+            except WireGuardError as e:
+                logger.error(f"Failed to update WG peer for OpenWrt {mac}: {e}")
+
+    # Update last_seen
+    Router.objects.filter(pk=router.pk).update(last_seen=timezone.now())
+
+    if router.reseller is None:
+        return HttpResponse('# not ready', content_type='text/plain')
+
+    # Router is claimed — generate credentials if needed
+    if not router.wg_tunnel_ip or not router.nas_secret:
+        router.wg_tunnel_ip = _allocate_tunnel_ip()
+        router.nas_secret = secrets.token_urlsafe(24)
+        router.status = 'pending_provision'
+        router.save()
+
+        # Add WireGuard peer on server (using the key the device sent)
+        if router.wg_public_key:
+            try:
+                add_peer(router.wg_public_key, router.wg_tunnel_ip)
+            except WireGuardError as e:
+                logger.error(f"Failed to add WG peer for OpenWrt {mac}: {e}")
+
+        # Write NAS entry for FreeRADIUS
+        from radius.models import Nas
+        Nas.objects.update_or_create(
+            nasname=router.wg_tunnel_ip,
+            defaults={
+                'shortname': mac,
+                'type': 'other',
+                'secret': router.nas_secret,
+                'description': f'SabiWiFi OpenWrt {mac}',
+            }
+        )
+
+    # Generate provision script
+    from routers.openwrt_provision import generate_openwrt_provision
+    script = generate_openwrt_provision(router)
+
+    # Update status
+    router.status = 'provisioned'
+    router.provision_count += 1
+    router.save(update_fields=['status', 'provision_count'])
+
+    logger.info(f"OpenWrt provision delivered for {mac} (count: {router.provision_count})")
+
+    return HttpResponse(script, content_type='text/plain')

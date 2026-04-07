@@ -5,21 +5,38 @@
 {% with active_tab='routers' %}
 
 <div class="mb-6">
-    <a href="{% url 'dashboard-routers' %}" class="text-sm text-text-secondary hover:text-primary">← Routers</a>
-    <h1 class="text-xl font-heading font-bold mt-2">Add Your Router</h1>
+    <a href="{% url 'dashboard-routers' %}" class="text-sm text-on-surface-variant hover:text-primary">← Routers</a>
+    <h1 class="text-xl font-headline font-bold mt-2">Add Your Router</h1>
 </div>
 
 <div class="max-w-lg">
-    <div class="bg-white rounded-xl border border-border p-5">
-        <p class="text-sm text-text-secondary mb-4">
+
+    <!-- Device type selector -->
+    <div class="flex rounded-xl overflow-hidden border border-outline-variant mb-5" id="type-tabs">
+        <button type="button" id="tab-mikrotik"
+                onclick="selectType('mikrotik')"
+                class="flex-1 py-2.5 text-sm font-semibold transition tab-active">
+            MikroTik
+        </button>
+        <button type="button" id="tab-openwrt"
+                onclick="selectType('openwrt')"
+                class="flex-1 py-2.5 text-sm font-semibold transition tab-inactive">
+            OpenWrt (AC2100)
+        </button>
+    </div>
+
+    <!-- MikroTik form -->
+    <div id="form-mikrotik" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <p class="text-sm text-on-surface-variant mb-4">
             Enter the serial number from the sticker on your MikroTik router.
         </p>
 
         <form method="post">
             {% csrf_token %}
+            <input type="hidden" name="device_type" value="mikrotik">
 
             {% if errors.serial_number %}
-            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">
+            <div class="bg-error-container/20 rounded-lg p-3 mb-4 text-sm text-on-error-container">
                 {{ errors.serial_number.0 }}
             </div>
             {% endif %}
@@ -27,26 +44,95 @@
             <div class="mb-4">
                 <label class="block text-sm font-medium mb-1">Serial Number</label>
                 <input type="text" name="serial_number" placeholder="e.g. HFG30A9B72C"
-                       class="w-full px-3 py-2.5 border border-border rounded-lg text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/40">
             </div>
 
             <button type="submit"
-                    class="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
-                Add Router
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+                Add MikroTik Router
             </button>
         </form>
 
-        <div class="mt-4 pt-4 border-t border-border">
-            <p class="text-sm text-text-secondary">
-                Already plugged it in? No problem — enter the serial and it will connect within a minute.
-            </p>
-            <p class="text-sm text-text-secondary mt-2">
-                Don't have a router yet?
-                <a href="https://wa.me/234XXXXXXXXXX" class="text-primary hover:underline">Chat on WhatsApp to order →</a>
+        <div class="mt-4 pt-4 border-t border-outline-variant/30">
+            <p class="text-sm text-on-surface-variant">
+                Already plugged it in? Enter the serial and it will connect within a minute.
             </p>
         </div>
     </div>
+
+    <!-- OpenWrt form -->
+    <div id="form-openwrt" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 hidden">
+        <p class="text-sm text-on-surface-variant mb-1">
+            Enter the <strong>MAC address</strong> printed on the sticker on your OpenWrt router.
+        </p>
+        <p class="text-xs text-on-surface-variant mb-4">
+            Make sure the router is powered on and connected to the internet first — it needs 2 minutes to register.
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="device_type" value="openwrt">
+
+            {% if errors.mac_address %}
+            <div class="bg-error-container/20 rounded-lg p-3 mb-4 text-sm text-on-error-container">
+                {{ errors.mac_address.0 }}
+            </div>
+            {% endif %}
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">MAC Address</label>
+                <input type="text" name="mac_address" placeholder="e.g. A4:B1:C2:D3:E4:F5"
+                       maxlength="17"
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <p class="text-xs text-on-surface-variant mt-1">Colons and hyphens are optional.</p>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+                Add OpenWrt Router
+            </button>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-outline-variant/30 space-y-1">
+            <p class="text-sm text-on-surface-variant">
+                Once added, your router's WiFi and captive portal will be configured automatically within 5 minutes.
+            </p>
+            <p class="text-sm text-on-surface-variant">
+                Need a router?
+                <a href="{% url 'shop-home' %}" class="text-primary hover:underline font-medium">Get one from our Shop →</a>
+            </p>
+        </div>
+    </div>
+
 </div>
+
+<script>
+const activeClass = 'bg-primary text-on-primary';
+const inactiveClass = 'bg-transparent text-on-surface-variant hover:bg-surface-container-low';
+
+function selectType(type) {
+    document.getElementById('form-mikrotik').classList.toggle('hidden', type !== 'mikrotik');
+    document.getElementById('form-openwrt').classList.toggle('hidden', type !== 'openwrt');
+
+    ['mikrotik', 'openwrt'].forEach(t => {
+        const btn = document.getElementById('tab-' + t);
+        if (t === type) {
+            btn.className = btn.className.replace('tab-inactive', '').replace('tab-active', '');
+            btn.classList.add(...activeClass.split(' '));
+        } else {
+            btn.className = btn.className.replace('tab-active', '').replace('tab-inactive', '');
+            btn.classList.add(...inactiveClass.split(' '));
+        }
+    });
+}
+
+// Default tab styles
+document.getElementById('tab-mikrotik').classList.add(...activeClass.split(' '));
+document.getElementById('tab-openwrt').classList.add(...inactiveClass.split(' '));
+
+// If there were OpenWrt errors, show that tab
+{% if errors.mac_address %}selectType('openwrt');{% endif %}
+</script>
 
 {% endwith %}
 {% endblock %}

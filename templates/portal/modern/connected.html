@@ -5,30 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connected — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}SabiWiFi{% endif %}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+            --secondary-container: #ffc96f;
+            --on-secondary-container: #614100;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        body { font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .container { width: 100%; max-width: 360px; }
-        .card { background: #fff; border-radius: 16px; padding: 28px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .card { background: var(--surface-container-lowest); border-radius: 16px; padding: 28px 24px; box-shadow: 0px 20px 40px rgba(43,47,46,0.06); }
         .logo { text-align: center; margin-bottom: 12px; }
         .logo img { max-width: 100px; max-height: 50px; }
         .icon { font-size: 48px; text-align: center; margin-bottom: 10px; }
-        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
-        .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 20px; }
-        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #F3F4F6; font-size: 14px; }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { color: #6B7280; }
-        .info-value { font-weight: 500; text-align: right; max-width: 58%; }
-        .badge { display: inline-block; padding: 2px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; background: #D1FAE5; color: #065F46; margin-left: 4px; white-space: nowrap; }
-        .divider { border: none; border-top: 1px solid #F3F4F6; margin: 16px 0; }
-        .account-note { background: {{ branding.primary_color|default:"#0052CC" }}0D; border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
-        .account-note strong { display: block; margin-bottom: 3px; }
-        .account-note a { color: {{ branding.primary_color|default:"#0052CC" }}; font-weight: 600; text-decoration: none; }
-        .countdown-bar-wrap { background: #F3F4F6; border-radius: 99px; height: 4px; margin-bottom: 10px; overflow: hidden; }
-        .countdown-bar { height: 4px; border-radius: 99px; background: {{ branding.primary_color|default:"#0052CC" }}; width: 100%; transition: width 1s linear; }
-        .countdown-text { font-size: 12px; color: #9CA3AF; text-align: center; margin-bottom: 16px; }
-        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
-        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
-        .skeleton { background: #F3F4F6; border-radius: 4px; height: 13px; margin: 8px 0; animation: shimmer 1.2s ease-in-out infinite; }
+        h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; color: var(--on-surface); }
+        .subtitle { font-size: 14px; color: var(--on-surface-variant); text-align: center; margin-bottom: 20px; }
+        .info-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; font-size: 14px; }
+        .info-row + .info-row { padding-top: 9px; }
+        .info-label { color: var(--on-surface-variant); }
+        .info-value { font-weight: 500; text-align: right; max-width: 58%; color: var(--on-surface); }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 12px; font-size: 11px; font-weight: 600; background: var(--primary); color: #fff; margin-left: 4px; white-space: nowrap; }
+        .divider { height: 2px; background: var(--surface-container); border: none; margin: 16px 0; border-radius: 1px; }
+        .account-note { background: var(--surface-container-low); border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+        .account-note strong { display: block; margin-bottom: 3px; color: var(--on-surface); }
+        .account-note a { color: var(--primary); font-weight: 600; text-decoration: none; }
+        .countdown-bar-wrap { background: var(--surface-container-highest); border-radius: 99px; height: 4px; margin-bottom: 10px; overflow: hidden; }
+        .countdown-bar { height: 4px; border-radius: 99px; background: var(--primary); width: 100%; transition: width 1s linear; }
+        .countdown-text { font-size: 12px; color: var(--on-surface-variant); text-align: center; margin-bottom: 16px; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .skeleton { background: var(--surface-container); border-radius: 4px; height: 13px; margin: 8px 0; animation: shimmer 1.2s ease-in-out infinite; }
         @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
     </style>
 </head>
@@ -52,7 +69,7 @@
                 <div class="skeleton" style="width:65%"></div>
             </div>
 
-            <hr class="divider">
+            <div class="divider"></div>
 
             <div class="account-note">
                 <strong>Manage your account anytime</strong>
@@ -136,7 +153,7 @@
             html += `
             <div class="info-row">
                 <span class="info-label">Plan</span>
-                <span class="info-value" style="color:#D97706;">No active plan</span>
+                <span class="info-value" style="color:var(--secondary-container);">No active plan</span>
             </div>`;
         }
         document.getElementById('account-info').innerHTML = html;

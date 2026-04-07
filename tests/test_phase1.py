@@ -607,7 +607,7 @@ class LandingPageTest(TestCase):
         resp = self.client.get(reverse('landing'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'SabiWiFi')
-        self.assertContains(resp, 'Turn Your Internet')
+        self.assertContains(resp, 'Imagine Running')
 
     def test_landing_redirects_logged_in_reseller(self):
         user = User.objects.create_user(username='r@x.com', email='r@x.com', password='p')

@@ -1,0 +1,317 @@
+<!-- SabiWiFi Design Tokens — "The Digital Veranda" (Light / Dark / System) -->
+
+<!-- Prevent flash of wrong theme — must run before any rendering -->
+<script>
+(function(){
+  var s = localStorage.getItem('sabiwifi-theme');
+  var d = s === 'dark' || (s !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if (d) document.documentElement.classList.add('dark');
+})();
+</script>
+
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+    darkMode: 'class',
+    theme: {
+        extend: {
+            colors: {
+                "primary":                     "rgb(var(--c-primary) / <alpha-value>)",
+                "primary-dim":                 "rgb(var(--c-primary-dim) / <alpha-value>)",
+                "primary-container":           "rgb(var(--c-primary-container) / <alpha-value>)",
+                "on-primary":                  "rgb(var(--c-on-primary) / <alpha-value>)",
+                "on-primary-container":        "rgb(var(--c-on-primary-container) / <alpha-value>)",
+                "primary-fixed":               "rgb(var(--c-primary-fixed) / <alpha-value>)",
+                "primary-fixed-dim":           "rgb(var(--c-primary-fixed-dim) / <alpha-value>)",
+                "on-primary-fixed":            "rgb(var(--c-on-primary-fixed) / <alpha-value>)",
+                "on-primary-fixed-variant":    "rgb(var(--c-on-primary-fixed-variant) / <alpha-value>)",
+                "secondary":                   "rgb(var(--c-secondary) / <alpha-value>)",
+                "secondary-dim":               "rgb(var(--c-secondary-dim) / <alpha-value>)",
+                "secondary-container":         "rgb(var(--c-secondary-container) / <alpha-value>)",
+                "on-secondary":                "rgb(var(--c-on-secondary) / <alpha-value>)",
+                "on-secondary-container":      "rgb(var(--c-on-secondary-container) / <alpha-value>)",
+                "secondary-fixed":             "rgb(var(--c-secondary-fixed) / <alpha-value>)",
+                "secondary-fixed-dim":         "rgb(var(--c-secondary-fixed-dim) / <alpha-value>)",
+                "on-secondary-fixed":          "rgb(var(--c-on-secondary-fixed) / <alpha-value>)",
+                "on-secondary-fixed-variant":  "rgb(var(--c-on-secondary-fixed-variant) / <alpha-value>)",
+                "tertiary":                    "rgb(var(--c-tertiary) / <alpha-value>)",
+                "tertiary-dim":                "rgb(var(--c-tertiary-dim) / <alpha-value>)",
+                "tertiary-container":          "rgb(var(--c-tertiary-container) / <alpha-value>)",
+                "on-tertiary":                 "rgb(var(--c-on-tertiary) / <alpha-value>)",
+                "on-tertiary-container":       "rgb(var(--c-on-tertiary-container) / <alpha-value>)",
+                "tertiary-fixed":              "rgb(var(--c-tertiary-fixed) / <alpha-value>)",
+                "tertiary-fixed-dim":          "rgb(var(--c-tertiary-fixed-dim) / <alpha-value>)",
+                "on-tertiary-fixed":           "rgb(var(--c-on-tertiary-fixed) / <alpha-value>)",
+                "on-tertiary-fixed-variant":   "rgb(var(--c-on-tertiary-fixed-variant) / <alpha-value>)",
+                "error":                       "rgb(var(--c-error) / <alpha-value>)",
+                "error-dim":                   "rgb(var(--c-error-dim) / <alpha-value>)",
+                "error-container":             "rgb(var(--c-error-container) / <alpha-value>)",
+                "on-error":                    "rgb(var(--c-on-error) / <alpha-value>)",
+                "on-error-container":          "rgb(var(--c-on-error-container) / <alpha-value>)",
+                "surface":                     "rgb(var(--c-surface) / <alpha-value>)",
+                "surface-dim":                 "rgb(var(--c-surface-dim) / <alpha-value>)",
+                "surface-bright":              "rgb(var(--c-surface-bright) / <alpha-value>)",
+                "surface-container-lowest":    "rgb(var(--c-surface-container-lowest) / <alpha-value>)",
+                "surface-container-low":       "rgb(var(--c-surface-container-low) / <alpha-value>)",
+                "surface-container":           "rgb(var(--c-surface-container) / <alpha-value>)",
+                "surface-container-high":      "rgb(var(--c-surface-container-high) / <alpha-value>)",
+                "surface-container-highest":   "rgb(var(--c-surface-container-highest) / <alpha-value>)",
+                "surface-variant":             "rgb(var(--c-surface-variant) / <alpha-value>)",
+                "surface-tint":                "rgb(var(--c-surface-tint) / <alpha-value>)",
+                "on-surface":                  "rgb(var(--c-on-surface) / <alpha-value>)",
+                "on-surface-variant":          "rgb(var(--c-on-surface-variant) / <alpha-value>)",
+                "background":                  "rgb(var(--c-background) / <alpha-value>)",
+                "on-background":               "rgb(var(--c-on-background) / <alpha-value>)",
+                "outline":                     "rgb(var(--c-outline) / <alpha-value>)",
+                "outline-variant":             "rgb(var(--c-outline-variant) / <alpha-value>)",
+                "inverse-surface":             "rgb(var(--c-inverse-surface) / <alpha-value>)",
+                "inverse-on-surface":          "rgb(var(--c-inverse-on-surface) / <alpha-value>)",
+                "inverse-primary":             "rgb(var(--c-inverse-primary) / <alpha-value>)",
+            },
+            fontFamily: {
+                "headline": ['"Plus Jakarta Sans"', 'sans-serif'],
+                "body":     ['"Be Vietnam Pro"', 'sans-serif'],
+                "label":    ['"Be Vietnam Pro"', 'sans-serif'],
+                "mono":     ['"JetBrains Mono"', 'monospace'],
+            },
+            borderRadius: {
+                "DEFAULT": "0.25rem",
+                "lg": "1rem",
+                "xl": "1.5rem",
+                "full": "9999px",
+            },
+            boxShadow: {
+                "ambient":    "var(--shadow-ambient)",
+                "ambient-sm": "var(--shadow-ambient-sm)",
+                "ambient-up": "var(--shadow-ambient-up)",
+            },
+        },
+    },
+}
+</script>
+
+<style>
+/* ═══════════ Light Mode (default) ═══════════ */
+:root {
+    color-scheme: light;
+
+    /* Primary (Growth Green) */
+    --c-primary: 0 106 54;
+    --c-primary-dim: 0 92 46;
+    --c-primary-container: 113 246 157;
+    --c-on-primary: 205 255 213;
+    --c-on-primary-container: 0 91 45;
+    --c-primary-fixed: 113 246 157;
+    --c-primary-fixed-dim: 98 232 145;
+    --c-on-primary-fixed: 0 70 33;
+    --c-on-primary-fixed-variant: 0 102 51;
+
+    /* Secondary (Earnest Gold) */
+    --c-secondary: 123 84 0;
+    --c-secondary-dim: 107 73 0;
+    --c-secondary-container: 255 201 111;
+    --c-on-secondary: 255 241 223;
+    --c-on-secondary-container: 97 65 0;
+    --c-secondary-fixed: 255 201 111;
+    --c-secondary-fixed-dim: 255 182 35;
+    --c-on-secondary-fixed: 72 48 0;
+    --c-on-secondary-fixed-variant: 108 74 0;
+
+    /* Tertiary (Trust Blue) */
+    --c-tertiary: 0 94 159;
+    --c-tertiary-dim: 0 82 139;
+    --c-tertiary-container: 112 181 255;
+    --c-on-tertiary: 237 243 255;
+    --c-on-tertiary-container: 0 50 88;
+    --c-tertiary-fixed: 112 181 255;
+    --c-tertiary-fixed-dim: 76 168 255;
+    --c-on-tertiary-fixed: 0 25 48;
+    --c-on-tertiary-fixed-variant: 0 59 103;
+
+    /* Error */
+    --c-error: 179 27 37;
+    --c-error-dim: 159 5 25;
+    --c-error-container: 251 81 81;
+    --c-on-error: 255 239 238;
+    --c-on-error-container: 87 0 8;
+
+    /* Surfaces */
+    --c-surface: 244 247 245;
+    --c-surface-dim: 208 214 211;
+    --c-surface-bright: 244 247 245;
+    --c-surface-container-lowest: 255 255 255;
+    --c-surface-container-low: 238 242 239;
+    --c-surface-container: 229 233 231;
+    --c-surface-container-high: 223 228 225;
+    --c-surface-container-highest: 216 222 220;
+    --c-surface-variant: 216 222 220;
+    --c-surface-tint: 0 106 54;
+    --c-on-surface: 43 47 46;
+    --c-on-surface-variant: 88 92 91;
+    --c-background: 244 247 245;
+    --c-on-background: 43 47 46;
+
+    /* Outline */
+    --c-outline: 116 120 118;
+    --c-outline-variant: 170 174 172;
+
+    /* Inverse */
+    --c-inverse-surface: 11 15 14;
+    --c-inverse-on-surface: 154 158 156;
+    --c-inverse-primary: 113 246 157;
+
+    /* Shadows */
+    --shadow-ambient:    0px 20px 40px rgba(43, 47, 46, 0.06);
+    --shadow-ambient-sm: 0px 8px 20px rgba(43, 47, 46, 0.04);
+    --shadow-ambient-up: 0px -4px 20px rgba(43, 47, 46, 0.06);
+}
+
+/* ═══════════ Dark Mode ═══════════ */
+.dark {
+    color-scheme: dark;
+
+    /* Primary — brighter green for dark backgrounds */
+    --c-primary: 113 246 157;
+    --c-primary-dim: 98 232 145;
+    --c-primary-container: 0 80 38;
+    --c-on-primary: 0 57 27;
+    --c-on-primary-container: 141 255 180;
+    --c-primary-fixed: 113 246 157;
+    --c-primary-fixed-dim: 98 232 145;
+    --c-on-primary-fixed: 0 70 33;
+    --c-on-primary-fixed-variant: 0 102 51;
+
+    /* Secondary — brighter gold */
+    --c-secondary: 255 193 80;
+    --c-secondary-dim: 255 182 35;
+    --c-secondary-container: 92 62 0;
+    --c-on-secondary: 66 44 0;
+    --c-on-secondary-container: 255 221 161;
+    --c-secondary-fixed: 255 201 111;
+    --c-secondary-fixed-dim: 255 182 35;
+    --c-on-secondary-fixed: 72 48 0;
+    --c-on-secondary-fixed-variant: 108 74 0;
+
+    /* Tertiary — brighter blue */
+    --c-tertiary: 156 202 255;
+    --c-tertiary-dim: 76 168 255;
+    --c-tertiary-container: 0 71 120;
+    --c-on-tertiary: 0 49 85;
+    --c-on-tertiary-container: 200 226 255;
+    --c-tertiary-fixed: 112 181 255;
+    --c-tertiary-fixed-dim: 76 168 255;
+    --c-on-tertiary-fixed: 0 25 48;
+    --c-on-tertiary-fixed-variant: 0 59 103;
+
+    /* Error — softer red */
+    --c-error: 255 180 171;
+    --c-error-dim: 251 81 81;
+    --c-error-container: 147 0 16;
+    --c-on-error: 104 0 10;
+    --c-on-error-container: 255 218 214;
+
+    /* Surfaces — dark with green tint */
+    --c-surface: 18 22 20;
+    --c-surface-dim: 18 22 20;
+    --c-surface-bright: 54 58 56;
+    --c-surface-container-lowest: 11 15 14;
+    --c-surface-container-low: 26 30 28;
+    --c-surface-container: 34 38 36;
+    --c-surface-container-high: 44 48 46;
+    --c-surface-container-highest: 54 58 56;
+    --c-surface-variant: 66 70 68;
+    --c-surface-tint: 113 246 157;
+    --c-on-surface: 224 228 225;
+    --c-on-surface-variant: 192 196 194;
+    --c-background: 18 22 20;
+    --c-on-background: 224 228 225;
+
+    /* Outline */
+    --c-outline: 142 146 143;
+    --c-outline-variant: 66 70 68;
+
+    /* Inverse */
+    --c-inverse-surface: 224 228 225;
+    --c-inverse-on-surface: 43 47 46;
+    --c-inverse-primary: 0 106 54;
+
+    /* Shadows — stronger for dark backgrounds */
+    --shadow-ambient:    0px 20px 40px rgba(0, 0, 0, 0.35);
+    --shadow-ambient-sm: 0px 8px 20px rgba(0, 0, 0, 0.25);
+    --shadow-ambient-up: 0px -4px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* ═══════════ Base Styles ═══════════ */
+body {
+    font-family: 'Be Vietnam Pro', sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+}
+
+/* Glassmorphism */
+.glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(24px);
+}
+.dark .glass-card {
+    background: rgba(30, 34, 32, 0.7);
+}
+
+/* Text gradient */
+.text-gradient {
+    background: linear-gradient(135deg, rgb(var(--c-primary)), rgb(var(--c-primary-dim)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Ghost border */
+.ghost-border {
+    border: 1px solid rgb(var(--c-outline-variant) / 0.15);
+}
+</style>
+
+<!-- Theme toggle utility — available globally -->
+<script>
+window.SabiTheme = {
+    get: function() {
+        return localStorage.getItem('sabiwifi-theme') || 'system';
+    },
+    set: function(mode) {
+        localStorage.setItem('sabiwifi-theme', mode);
+        this.apply();
+    },
+    apply: function() {
+        var stored = this.get();
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored === 'dark' || (stored === 'system' && prefersDark);
+        document.documentElement.classList.toggle('dark', isDark);
+    },
+    cycle: function() {
+        var current = this.get();
+        var next = current === 'light' ? 'dark' : current === 'dark' ? 'system' : 'light';
+        this.set(next);
+        return next;
+    },
+    icon: function() {
+        var m = this.get();
+        return m === 'light' ? 'light_mode' : m === 'dark' ? 'dark_mode' : 'brightness_auto';
+    },
+    label: function() {
+        var m = this.get();
+        return m === 'light' ? 'Light' : m === 'dark' ? 'Dark' : 'System';
+    }
+};
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+    if (SabiTheme.get() === 'system') SabiTheme.apply();
+});
+</script>

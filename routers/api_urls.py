@@ -8,6 +8,10 @@ urlpatterns = [
     path('phonehome-setup/', views.router_phonehome_setup, name='api-router-phonehome-setup'),
     path('bootstrap/', views.router_bootstrap_generic, name='api-router-bootstrap-generic'),
     path('bootstrap/<str:serial>/', views.router_bootstrap, name='api-router-bootstrap'),
+    # OpenWrt phone-home + provision (deprecated — openwisp-config replaces this)
+    path('openwrt-provision/<str:mac>/', views.openwrt_provision, name='api-openwrt-provision'),
+    # OpenWISP → SabiWiFi webhook (device online/offline events)
+    path('openwisp-webhook/', views.openwisp_webhook, name='api-openwisp-webhook'),
     path('', views.router_list, name='api-router-list'),
     path('<int:pk>/status/', views.router_status, name='api-router-status'),
     path('<int:pk>/stats/', views.router_stats, name='api-router-stats'),

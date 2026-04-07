@@ -17,6 +17,7 @@ from plans.models import ServicePlan, Subscription
 from billing.models import Payment
 from routers.models import Router
 from routers.bootstrap import generate_bootstrap_rsc, generate_generic_bootstrap_rsc
+from shop.models import Category, Product, ProductImage, CrossSell, ShippingZone, Order, OrderItem
 
 logger = logging.getLogger(__name__)
 
@@ -329,8 +330,8 @@ class PaymentAdmin(SimpleHistoryAdmin):
 
 @admin.register(Router)
 class RouterAdmin(SimpleHistoryAdmin):
-    list_display = ['serial_number', 'reseller', 'status_display', 'location_name', 'last_seen_display', 'bootstrap_link', 'created_at']
-    list_filter = ['status', 'reseller', 'created_at']
+    list_display = ['serial_number', 'device_type', 'reseller', 'status_display', 'location_name', 'last_seen_display', 'bootstrap_link', 'created_at']
+    list_filter = ['status', 'device_type', 'reseller', 'created_at']
     search_fields = ['serial_number', 'reseller__name', 'location_name']
     readonly_fields = [
         'wg_public_key', 'wg_tunnel_ip', 'nas_secret',
@@ -344,7 +345,7 @@ class RouterAdmin(SimpleHistoryAdmin):
 
     fieldsets = (
         (None, {
-            'fields': ('serial_number', 'reseller', 'status', 'location_name', 'bootstrap_download_button'),
+            'fields': ('serial_number', 'device_type', 'reseller', 'status', 'location_name', 'bootstrap_download_button'),
         }),
         ('Health', {
             'fields': ('last_seen', 'provision_count'),
@@ -474,6 +475,14 @@ class RouterAdmin(SimpleHistoryAdmin):
         extra_context['generic_bootstrap_url'] = reverse(
             'admin:routers_router_download_generic_bootstrap'
         )
+        extra_context['openwrt_firmware_url'] = reverse(
+            'admin:routers_router_download_openwrt_firmware'
+        )
+        # Check if firmware image exists
+        import os
+        extra_context['openwrt_firmware_exists'] = os.path.exists(
+            getattr(settings, 'OPENWRT_FIRMWARE_PATH', '/opt/openwrt-imagebuilder/bin/firmware-latest.bin')
+        )
         return super().changelist_view(request, extra_context=extra_context)
 
     def get_urls(self):
@@ -488,6 +497,11 @@ class RouterAdmin(SimpleHistoryAdmin):
                 'download-generic-bootstrap/',
                 self.admin_site.admin_view(self.download_generic_bootstrap_view),
                 name='routers_router_download_generic_bootstrap',
+            ),
+            path(
+                'download-openwrt-firmware/',
+                self.admin_site.admin_view(self.download_openwrt_firmware_view),
+                name='routers_router_download_openwrt_firmware',
             ),
             path(
                 '<int:pk>/download-bootstrap/',
@@ -505,6 +519,27 @@ class RouterAdmin(SimpleHistoryAdmin):
         response = HttpResponse(rsc_content, content_type='text/plain')
         response['Content-Disposition'] = 'attachment; filename="bootstrap-generic.rsc"'
         return response
+
+    def download_openwrt_firmware_view(self, request):
+        """Download the custom SabiWiFi OpenWrt firmware image for Xiaomi AC2100."""
+        import os
+        firmware_path = getattr(
+            settings, 'OPENWRT_FIRMWARE_PATH',
+            '/opt/openwrt-imagebuilder/bin/firmware-latest.bin'
+        )
+        if not os.path.exists(firmware_path):
+            self.message_user(
+                request,
+                'OpenWrt firmware image not found. Run: manage.py build_openwrt_firmware',
+                level='error',
+            )
+            return HttpResponseRedirect(reverse('admin:routers_router_changelist'))
+
+        with open(firmware_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/octet-stream')
+            response['Content-Disposition'] = 'attachment; filename="sabiwifi-openwrt-ac2100-sysupgrade.bin"'
+            response['Content-Length'] = os.path.getsize(firmware_path)
+            return response
 
     def download_bootstrap_view(self, request, pk):
         """Admin view to download the bootstrap .rsc for a single router."""
@@ -564,6 +599,107 @@ class RouterAdmin(SimpleHistoryAdmin):
             'title': 'Import Router Serials',
             'opts': self.model._meta,
         })
+
+
+# ─────────────────────────────────────────────
+#  SHOP ADMIN
+# ─────────────────────────────────────────────
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'sort_order']
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ['sort_order', 'name']
+
+
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 1
+    fields = ['image', 'image_url', 'caption', 'sort_order']
+
+
+class CrossSellInline(admin.TabularInline):
+    model = CrossSell
+    fk_name = 'from_product'
+    extra = 1
+    verbose_name = 'Cross-sell'
+    verbose_name_plural = 'Cross-sells (shown on this product page)'
+    raw_id_fields = ['to_product']
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ['name', 'category', 'price_ngn', 'stock', 'is_active', 'is_featured']
+    list_filter = ['is_active', 'is_featured', 'category']
+    list_editable = ['price_ngn', 'stock', 'is_active', 'is_featured']
+    search_fields = ['name', 'description']
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [ProductImageInline, CrossSellInline]
+    fieldsets = (
+        (None, {'fields': ('category', 'name', 'slug', 'description')}),
+        ('Pricing & Stock', {'fields': ('price_ngn', 'stock')}),
+        ('Display', {'fields': ('is_active', 'is_featured', 'primary_image', 'primary_image_url')}),
+    )
+
+    class Media:
+        js = ('admin/js/image_size_check.js',)
+
+
+@admin.register(ShippingZone)
+class ShippingZoneAdmin(admin.ModelAdmin):
+    list_display = ['name', 'flat_rate_ngn', 'state_count']
+    fields = ['name', 'states', 'flat_rate_ngn']
+
+    def state_count(self, obj):
+        return len(obj.states or [])
+    state_count.short_description = 'States'
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+    readonly_fields = ['product', 'product_name', 'product_price_ngn', 'quantity', 'line_total']
+    fields = ['product_name', 'product_price_ngn', 'quantity', 'line_total']
+    can_delete = False
+
+    def line_total(self, obj):
+        return f'₦{obj.line_total:,.0f}'
+    line_total.short_description = 'Line Total'
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = [
+        'reference', 'customer_name', 'customer_phone', 'state',
+        'total_ngn', 'status', 'paystack_status', 'created_at',
+    ]
+    list_filter = ['status', 'paystack_status', 'state', 'created_at']
+    search_fields = ['reference', 'customer_name', 'customer_email', 'customer_phone']
+    readonly_fields = [
+        'reference', 'paystack_reference', 'paystack_status',
+        'subtotal_ngn', 'shipping_ngn', 'total_ngn', 'created_at', 'updated_at',
+    ]
+    inlines = [OrderItemInline]
+    actions = ['mark_processing', 'mark_shipped', 'mark_delivered']
+    fieldsets = (
+        ('Order', {'fields': ('reference', 'status', 'tracking_number', 'notes')}),
+        ('Customer', {'fields': ('customer_name', 'customer_email', 'customer_phone')}),
+        ('Delivery', {'fields': ('address_line1', 'address_line2', 'city', 'state', 'shipping_zone')}),
+        ('Payment', {'fields': ('paystack_reference', 'paystack_status', 'subtotal_ngn', 'shipping_ngn', 'total_ngn')}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
+    )
+
+    def mark_processing(self, request, queryset):
+        queryset.filter(status='paid').update(status='processing')
+    mark_processing.short_description = 'Mark selected orders as Processing'
+
+    def mark_shipped(self, request, queryset):
+        queryset.filter(status__in=['paid', 'processing']).update(status='shipped')
+    mark_shipped.short_description = 'Mark selected orders as Shipped'
+
+    def mark_delivered(self, request, queryset):
+        queryset.filter(status='shipped').update(status='delivered')
+    mark_delivered.short_description = 'Mark selected orders as Delivered'
 
 
 # Admin site customization

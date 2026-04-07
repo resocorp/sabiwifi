@@ -1,0 +1,244 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}Checkout — SabiWiFi Shop{% endblock %}
+
+{% block head_extra %}
+<script src="https://js.paystack.co/v2/inline.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-headline font-bold mb-6 text-on-surface">Checkout</h1>
+
+  <!-- Empty cart redirect -->
+  <div id="empty-notice" class="hidden text-center py-12">
+    <p class="text-on-surface-variant">Your cart is empty. <a href="/shop/" class="text-primary font-medium hover:underline">Browse products →</a></p>
+  </div>
+
+  <div id="checkout-form-wrap" class="hidden">
+    <div class="grid md:grid-cols-5 gap-8">
+
+      <!-- Delivery form (3/5) -->
+      <div class="md:col-span-3 space-y-4">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+          <h2 class="font-headline font-semibold mb-4 text-on-surface">Delivery Details</h2>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">Full Name *</label>
+              <input id="f-name" type="text" placeholder="John Doe"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">Email *</label>
+              <input id="f-email" type="email" placeholder="you@example.com"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">Phone *</label>
+              <input id="f-phone" type="tel" placeholder="08099999999"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">Address Line 1 *</label>
+              <input id="f-addr1" type="text" placeholder="12 Broad Street"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">Address Line 2</label>
+              <input id="f-addr2" type="text" placeholder="Apartment, suite, etc. (optional)"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">City *</label>
+              <input id="f-city" type="text" placeholder="Lagos"
+                     class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-on-surface-variant mb-1">State *</label>
+              <select id="f-state" onchange="fetchShipping()"
+                      class="w-full bg-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <option value="">Select state...</option>
+                {% for state in states %}
+                <option value="{{ state }}">{{ state }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error message -->
+        <div id="checkout-error" class="hidden bg-error-container/20 text-on-error-container text-sm rounded-lg px-4 py-3"></div>
+      </div>
+
+      <!-- Order summary (2/5) -->
+      <div class="md:col-span-2">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 sticky top-20">
+          <h2 class="font-headline font-semibold mb-4 text-on-surface">Order Summary</h2>
+          <div id="summary-items" class="space-y-2 mb-4 text-sm"></div>
+          <div class="border-t border-surface-container-high pt-3 space-y-1.5 text-sm">
+            <div class="flex justify-between text-on-surface-variant">
+              <span>Subtotal</span>
+              <span id="s-subtotal">₦0</span>
+            </div>
+            <div class="flex justify-between text-on-surface-variant">
+              <span>Shipping</span>
+              <span id="s-shipping">Select state</span>
+            </div>
+            <div class="flex justify-between font-semibold text-base pt-1 border-t border-surface-container-high">
+              <span>Total</span>
+              <span id="s-total" class="text-primary">₦0</span>
+            </div>
+          </div>
+          <button id="pay-btn" onclick="startPayment()"
+                  class="mt-5 w-full bg-primary text-on-primary font-semibold py-3 rounded-lg hover:bg-primary-dim transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            Pay Now
+          </button>
+          <p class="text-center text-xs text-on-surface-variant mt-2">Secured by Paystack</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PAYSTACK_PK = '{{ paystack_public_key }}';
+let shippingNgn = 0;
+let shippingFetched = false;
+
+function fmtPrice(n) {
+  return '₦' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function getCart() {
+  return JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+}
+
+function renderSummary() {
+  const cart = getCart();
+  const list = document.getElementById('summary-items');
+  list.innerHTML = '';
+  let subtotal = 0;
+  cart.forEach(item => {
+    const line = item.price * (item.qty || 1);
+    subtotal += line;
+    const row = document.createElement('div');
+    row.className = 'flex justify-between gap-2';
+    row.innerHTML = `<span class="text-on-surface-variant truncate">${item.name} ×${item.qty||1}</span><span class="font-medium flex-shrink-0">${fmtPrice(line)}</span>`;
+    list.appendChild(row);
+  });
+  document.getElementById('s-subtotal').textContent = fmtPrice(subtotal);
+  const total = subtotal + shippingNgn;
+  document.getElementById('s-total').textContent = fmtPrice(total);
+  return { subtotal, total };
+}
+
+async function fetchShipping() {
+  const state = document.getElementById('f-state').value;
+  if (!state) return;
+  document.getElementById('s-shipping').textContent = '…';
+  try {
+    const r = await fetch(`/api/shop/shipping-rate/?state=${encodeURIComponent(state)}`);
+    const data = await r.json();
+    shippingNgn = parseFloat(data.shipping_ngn) || 0;
+    document.getElementById('s-shipping').textContent = shippingNgn > 0 ? fmtPrice(shippingNgn) : 'Free';
+    shippingFetched = true;
+  } catch {
+    document.getElementById('s-shipping').textContent = '—';
+  }
+  renderSummary();
+}
+
+function showError(msg) {
+  const el = document.getElementById('checkout-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function clearError() {
+  document.getElementById('checkout-error').classList.add('hidden');
+}
+
+async function startPayment() {
+  clearError();
+  const cart = getCart();
+  if (!cart.length) { showError('Your cart is empty.'); return; }
+
+  const name = document.getElementById('f-name').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+  const addr1 = document.getElementById('f-addr1').value.trim();
+  const addr2 = document.getElementById('f-addr2').value.trim();
+  const city = document.getElementById('f-city').value.trim();
+  const state = document.getElementById('f-state').value;
+
+  if (!name || !email || !phone || !addr1 || !city || !state) {
+    showError('Please fill in all required fields.');
+    return;
+  }
+
+  const btn = document.getElementById('pay-btn');
+  btn.disabled = true;
+  btn.textContent = 'Preparing order…';
+
+  try {
+    const r = await fetch('/api/shop/initiate-payment/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({
+        cart: cart.map(i => ({ product_id: i.id, qty: i.qty || 1 })),
+        customer: { name, email, phone, address_line1: addr1, address_line2: addr2, city, state },
+      }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      showError(data.error || 'Could not create order.');
+      btn.disabled = false;
+      btn.textContent = 'Pay Now';
+      return;
+    }
+
+    // Open Paystack inline
+    const handler = PaystackPop.setup({
+      key: data.public_key || PAYSTACK_PK,
+      email: email,
+      amount: data.amount_kobo,
+      ref: data.reference,
+      onSuccess: (transaction) => {
+        localStorage.removeItem('sabiwifi_cart');
+        updateCartBadge();
+        window.location.href = data.order_url;
+      },
+      onCancel: () => {
+        btn.disabled = false;
+        btn.textContent = 'Pay Now';
+        showError('Payment cancelled. Your order is saved — you can try again.');
+      },
+    });
+    handler.openIframe();
+
+  } catch (err) {
+    showError('Network error. Please try again.');
+    btn.disabled = false;
+    btn.textContent = 'Pay Now';
+  }
+}
+
+function getCookie(name) {
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
+}
+
+// Init
+const cart = getCart();
+if (!cart.length) {
+  document.getElementById('empty-notice').classList.remove('hidden');
+} else {
+  document.getElementById('checkout-form-wrap').classList.remove('hidden');
+  renderSummary();
+}
+</script>
+{% endblock %}

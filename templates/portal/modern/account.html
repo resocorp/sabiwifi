@@ -5,43 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}SabiWiFi{% endif %}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+            --secondary-container: #ffc96f;
+            --on-secondary-container: #614100;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; padding: 16px; }
+        body { font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; padding: 16px; }
         .container { max-width: 400px; margin: 0 auto; }
-        .card { background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+        .card { background: var(--surface-container-lowest); border-radius: 16px; padding: 24px; box-shadow: 0px 20px 40px rgba(43,47,46,0.06); margin-bottom: 16px; }
         .logo { text-align: center; margin-bottom: 12px; }
         .logo img { max-width: 100px; max-height: 50px; }
-        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 16px; }
-        h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-        .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F3F4F6; font-size: 14px; }
-        .info-row:last-child { border-bottom: none; }
-        .info-label { color: #6B7280; }
-        .info-value { font-weight: 500; text-align: right; }
+        h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 16px; color: var(--on-surface); }
+        h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--on-surface); }
+        .info-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+        .info-label { color: var(--on-surface-variant); }
+        .info-value { font-weight: 500; text-align: right; color: var(--on-surface); }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .badge-active { background: #D1FAE5; color: #065F46; }
-        .badge-expired { background: #FEE2E2; color: #991B1B; }
-        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; margin-top: 8px; }
-        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
+        .badge-active { background: var(--primary); color: #fff; }
+        .badge-expired { background: var(--error); color: #fff; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; margin-top: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; }
-        .btn-danger { background: transparent; border: 1px solid #FECACA; color: #991B1B; }
+        .btn-outline { background: var(--surface-container-low); color: var(--on-surface); }
+        .btn-danger { background: var(--surface-container-low); color: var(--error); }
         .btn-sm { padding: 8px 16px; font-size: 13px; display: inline-block; width: auto; }
-        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; }
-        input { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; }
-        input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; color: var(--on-surface); }
+        input { width: 100%; padding: 10px 12px; background: var(--surface-container-highest); border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; outline: none; color: var(--on-surface); }
+        input:focus { box-shadow: 0 0 0 2px var(--primary)40; }
         .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
-        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
-        .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
-        .plan-card { border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s; }
-        .plan-card:hover { border-color: {{ branding.primary_color|default:"#0052CC" }}; }
-        .plan-card.current { border-color: #10B981; background: #F0FDF4; }
-        .plan-name { font-weight: 600; font-size: 15px; }
-        .plan-details { font-size: 13px; color: #6B7280; margin-top: 4px; }
-        .plan-price { font-size: 18px; font-weight: 700; color: {{ branding.primary_color|default:"#0052CC" }}; margin-top: 4px; }
+        .error { background: var(--error); color: #fff; padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 12px; display: none; }
+        .success { background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 12px; display: none; }
+        .plan-card { background: var(--surface-container-low); border-radius: 12px; padding: 16px; margin-bottom: 8px; cursor: pointer; transition: box-shadow 0.2s; }
+        .plan-card:hover { box-shadow: 0 0 0 2px var(--primary)40; }
+        .plan-card.current { background: var(--surface-container); }
+        .plan-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 15px; color: var(--on-surface); }
+        .plan-details { font-size: 13px; color: var(--on-surface-variant); margin-top: 4px; }
+        .plan-price { font-size: 18px; font-weight: 700; color: var(--primary); margin-top: 4px; }
         .section { display: none; }
         .section.active { display: block; }
         .text-center { text-align: center; }
-        .text-muted { color: #6B7280; font-size: 13px; }
+        .text-muted { color: var(--on-surface-variant); font-size: 13px; }
         .mt-8 { margin-top: 8px; }
         .mt-16 { margin-top: 16px; }
         /* Login section */
@@ -65,7 +81,7 @@
                 <input type="password" id="login-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
                 <button class="btn btn-primary mt-16" id="login-btn" onclick="doLogin()">Log In</button>
                 <p class="text-center text-muted mt-8">
-                    <a href="#" onclick="showSection('reset-section'); return false;" style="color: {{ branding.primary_color|default:'#0052CC' }}; text-decoration: none;">Forgot PIN?</a>
+                    <a href="#" onclick="showSection('reset-section'); return false;" style="color: var(--primary); text-decoration: none;">Forgot PIN?</a>
                 </p>
             </div>
         </div>
@@ -126,7 +142,7 @@
                 </div>
                 <button class="btn btn-outline mt-8" onclick="showSection('change-pin-section')">Change WiFi PIN</button>
                 <button class="btn btn-outline mt-8" onclick="loadPlans()">Change Plan</button>
-                <button class="btn btn-danger mt-8" id="disconnect-btn" onclick="doDisconnectAll()">📵 Disconnect All Devices</button>
+                <button class="btn btn-danger mt-8" id="disconnect-btn" onclick="doDisconnectAll()">Disconnect All Devices</button>
             </div>
 
             <!-- Notification Preferences -->
@@ -145,7 +161,7 @@
                     <span class="info-label">Marketing</span>
                     <input type="checkbox" id="pref-marketing" onchange="saveNotifPrefs()">
                 </label>
-                <p id="notif-prefs-msg" style="font-size:11px;color:#10B981;margin-top:8px;display:none">Preferences saved.</p>
+                <p id="notif-prefs-msg" style="font-size:11px;color:var(--primary);margin-top:8px;display:none">Preferences saved.</p>
             </div>
 
             <!-- Payment History -->
@@ -429,7 +445,7 @@
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
             btn.disabled = false;
-            btn.textContent = '📵 Disconnect All Devices';
+            btn.textContent = 'Disconnect All Devices';
             if (ok) {
                 // Update stored token (rotated server-side)
                 if (data.auth_token) {
@@ -443,7 +459,7 @@
         })
         .catch(() => {
             btn.disabled = false;
-            btn.textContent = '📵 Disconnect All Devices';
+            btn.textContent = 'Disconnect All Devices';
             showMsg('acct-msg', 'Network error. Please try again.', 'error');
         });
     }

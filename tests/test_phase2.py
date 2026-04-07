@@ -7,7 +7,7 @@ full subscriber lifecycle.
 import json
 from decimal import Decimal
 from datetime import timedelta
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.utils import timezone
 from django.core.cache import cache
 from django.urls import reverse
@@ -65,8 +65,8 @@ class SubscriberSignupTest(TestCase):
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('otp_debug', resp.data)
-        self.assertEqual(len(resp.data['otp_debug']), 6)
+        self.assertIn('message', resp.data)
+        self.assertIn('reseller_id', resp.data)
 
     def test_signup_normalizes_phone(self):
         resp = self.client.post(reverse('api-portal-signup'), {
@@ -75,7 +75,7 @@ class SubscriberSignupTest(TestCase):
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['phone'], '+2348099999999')
+        self.assertEqual(resp.data['phone'], '08099999999')
 
     def test_signup_rejects_invalid_phone(self):
         resp = self.client.post(reverse('api-portal-signup'), {
@@ -102,7 +102,7 @@ class SubscriberSignupTest(TestCase):
 
     def test_signup_rejects_duplicate_phone(self):
         Subscriber.objects.create(
-            reseller=self.reseller, phone='+2348099999999', email='existing@x.com', verified=True,
+            reseller=self.reseller, phone='08099999999', email='existing@x.com', verified=True,
         )
         resp = self.client.post(reverse('api-portal-signup'), {
             'phone': '+2348099999999',
@@ -144,13 +144,13 @@ class OTPVerificationTest(TestCase):
         _create_plan(self.reseller)
         cache.clear()
 
-        # Do signup to get OTP
-        resp = self.client.post(reverse('api-portal-signup'), {
+        # Do signup — OTP stored in cache (no otp_debug in response)
+        self.client.post(reverse('api-portal-signup'), {
             'phone': '+2348099999999',
             'email': 'sub@example.com',
             'reseller_slug': self.reseller.slug,
         }, format='json')
-        self.otp = resp.data['otp_debug']
+        self.otp = cache.get(f'otp_08099999999_{self.reseller.id}')['otp']
 
     def test_verify_correct_otp(self):
         resp = self.client.post(reverse('api-portal-verify'), {
@@ -203,13 +203,13 @@ class SetPINTest(TestCase):
         _create_plan(self.reseller)
         cache.clear()
 
-        # Signup + verify OTP
-        resp = self.client.post(reverse('api-portal-signup'), {
+        # Signup + verify OTP — read OTP from cache (no otp_debug in response)
+        self.client.post(reverse('api-portal-signup'), {
             'phone': '+2348099999999',
             'email': 'sub@example.com',
             'reseller_slug': self.reseller.slug,
         }, format='json')
-        otp = resp.data['otp_debug']
+        otp = cache.get(f'otp_08099999999_{self.reseller.id}')['otp']
 
         resp = self.client.post(reverse('api-portal-verify'), {
             'phone': '+2348099999999',
@@ -226,7 +226,7 @@ class SetPINTest(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertIn('auth_token', resp.data)
-        sub = Subscriber.objects.get(phone='+2348099999999', reseller=self.reseller)
+        sub = Subscriber.objects.get(phone='08099999999', reseller=self.reseller)
         self.assertTrue(sub.verified)
         self.assertTrue(sub.check_pin('1234'))
         self.assertEqual(len(sub.auth_token), 64)
@@ -265,7 +265,7 @@ class SubscriberLoginTest(TestCase):
         self.client = APIClient()
         self.reseller = _create_reseller()
         self.sub = Subscriber.objects.create(
-            reseller=self.reseller, phone='+2348099999999',
+            reseller=self.reseller, phone='08099999999',
             email='sub@x.com', verified=True,
         )
         self.sub.set_pin('1234')
@@ -368,7 +368,7 @@ class ResetPINTest(TestCase):
         self.client = APIClient()
         self.reseller = _create_reseller()
         self.sub = Subscriber.objects.create(
-            reseller=self.reseller, phone='+2348099999999',
+            reseller=self.reseller, phone='08099999999',
             email='sub@x.com', verified=True,
         )
         self.sub.set_pin('1234')
@@ -376,12 +376,12 @@ class ResetPINTest(TestCase):
         cache.clear()
 
     def test_reset_pin_full_flow(self):
-        # Request reset OTP
+        # Request reset OTP — stored in cache, not returned in response
         resp = self.client.post(reverse('api-portal-reset-pin'), {
             'phone': '+2348099999999',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
-        otp = resp.data['otp_debug']
+        otp = cache.get('pin_reset_08099999999')['otp']
 
         # Confirm with OTP + new PIN
         resp = self.client.post(reverse('api-portal-reset-pin-confirm'), {
@@ -479,6 +479,7 @@ class FreePlanActivationTest(TestCase):
 #  BILLING WEBHOOK TEST
 # ──────────────────────────────────────────────
 
+@override_settings(PAYSTACK_SECRET_KEY='')
 class PaymentWebhookTest(TestCase):
     def setUp(self):
         self.client = Client()
@@ -569,7 +570,7 @@ class PaymentWebhookTest(TestCase):
         })
         resp = self.client.post(reverse('api-billing-webhook'), data=payload, content_type='application/json')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()['status'], 'unknown_reference')
+        self.assertEqual(resp.json()['status'], 'not_applicable')
 
 
 # ──────────────────────────────────────────────
@@ -753,7 +754,7 @@ class FullSubscriberLifecycleTest(TestCase):
             'reseller_slug': reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
-        otp = resp.data['otp_debug']
+        otp = cache.get(f'otp_08077777777_{reseller.id}')['otp']
 
         # 2. Verify OTP
         resp = client.post(reverse('api-portal-verify'), {
@@ -773,8 +774,8 @@ class FullSubscriberLifecycleTest(TestCase):
         self.assertEqual(resp.status_code, 201)
         auth_token = resp.data['auth_token']
 
-        # Verify subscriber created
-        sub = Subscriber.objects.get(phone='+2348077777777', reseller=reseller)
+        # Verify subscriber created (phone stored as local format)
+        sub = Subscriber.objects.get(phone='08077777777', reseller=reseller)
         self.assertTrue(sub.verified)
 
         # 4. Select free trial plan
@@ -790,13 +791,13 @@ class FullSubscriberLifecycleTest(TestCase):
         self.assertIsNotNone(resp.data['subscription'])
         self.assertEqual(resp.data['subscription']['plan_name'], 'Free Trial')
 
-        # 6. Check RADIUS setup
+        # 6. Check RADIUS setup (username = subscriber.phone = local format)
         self.assertTrue(Radusergroup.objects.filter(
-            username='+2348077777777',
+            username='08077777777',
             groupname=free_plan.radius_group_name,
         ).exists())
         self.assertTrue(Radcheck.objects.filter(
-            username='+2348077777777',
+            username='08077777777',
             attribute='Cleartext-Password',
         ).exists())
 
@@ -822,7 +823,7 @@ class FullSubscriberLifecycleTest(TestCase):
         self.assertEqual(subs[1].status, 'expired')
 
         # 9. RADIUS updated to new plan
-        rug = Radusergroup.objects.get(username='+2348077777777')
+        rug = Radusergroup.objects.get(username='08077777777')
         self.assertEqual(rug.groupname, weekly_plan.radius_group_name)
 
         # 10. Change PIN

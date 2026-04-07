@@ -3,47 +3,59 @@
 {% block body %}
 <div class="flex min-h-screen">
     <!-- Desktop Sidebar -->
-    <aside class="hidden md:flex md:flex-col md:w-56 bg-white border-r border-border fixed h-full z-30">
-        <div class="p-4 border-b border-border">
+    <aside class="hidden md:flex md:flex-col md:w-56 bg-surface-container-low fixed h-full z-30">
+        <div class="p-4">
             <a href="{% url 'dashboard-overview' %}" class="flex items-center gap-2">
-                <span class="text-primary font-heading font-bold text-lg">SabiWiFi</span>
+                <span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings: 'FILL' 1;">wifi_tethering</span>
+                <span class="font-headline font-extrabold italic text-xl tracking-tight text-primary">SabiWiFi</span>
             </a>
         </div>
         <nav class="flex-1 p-3 space-y-1">
             <a href="{% url 'dashboard-overview' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'overview' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>📊</span> Overview
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'overview' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">bar_chart_4_bars</span> Overview
             </a>
             <a href="{% url 'dashboard-plans' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'plans' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>📋</span> Plans
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'plans' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">list_alt</span> Plans
             </a>
             <a href="{% url 'dashboard-subscribers' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'subscribers' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>👥</span> Subscribers
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'subscribers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">group</span> Subscribers
             </a>
             <a href="{% url 'dashboard-payments' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'payments' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>💳</span> Payments
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'payments' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">payments</span> Payments
             </a>
             <a href="{% url 'dashboard-routers' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'routers' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>📡</span> Routers
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'routers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">router</span> Routers
             </a>
             <a href="{% url 'dashboard-broadcasts' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'broadcasts' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>📢</span> Broadcasts
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'broadcasts' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">campaign</span> Broadcasts
+            </a>
+            <a href="{% url 'shop-home' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-surface-container"
+               target="_blank">
+                <span class="material-symbols-outlined text-[20px]">shopping_cart</span> Shop
             </a>
             <a href="{% url 'dashboard-settings' %}"
-               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'settings' %}bg-primary/10 text-primary{% else %}text-text-secondary hover:bg-gray-50{% endif %}">
-                <span>⚙️</span> Settings
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'settings' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">settings</span> Settings
             </a>
         </nav>
-        <div class="p-3 border-t border-border">
+        <div class="p-3 space-y-1">
+            <button onclick="SabiTheme.cycle(); updateThemeBtn();"
+                    id="sidebar-theme-btn"
+                    class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container w-full text-left">
+                <span class="material-symbols-outlined text-[20px]" id="sidebar-theme-icon">brightness_auto</span>
+                <span id="sidebar-theme-label">System</span>
+            </button>
             <form method="post" action="{% url 'logout' %}">
                 {% csrf_token %}
-                <button type="submit" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text-secondary hover:bg-gray-50 w-full text-left">
-                    <span>🚪</span> Log out
+                <button type="submit" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container w-full text-left">
+                    <span class="material-symbols-outlined text-[20px]">logout</span> Log out
                 </button>
             </form>
         </div>
@@ -53,14 +65,14 @@
     <main class="flex-1 md:ml-56 pb-20 md:pb-0">
         <!-- Bank Banner -->
         {% if reseller and not reseller.payment_verified %}
-        <div id="bank-banner" class="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-2 text-sm text-amber-800">
-                <span>💰</span>
+        <div id="bank-banner" class="bg-secondary-container/30 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-sm text-on-secondary-container">
+                <span class="material-symbols-outlined text-[18px]">account_balance</span>
                 <span>Add your bank account to start earning. Enable paid plans &amp; unlimited subscribers.</span>
             </div>
             <div class="flex items-center gap-2">
-                <a href="{% url 'dashboard-settings' %}" class="text-sm font-medium text-primary hover:underline">Set Up →</a>
-                <button onclick="document.getElementById('bank-banner').style.display='none'" class="text-amber-400 hover:text-amber-600 ml-2">&times;</button>
+                <a href="{% url 'dashboard-settings' %}" class="text-sm font-medium text-primary hover:underline">Set Up &rarr;</a>
+                <button onclick="document.getElementById('bank-banner').style.display='none'" class="text-on-secondary-container/40 hover:text-on-secondary-container ml-2">&times;</button>
             </div>
         </div>
         {% endif %}
@@ -69,7 +81,7 @@
         {% if messages %}
         <div class="px-4 pt-4 space-y-2">
             {% for message in messages %}
-            <div class="p-3 rounded-lg text-sm {% if message.tags == 'success' %}bg-green-50 text-green-800 border border-green-200{% elif message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200{% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
+            <div class="p-3 rounded-lg text-sm {% if message.tags == 'success' %}bg-primary-container/30 text-on-primary-container{% elif message.tags == 'error' %}bg-error-container/20 text-on-error-container{% else %}bg-tertiary-container/20 text-on-tertiary-container{% endif %}">
                 {{ message }}
             </div>
             {% endfor %}
@@ -83,29 +95,38 @@
     </main>
 
     <!-- Mobile Bottom Tab Bar -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-border z-30">
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface-container-lowest shadow-ambient-up z-30">
         <div class="flex justify-around py-2">
-            <a href="{% url 'dashboard-overview' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'overview' %}text-primary{% else %}text-text-secondary{% endif %}">
-                <span class="text-lg">📊</span>
+            <a href="{% url 'dashboard-overview' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'overview' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">bar_chart_4_bars</span>
                 <span class="text-[10px] mt-0.5">Home</span>
             </a>
-            <a href="{% url 'dashboard-plans' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'plans' %}text-primary{% else %}text-text-secondary{% endif %}">
-                <span class="text-lg">📋</span>
+            <a href="{% url 'dashboard-plans' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'plans' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">list_alt</span>
                 <span class="text-[10px] mt-0.5">Plans</span>
             </a>
-            <a href="{% url 'dashboard-subscribers' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'subscribers' %}text-primary{% else %}text-text-secondary{% endif %}">
-                <span class="text-lg">👥</span>
+            <a href="{% url 'dashboard-subscribers' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'subscribers' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">group</span>
                 <span class="text-[10px] mt-0.5">Subs</span>
             </a>
-            <a href="{% url 'dashboard-payments' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'payments' %}text-primary{% else %}text-text-secondary{% endif %}">
-                <span class="text-lg">💳</span>
+            <a href="{% url 'dashboard-payments' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'payments' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">payments</span>
                 <span class="text-[10px] mt-0.5">Pay</span>
             </a>
-            <a href="{% url 'dashboard-settings' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'settings' %}text-primary{% else %}text-text-secondary{% endif %}">
-                <span class="text-lg">⚙️</span>
+            <a href="{% url 'dashboard-settings' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'settings' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">settings</span>
                 <span class="text-[10px] mt-0.5">Settings</span>
             </a>
         </div>
     </nav>
 </div>
+<script>
+function updateThemeBtn() {
+    var icon = document.getElementById('sidebar-theme-icon');
+    var label = document.getElementById('sidebar-theme-label');
+    if (icon) icon.textContent = SabiTheme.icon();
+    if (label) label.textContent = SabiTheme.label();
+}
+updateThemeBtn();
+</script>
 {% endblock %}

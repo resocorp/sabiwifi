@@ -292,7 +292,7 @@ class ExpiryRemindersTest(TestCase):
         from django.core.management import call_command
         out = StringIO()
         call_command('send_expiry_reminders', stdout=out)
-        self.assertIn('1 sent', out.getvalue())
+        self.assertIn('1 1-day', out.getvalue())
 
     def test_no_reminder_for_far_future_expiry(self):
         reseller = _create_reseller()
@@ -310,7 +310,7 @@ class ExpiryRemindersTest(TestCase):
         from django.core.management import call_command
         out = StringIO()
         call_command('send_expiry_reminders', stdout=out)
-        self.assertIn('0 sent', out.getvalue())
+        self.assertIn('0 1-day', out.getvalue())
 
     def test_reminder_dedup(self):
         """Same subscription should only get one reminder."""
@@ -329,11 +329,11 @@ class ExpiryRemindersTest(TestCase):
         from django.core.management import call_command
         out1 = StringIO()
         call_command('send_expiry_reminders', stdout=out1)
-        self.assertIn('1 sent', out1.getvalue())
+        self.assertIn('1 1-day', out1.getvalue())
 
         out2 = StringIO()
         call_command('send_expiry_reminders', stdout=out2)
-        self.assertIn('0 sent', out2.getvalue())
+        self.assertIn('0 1-day', out2.getvalue())
 
 
 # ──────────────────────────────────────────────
@@ -523,7 +523,7 @@ class PortalTemplateRenderingTest(TestCase):
     def test_account_login_page(self):
         resp = self.client.get('/account/')
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'Manage Your Account')
+        self.assertContains(resp, 'My Account')
 
 
 # ──────────────────────────────────────────────
@@ -555,7 +555,7 @@ class CheckRoutersTest(TestCase):
         router.refresh_from_db()
         # Since 10.99.99.99 isn't reachable, should be marked offline
         self.assertEqual(router.status, 'offline')
-        self.assertIn('1 changed', out.getvalue())
+        self.assertIn('1 status change', out.getvalue())
 
 
 # ──────────────────────────────────────────────

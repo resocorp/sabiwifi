@@ -5,50 +5,51 @@
 {% with active_tab='plans' %}
 
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-heading font-bold">Service Plans</h1>
+    <h1 class="text-xl font-headline font-bold">Service Plans</h1>
     <a href="{% url 'dashboard-plan-create' %}"
-       class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+       class="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
         + Create Plan
     </a>
 </div>
 
 <div class="space-y-3">
     {% for plan in plans %}
-    <div class="bg-white rounded-xl border border-border p-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
         <div class="flex items-start justify-between mb-2">
-            <h3 class="font-heading font-semibold">{{ plan.name }}</h3>
-            <span class="text-xs font-medium px-2 py-0.5 rounded-full {% if plan.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+            <h3 class="font-headline font-semibold">{{ plan.name }}</h3>
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full {% if plan.is_active %}bg-primary-container/30 text-on-primary-container{% else %}bg-surface-container text-on-surface-variant{% endif %}">
                 {% if plan.is_active %}ACTIVE{% else %}DISABLED{% endif %}
             </span>
         </div>
-        <p class="text-sm text-text-secondary">{{ plan.speed_display }}</p>
-        <p class="text-sm text-text-secondary">{{ plan.duration_display }} · {{ plan.data_cap_display }}</p>
+        <p class="text-sm text-on-surface-variant">{{ plan.speed_display }}</p>
+        <p class="text-sm text-on-surface-variant">{{ plan.duration_display }} · {{ plan.data_cap_display }}</p>
         <div class="flex items-center justify-between mt-3">
             <div class="flex items-center gap-4">
                 <span class="font-mono font-bold text-lg">{% if plan.is_free %}Free{% else %}₦{{ plan.price_ngn|floatformat:0 }}{% endif %}</span>
-                <span class="text-xs text-text-secondary">{{ plan.max_devices }} device{{ plan.max_devices|pluralize }}</span>
+                <span class="text-xs text-on-surface-variant">{{ plan.max_devices }} device{{ plan.max_devices|pluralize }}</span>
             </div>
-            <span class="text-xs text-text-secondary">{{ plan.active_subscribers }} active subscriber{{ plan.active_subscribers|pluralize }}</span>
+            <span class="text-xs text-on-surface-variant">{{ plan.active_subscribers }} active subscriber{{ plan.active_subscribers|pluralize }}</span>
         </div>
-        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+        <div class="flex items-center gap-2 mt-3 pt-3">
+            <div class="absolute -mt-3 left-0 right-0 bg-surface-container h-px"></div>
             <a href="{% url 'dashboard-plan-edit' plan.pk %}" class="text-sm text-primary hover:underline">Edit</a>
             {% if plan.is_active %}
             <form method="post" action="{% url 'plan-disable' plan.pk %}" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="text-sm text-text-secondary hover:text-danger">Disable</button>
+                <button type="submit" class="text-sm text-on-surface-variant hover:text-error">Disable</button>
             </form>
             {% else %}
             <form method="post" action="{% url 'plan-enable' plan.pk %}" class="inline">
                 {% csrf_token %}
-                <button type="submit" class="text-sm text-accent hover:underline">Enable</button>
+                <button type="submit" class="text-sm text-primary hover:underline">Enable</button>
             </form>
             {% endif %}
         </div>
     </div>
     {% empty %}
-    <div class="bg-white rounded-xl border border-border p-8 text-center">
-        <p class="text-text-secondary mb-4">No plans yet. Create your first plan to get started.</p>
-        <a href="{% url 'dashboard-plan-create' %}" class="inline-block bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dark transition">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-8 text-center">
+        <p class="text-on-surface-variant mb-4">No plans yet. Create your first plan to get started.</p>
+        <a href="{% url 'dashboard-plan-create' %}" class="inline-block bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
             Create Your First Plan
         </a>
     </div>

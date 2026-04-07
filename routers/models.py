@@ -5,7 +5,8 @@ from simple_history.models import HistoricalRecords
 
 class Router(models.Model):
     """
-    A MikroTik router managed by the platform.
+    A router managed by the platform.
+    Supports MikroTik (RouterOS) and OpenWrt devices.
     Reseller is nullable — 'available' routers have no reseller yet.
     """
     STATUS_CHOICES = [
@@ -17,7 +18,16 @@ class Router(models.Model):
         ('failed', 'Failed'),
     ]
 
+    DEVICE_TYPE_CHOICES = [
+        ('mikrotik', 'MikroTik'),
+        ('openwrt', 'OpenWrt'),
+    ]
+
     serial_number = models.CharField(max_length=50, unique=True)
+    device_type = models.CharField(
+        max_length=10, choices=DEVICE_TYPE_CHOICES, default='mikrotik',
+        help_text='MikroTik uses serial number, OpenWrt uses MAC address as identifier.'
+    )
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='routers'

@@ -4,85 +4,85 @@
 {% block body %}
 <div class="max-w-5xl mx-auto px-4 py-6">
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-heading font-bold">Platform Overview</h1>
+        <h1 class="text-2xl font-headline font-bold">Platform Overview</h1>
         <a href="/admin/" class="text-sm text-primary hover:underline">Django Admin →</a>
     </div>
 
     <!-- Top-Level Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div class="bg-white rounded-xl border border-border p-4">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">{{ active_resellers }}</p>
-            <p class="text-text-secondary text-xs mt-1">Active resellers</p>
-            <p class="text-text-secondary text-[10px]">{{ total_resellers }} total</p>
+            <p class="text-on-surface-variant text-xs mt-1">Active resellers</p>
+            <p class="text-on-surface-variant text-[10px]">{{ total_resellers }} total</p>
         </div>
-        <div class="bg-white rounded-xl border border-border p-4">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">{{ active_subscriptions }}</p>
-            <p class="text-text-secondary text-xs mt-1">Active subscriptions</p>
-            <p class="text-text-secondary text-[10px]">{{ total_subscribers }} subscribers</p>
+            <p class="text-on-surface-variant text-xs mt-1">Active subscriptions</p>
+            <p class="text-on-surface-variant text-[10px]">{{ total_subscribers }} subscribers</p>
         </div>
-        <div class="bg-white rounded-xl border border-border p-4">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">{{ online_routers }}/{{ total_routers }}</p>
-            <p class="text-text-secondary text-xs mt-1">Routers online</p>
+            <p class="text-on-surface-variant text-xs mt-1">Routers online</p>
             {% if offline_routers > 0 %}
-            <p class="text-danger text-[10px]">{{ offline_routers }} offline</p>
+            <p class="text-error text-[10px]">{{ offline_routers }} offline</p>
             {% endif %}
         </div>
-        <div class="bg-white rounded-xl border border-border p-4">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">₦{{ monthly_revenue|floatformat:0 }}</p>
-            <p class="text-text-secondary text-xs mt-1">Revenue this month</p>
-            <p class="text-accent text-[10px]">₦{{ monthly_platform_revenue|floatformat:0 }} platform</p>
+            <p class="text-on-surface-variant text-xs mt-1">Revenue this month</p>
+            <p class="text-primary text-[10px]">₦{{ monthly_platform_revenue|floatformat:0 }} platform</p>
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Today -->
-        <div class="bg-white rounded-xl border border-border p-4">
-            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Today</h2>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Today</h2>
             <p class="font-mono font-bold text-xl">₦{{ today_revenue|floatformat:0 }}</p>
-            <p class="text-text-secondary text-xs">Revenue today</p>
+            <p class="text-on-surface-variant text-xs">Revenue today</p>
         </div>
 
         <!-- Alerts -->
-        <div class="bg-white rounded-xl border border-border p-4">
-            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider mb-3">Alerts</h2>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Alerts</h2>
             {% for alert in alerts %}
             <div class="flex items-start gap-2 text-sm mb-2">
-                <span class="text-warning">⚠</span>
+                <span class="material-symbols-outlined text-secondary" style="font-size: 18px;">warning</span>
                 <div>
                     <p>{{ alert.message }}</p>
-                    {% if alert.time %}<p class="text-xs text-text-secondary">Last seen: {{ alert.time|timesince }} ago</p>{% endif %}
+                    {% if alert.time %}<p class="text-xs text-on-surface-variant">Last seen: {{ alert.time|timesince }} ago</p>{% endif %}
                 </div>
             </div>
             {% empty %}
-            <p class="text-sm text-text-secondary">No alerts.</p>
+            <p class="text-sm text-on-surface-variant">No alerts.</p>
             {% endfor %}
         </div>
     </div>
 
     {% load tz %}
     <!-- Router Activity -->
-    <div class="bg-white rounded-xl border border-border mt-6">
-        <div class="p-4 border-b border-border flex items-center justify-between">
-            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Router Activity</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mt-6">
+        <div class="bg-surface-container-low px-4 py-3 rounded-t-xl flex items-center justify-between">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider">Router Activity</h2>
             <a href="/admin/routers/router/" class="text-xs text-primary hover:underline">All routers →</a>
         </div>
 
         {% if phoning_home_routers %}
-        <div class="p-4 border-b border-border">
+        <div class="p-4">
             <h3 class="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">Currently Phoning Home (last 5 min)</h3>
-            <div class="divide-y divide-border">
+            <div class="divide-y divide-surface-container-high">
                 {% for r in phoning_home_routers %}
                 <div class="py-2 flex items-center justify-between text-sm">
                     <div class="flex items-center gap-2">
                         <span class="inline-block w-2 h-2 rounded-full bg-green-500" style="animation: pulse 2s infinite;"></span>
                         <span class="font-mono font-medium">{{ r.serial_number }}</span>
                         {% if r.reseller %}
-                        <span class="text-text-secondary text-xs">{{ r.reseller.name }}</span>
+                        <span class="text-on-surface-variant text-xs">{{ r.reseller.name }}</span>
                         {% else %}
-                        <span style="background: #fef3c7; color: #92400e; padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;">NOT CLAIMED</span>
+                        <span class="bg-secondary-container text-on-secondary-container px-2 py-px rounded-full text-[10px] font-semibold">NOT CLAIMED</span>
                         {% endif %}
                     </div>
-                    <div class="text-xs text-text-secondary">
+                    <div class="text-xs text-on-surface-variant">
                         {{ r.get_status_display }} · {{ r.last_seen|timesince }} ago
                     </div>
                 </div>
@@ -90,19 +90,21 @@
             </div>
         </div>
         {% else %}
-        <div class="p-4 border-b border-border">
-            <p class="text-sm text-text-secondary">No routers phoning home right now.</p>
+        <div class="p-4">
+            <p class="text-sm text-on-surface-variant">No routers phoning home right now.</p>
         </div>
         {% endif %}
 
         {% if unclaimed_with_contact %}
+        <div class="bg-surface-container-low px-4 py-3">
+            <h3 class="text-xs font-semibold text-amber-700 uppercase tracking-wider">Unclaimed Routers (have phoned home before)</h3>
+        </div>
         <div class="p-4">
-            <h3 class="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Unclaimed Routers (have phoned home before)</h3>
-            <div class="divide-y divide-border">
+            <div class="divide-y divide-surface-container-high">
                 {% for r in unclaimed_with_contact %}
                 <div class="py-2 flex items-center justify-between text-sm">
                     <span class="font-mono font-medium">{{ r.serial_number }}</span>
-                    <span class="text-xs text-text-secondary">Last seen {{ r.last_seen|timesince }} ago</span>
+                    <span class="text-xs text-on-surface-variant">Last seen {{ r.last_seen|timesince }} ago</span>
                 </div>
                 {% endfor %}
             </div>
@@ -116,16 +118,16 @@
 
     <!-- Top Resellers -->
     {% if top_resellers %}
-    <div class="bg-white rounded-xl border border-border mt-6">
-        <div class="p-4 border-b border-border">
-            <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Top Resellers This Month</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mt-6">
+        <div class="bg-surface-container-low px-4 py-3 rounded-t-xl">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider">Top Resellers This Month</h2>
         </div>
-        <div class="divide-y divide-border">
+        <div class="divide-y divide-surface-container-high">
             {% for r in top_resellers %}
             <div class="px-4 py-3 flex items-center justify-between text-sm">
                 <div>
                     <span class="font-medium">{{ r.name }}</span>
-                    <span class="text-text-secondary ml-2">{{ r.owner_name }}</span>
+                    <span class="text-on-surface-variant ml-2">{{ r.owner_name }}</span>
                 </div>
                 <span class="font-mono font-medium">₦{{ r.month_revenue|floatformat:0 }}</span>
             </div>

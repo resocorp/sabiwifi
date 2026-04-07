@@ -8,5 +8,14 @@
         </a>
     </li>
     {% endif %}
+    {% if openwrt_firmware_url %}
+    <li>
+        <a href="{{ openwrt_firmware_url }}" class="button"
+           style="background: {% if openwrt_firmware_exists %}#3b82f6{% else %}#9ca3af{% endif %};"
+           {% if not openwrt_firmware_exists %}title="Firmware not built yet. Run: manage.py build_openwrt_firmware"{% endif %}>
+            ⬇ Download OpenWrt Firmware (.bin)
+        </a>
+    </li>
+    {% endif %}
     {{ block.super }}
 {% endblock %}

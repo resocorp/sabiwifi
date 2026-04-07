@@ -4,29 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+        }
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#111;min-height:100vh;padding:40px 24px}
-        .container{max-width:320px;margin:0 auto}
-        h1{font-size:20px;font-weight:600;margin-bottom:4px}
-        .subtitle{font-size:13px;color:#666;margin-bottom:28px}
-        label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#888;margin-bottom:4px;margin-top:20px}
-        input[type="tel"],input[type="password"]{width:100%;padding:10px 0;border:none;border-bottom:2px solid #ddd;font-size:16px;outline:none;background:transparent;color:#111}
-        input::placeholder{color:#ccc}
-        input:focus{border-bottom-color:#111}
-        .btn{display:block;width:100%;padding:13px;border:2px solid #111;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;margin-top:28px;background:#111;color:#fff;border-radius:0}
-        .btn-outline{background:#fff;color:#111;margin-top:10px}
+        body{font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--surface);color:var(--on-surface);min-height:100vh;padding:40px 24px}
+        .container{max-width:360px;margin:0 auto;background:var(--surface-container-lowest);border-radius:1.25rem;padding:32px 28px;box-shadow:0 2px 16px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.02)}
+        h1{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:22px;font-weight:700;margin-bottom:4px;color:var(--on-surface)}
+        .subtitle{font-size:13px;color:var(--on-surface-variant);margin-bottom:28px}
+        label{display:block;font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--on-surface-variant);margin-bottom:6px;margin-top:20px}
+        input[type="tel"],input[type="password"]{width:100%;padding:12px 16px;background:var(--surface-container-highest);font-size:16px;outline:none;color:var(--on-surface);border:none;border-radius:1rem;font-family:'Be Vietnam Pro',sans-serif;transition:box-shadow .2s}
+        input::placeholder{color:var(--surface-container)}
+        input:focus{box-shadow:0 0 0 2px rgba(0,106,54,.25)}
+        .btn{display:block;width:100%;padding:14px;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;margin-top:28px;background:var(--primary);color:#fff;border:none;border-radius:1rem;font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;transition:background .15s}
+        .btn:hover{background:var(--primary-dim)}
+        .btn-outline{background:var(--surface-container-low);color:var(--on-surface);margin-top:10px}
+        .btn-outline:hover{background:var(--surface-container)}
         .btn:disabled{opacity:.4;cursor:not-allowed}
-        .link{color:#888;text-decoration:underline;font-size:12px}
-        .divider{text-align:center;color:#ccc;font-size:11px;margin:20px 0;text-transform:uppercase;letter-spacing:1px}
-        hr{border:none;border-top:1px solid #eee;margin:20px 0}
-        .notice{padding:10px 12px;font-size:13px;margin-bottom:16px;border-left:3px solid;line-height:1.5}
+        .link{color:var(--on-surface-variant);text-decoration:underline;font-size:12px}
+        .divider{text-align:center;color:var(--surface-container);font-size:11px;margin:24px 0;text-transform:uppercase;letter-spacing:1px}
+        .spacer{height:1px;background:var(--surface-container);margin:24px 0;border-radius:1px}
+        .notice{padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.5;border-radius:.75rem}
         .notice strong{display:block;margin-bottom:2px;font-size:13px}
-        .notice-amber{border-color:#F59E0B;background:#FFFBEB;color:#92400E}
-        .notice-red{border-color:#EF4444;background:#FEF2F2;color:#991B1B}
-        .msg{padding:10px 12px;font-size:13px;margin-bottom:16px;border-left:3px solid;display:none;line-height:1.5}
-        .msg-error{border-color:#EF4444;background:#FEF2F2;color:#991B1B}
-        .msg-success{border-color:#10B981;background:#F0FDF4;color:#065F46}
+        .notice-amber{background:#FFFBEB;color:#92400E}
+        .notice-red{background:#FEF2F2;color:var(--error)}
+        .msg{padding:12px 14px;font-size:13px;margin-bottom:16px;display:none;line-height:1.5;border-radius:.75rem}
+        .msg-error{background:#FEF2F2;color:var(--error)}
+        .msg-success{background:#F0FDF4;color:#065F46}
         .text-center{text-align:center}
         .mt-3{margin-top:12px}
     </style>
@@ -54,14 +71,14 @@
         <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
         <label>PIN</label>
         <input type="password" id="pin" placeholder="••••" maxlength="4" inputmode="numeric" required>
-        <button type="button" id="login-btn" class="btn" onclick="doLogin()">Log In</button>
+        <button type="button" id="login-btn" class="btn" onclick="doLogin()">Connect Now</button>
 
         <p class="text-center mt-3">
             <a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> ·
             <a href="/portal/account/?r={{ serial }}" class="link">My Account</a>
         </p>
-        <hr>
-        <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">New? Sign Up</a>
+        <div class="spacer"></div>
+        <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">New here? Sign Up</a>
     </div>
 
     <form id="hotspot-form" method="post" style="display:none;">
@@ -104,7 +121,7 @@
         const pin = document.getElementById('pin').value.trim();
         const btn = document.getElementById('login-btn');
         if (!phone || !pin) { showMsg('Enter phone and PIN.', 'error'); return; }
-        btn.disabled = true; btn.textContent = 'Logging in…';
+        btn.disabled = true; btn.textContent = 'Connecting…';
 
         fetch('/api/portal/login/', {
             method: 'POST',
@@ -116,7 +133,7 @@
             if (ok) {
                 if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
                 if (data.has_active_plan === false) {
-                    btn.disabled = false; btn.textContent = 'Log In';
+                    btn.disabled = false; btn.textContent = 'Connect Now';
                     showMsg('<strong>No active plan.</strong> <a href="/portal/account/?r=' + serial + '" style="color:inherit;font-weight:700;">Go to My Account</a> to choose a plan.', 'error');
                     return;
                 }
@@ -132,14 +149,14 @@
                     form.action = linkLogin; form.submit();
                 } else {
                     showMsg('Connected!', 'success');
-                    btn.disabled = false; btn.textContent = 'Log In';
+                    btn.disabled = false; btn.textContent = 'Connect Now';
                 }
             } else {
-                btn.disabled = false; btn.textContent = 'Log In';
+                btn.disabled = false; btn.textContent = 'Connect Now';
                 showMsg(data.error || 'Login failed.', 'error');
             }
         })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Log In'; showMsg('Network error.', 'error'); });
+        .catch(() => { btn.disabled = false; btn.textContent = 'Connect Now'; showMsg('Network error.', 'error'); });
     }
 
     document.getElementById('pin').addEventListener('keypress', e => { if (e.key === 'Enter') doLogin(); });

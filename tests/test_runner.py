@@ -100,3 +100,10 @@ class SabiWiFiTestRunner(DiscoverRunner):
         with connection.cursor() as cursor:
             cursor.execute(RADIUS_TABLES_SQL)
         return result
+
+    def run_tests(self, test_labels, **kwargs):
+        # SECURE_SSL_REDIRECT=True in prod redirects all HTTP test requests to
+        # HTTPS (301), breaking every test. Disable it for the test suite.
+        from django.test.utils import override_settings
+        with override_settings(SECURE_SSL_REDIRECT=False):
+            return super().run_tests(test_labels, **kwargs)

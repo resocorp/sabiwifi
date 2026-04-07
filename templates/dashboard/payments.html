@@ -4,60 +4,63 @@
 {% block content %}
 {% with active_tab='payments' %}
 
-<h1 class="text-xl font-heading font-bold mb-6">Payments & Earnings</h1>
+<h1 class="text-xl font-headline font-bold mb-6">Payments & Earnings</h1>
 
 <!-- Monthly Summary Cards -->
 <div class="grid grid-cols-3 gap-3 mb-6">
-    <div class="bg-white rounded-xl border border-border p-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
         <p class="font-mono font-bold text-lg md:text-xl">₦{{ monthly_revenue|floatformat:0 }}</p>
-        <p class="text-text-secondary text-xs mt-1">Total revenue</p>
+        <p class="text-on-surface-variant text-xs mt-1">Total revenue</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
         <p class="font-mono font-bold text-lg md:text-xl">₦{{ monthly_platform_fee|floatformat:0 }}</p>
-        <p class="text-text-secondary text-xs mt-1">Platform fee (15%)</p>
+        <p class="text-on-surface-variant text-xs mt-1">Platform fee (15%)</p>
     </div>
-    <div class="bg-white rounded-xl border border-border p-4">
-        <p class="font-mono font-bold text-lg md:text-xl text-accent">₦{{ monthly_earnings|floatformat:0 }}</p>
-        <p class="text-text-secondary text-xs mt-1">Your earnings</p>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <p class="font-mono font-bold text-lg md:text-xl text-primary">₦{{ monthly_earnings|floatformat:0 }}</p>
+        <p class="text-on-surface-variant text-xs mt-1">Your earnings</p>
     </div>
 </div>
 
 {% if reseller.payment_verified %}
-<p class="text-sm text-text-secondary mb-6">
+<p class="text-sm text-on-surface-variant mb-6">
     Payouts settle to your bank ({{ reseller.bank_name }} ****{{ reseller.account_number|truncatechars:4 }}) next business day.
 </p>
 {% endif %}
 
 <!-- Transaction List -->
-<div class="bg-white rounded-xl border border-border">
-    <div class="p-4 border-b border-border">
-        <h2 class="text-sm font-heading font-semibold text-text-secondary uppercase tracking-wider">Transactions</h2>
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm">
+    <div class="p-4">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant">Transactions</h2>
     </div>
-    <div class="divide-y divide-border">
+    <div class="space-y-px bg-surface-container">
         {% for payment in payments %}
-        <div class="px-4 py-3 text-sm">
+        <div class="bg-surface-container-lowest px-4 py-3 text-sm">
             <div class="flex items-center justify-between">
                 <div>
-                    <span class="text-text-secondary">{{ payment.created_at|date:"M j" }}</span>
+                    <span class="text-on-surface-variant">{{ payment.created_at|date:"M j" }}</span>
                     <span class="ml-2 font-mono text-xs">{{ payment.subscriber.phone }}</span>
+                    {% if payment.payment_type == 'signup_fee' %}
+                    <span class="ml-2 text-xs bg-tertiary-container/30 text-on-tertiary-container px-1.5 py-0.5 rounded-md font-medium">Signup Fee</span>
+                    {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="font-mono font-medium">₦{{ payment.amount_ngn|floatformat:0 }}</span>
                     {% if payment.paystack_status == 'success' %}
-                    <span class="text-accent text-xs">✓ {{ payment.payment_method }}</span>
+                    <span class="text-primary text-xs">✓ {{ payment.payment_method }}</span>
                     {% elif payment.paystack_status == 'failed' %}
-                    <span class="text-danger text-xs">✗ failed</span>
+                    <span class="text-error text-xs">✗ failed</span>
                     {% else %}
-                    <span class="text-text-secondary text-xs">pending</span>
+                    <span class="text-on-surface-variant text-xs">pending</span>
                     {% endif %}
                 </div>
             </div>
             {% if payment.paystack_status == 'success' and payment.reseller_amount_ngn %}
-            <p class="text-xs text-text-secondary mt-1 ml-12">You earned: ₦{{ payment.reseller_amount_ngn|floatformat:0 }}</p>
+            <p class="text-xs text-on-surface-variant mt-1 ml-12">You earned: ₦{{ payment.reseller_amount_ngn|floatformat:0 }}</p>
             {% endif %}
         </div>
         {% empty %}
-        <div class="px-4 py-8 text-center text-text-secondary text-sm">
+        <div class="bg-surface-container-lowest px-4 py-8 text-center text-on-surface-variant text-sm">
             No transactions yet.
         </div>
         {% endfor %}

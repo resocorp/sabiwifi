@@ -1,0 +1,128 @@
+{% extends 'shop/base.html' %}
+
+{% block title %}Order {{ order.reference }} — SabiWiFi Shop{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto px-4 py-10">
+
+  {% if order.status == 'pending' %}
+  <!-- Pending payment -->
+  <div class="text-center mb-8">
+    <span class="material-symbols-outlined text-[48px] text-secondary mb-3">hourglass_top</span>
+    <h1 class="text-2xl font-headline font-bold mb-1 text-on-surface">Payment Pending</h1>
+    <p class="text-on-surface-variant text-sm">Your order has been created. Complete payment to confirm it.</p>
+  </div>
+  <div class="bg-secondary-container/30 text-on-secondary-container rounded-xl px-5 py-4 mb-6 text-sm">
+    If you already paid and this page still shows pending, please wait a moment and refresh.
+  </div>
+  {% elif order.status == 'cancelled' %}
+  <div class="text-center mb-8">
+    <span class="material-symbols-outlined text-[48px] text-error mb-3">cancel</span>
+    <h1 class="text-2xl font-headline font-bold mb-1 text-on-surface">Order Cancelled</h1>
+    <p class="text-on-surface-variant text-sm">This order has been cancelled.</p>
+  </div>
+  {% else %}
+  <!-- Paid / processing / shipped / delivered -->
+  <div class="text-center mb-8">
+    <span class="material-symbols-outlined text-[48px] mb-3
+      {% if order.status == 'paid' %}text-primary
+      {% elif order.status == 'processing' %}text-secondary
+      {% elif order.status == 'shipped' %}text-primary
+      {% elif order.status == 'delivered' %}text-primary
+      {% else %}text-primary{% endif %}">
+      {% if order.status == 'paid' %}check_circle
+      {% elif order.status == 'processing' %}package_2
+      {% elif order.status == 'shipped' %}local_shipping
+      {% elif order.status == 'delivered' %}celebration
+      {% else %}check_circle{% endif %}
+    </span>
+    <h1 class="text-2xl font-headline font-bold mb-1 text-on-surface">
+      {% if order.status == 'paid' %}Order Confirmed!
+      {% elif order.status == 'processing' %}Order Processing
+      {% elif order.status == 'shipped' %}Order Shipped!
+      {% elif order.status == 'delivered' %}Order Delivered
+      {% else %}Order Confirmed{% endif %}
+    </h1>
+    <p class="text-on-surface-variant text-sm">
+      {% if order.status == 'paid' %}Your payment was received. We'll start processing your order shortly.
+      {% elif order.status == 'processing' %}We're packing your order and will ship it soon.
+      {% elif order.status == 'shipped' %}Your order is on the way!{% if order.tracking_number %} Tracking: <strong>{{ order.tracking_number }}</strong>{% endif %}
+      {% elif order.status == 'delivered' %}Your order has been delivered. Enjoy!
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- Order details card -->
+  <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-4">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-headline font-semibold text-on-surface">Order Details</h2>
+      <span class="text-xs font-mono text-on-surface-variant">{{ order.reference }}</span>
+    </div>
+
+    <!-- Status badge -->
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-xs font-semibold px-2.5 py-1 rounded-full
+        {% if order.status == 'pending' %}bg-yellow-100 text-yellow-700
+        {% elif order.status == 'paid' %}bg-blue-100 text-blue-700
+        {% elif order.status == 'processing' %}bg-purple-100 text-purple-700
+        {% elif order.status == 'shipped' %}bg-indigo-100 text-indigo-700
+        {% elif order.status == 'delivered' %}bg-green-100 text-green-700
+        {% else %}bg-red-100 text-red-700{% endif %}">
+        {{ order.get_status_display }}
+      </span>
+    </div>
+
+    <!-- Items -->
+    <div class="space-y-2 mb-4">
+      {% for item in order.items.all %}
+      <div class="flex justify-between text-sm">
+        <span class="text-on-surface-variant">{{ item.product_name }} ×{{ item.quantity }}</span>
+        <span class="font-medium text-on-surface">₦{{ item.line_total|floatformat:0 }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="border-t border-surface-container-high pt-3 space-y-1.5 text-sm">
+      <div class="flex justify-between text-on-surface-variant">
+        <span>Subtotal</span>
+        <span>₦{{ order.subtotal_ngn|floatformat:0 }}</span>
+      </div>
+      <div class="flex justify-between text-on-surface-variant">
+        <span>Shipping</span>
+        <span>{% if order.shipping_ngn > 0 %}₦{{ order.shipping_ngn|floatformat:0 }}{% else %}Free{% endif %}</span>
+      </div>
+      <div class="flex justify-between font-semibold text-base pt-1 border-t border-surface-container-high">
+        <span>Total Paid</span>
+        <span class="text-primary">₦{{ order.total_ngn|floatformat:0 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delivery address -->
+  <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-6">
+    <h2 class="font-headline font-semibold mb-3 text-on-surface">Delivery Address</h2>
+    <p class="text-sm text-on-surface-variant leading-relaxed">
+      {{ order.customer_name }}<br>
+      {{ order.address_line1 }}{% if order.address_line2 %}, {{ order.address_line2 }}{% endif %}<br>
+      {{ order.city }}, {{ order.state }}
+    </p>
+    <p class="text-sm text-on-surface-variant mt-2 flex items-center gap-3 flex-wrap">
+      <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">phone</span> {{ order.customer_phone }}</span>
+      <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">mail</span> {{ order.customer_email }}</span>
+    </p>
+  </div>
+
+  <div class="flex gap-3">
+    <a href="/shop/" class="flex-1 text-center bg-surface-container-low text-on-surface-variant font-semibold py-2.5 rounded-lg hover:bg-surface-container transition-colors text-sm">
+      Continue Shopping
+    </a>
+    {% if order.status == 'pending' %}
+    <button onclick="location.reload()" class="flex-1 bg-primary text-on-primary font-semibold py-2.5 rounded-lg hover:bg-primary-dim transition-colors text-sm">
+      Refresh Status
+    </button>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

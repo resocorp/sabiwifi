@@ -266,9 +266,22 @@ def portal_verify_otp(request):
 
     cache.delete(cache_key)
 
+    # Check if reseller charges a signup fee
+    signup_fee_required = False
+    signup_fee_amount = 0
+    try:
+        reseller = Reseller.objects.get(id=otp_data['reseller_id'])
+        if reseller.signup_fee_enabled and reseller.signup_fee_amount > 0 and reseller.payment_verified:
+            signup_fee_required = True
+            signup_fee_amount = float(reseller.signup_fee_amount)
+    except Reseller.DoesNotExist:
+        pass
+
     return Response({
         'message': 'Phone verified!',
         'verify_token': verify_token,
+        'signup_fee_required': signup_fee_required,
+        'signup_fee_amount': signup_fee_amount,
     })
 
 
@@ -417,6 +430,7 @@ def portal_set_pin(request):
     pin_confirm = request.data.get('pin_confirm', '')
     plan_id = request.data.get('plan_id')
     paystack_reference = request.data.get('paystack_reference', '').strip()
+    signup_fee_reference = request.data.get('signup_fee_reference', '').strip()
 
     if not verify_token:
         return Response({'error': 'Verification required.'}, status=400)
@@ -435,6 +449,23 @@ def portal_set_pin(request):
         reseller = Reseller.objects.get(id=verified_data['reseller_id'])
     except Reseller.DoesNotExist:
         return Response({'error': 'Network not found.'}, status=400)
+
+    # --- Verify signup fee payment if required ---
+    from decimal import Decimal
+    signup_fee_data = None
+    if reseller.signup_fee_enabled and reseller.signup_fee_amount > 0 and reseller.payment_verified:
+        if not signup_fee_reference:
+            return Response({'error': 'Account creation fee payment required.'}, status=400)
+
+        pending_fee = cache.get(f'pending_signup_fee_{verify_token}')
+        if not pending_fee or pending_fee.get('reference') != signup_fee_reference:
+            return Response({'error': 'Invalid signup fee payment reference.'}, status=400)
+
+        signup_fee_data, fee_error = _verify_paystack_payment(
+            signup_fee_reference, pending_fee['amount_kobo']
+        )
+        if not signup_fee_data:
+            return Response({'error': fee_error}, status=400)
 
     # --- Resolve plan ---
     from radius.utils import create_default_trial_plan
@@ -491,7 +522,44 @@ def portal_set_pin(request):
 
     subscriber.set_pin(pin)
     subscriber.generate_auth_token()
+    if signup_fee_data:
+        subscriber.signup_fee_paid = True
     subscriber.save()
+
+    # Record signup fee payment
+    if signup_fee_data:
+        commission_pct = reseller.get_commission_pct()
+        fee_bearer = reseller.get_fee_bearer()
+        amount_ngn = reseller.signup_fee_amount
+        platform_share = (amount_ngn * commission_pct / Decimal('100')).quantize(Decimal('0.01'))
+        reseller_share = amount_ngn - platform_share
+        Payment.objects.create(
+            subscriber=subscriber,
+            plan=None,
+            reseller=reseller,
+            payment_type='signup_fee',
+            amount_ngn=amount_ngn,
+            paystack_reference=signup_fee_data.get('reference', ''),
+            paystack_status='success',
+            payment_method=signup_fee_data.get('channel', 'card'),
+            commission_pct_applied=commission_pct,
+            fee_bearer_applied=fee_bearer,
+            platform_amount_ngn=platform_share,
+            reseller_amount_ngn=reseller_share,
+            gateway_fee_ngn=0,
+        )
+        try:
+            from notifications.notify import notify_reseller, notify_admin_contacts
+            ctx = {
+                'name': verified_data['phone'],
+                'phone': verified_data['phone'],
+                'plan': 'Account Creation Fee',
+                'amount': f'{float(amount_ngn):,.0f}',
+            }
+            notify_reseller(reseller, 'payment_received', ctx)
+            notify_admin_contacts(reseller, 'payment_received', ctx)
+        except Exception as _exc:
+            logger.warning(f'Signup fee notify failed: {_exc}')
 
     # Activate chosen plan
     if chosen_plan:
@@ -500,6 +568,8 @@ def portal_set_pin(request):
     cache.delete(f'verified_{verify_token}')
     if paystack_reference:
         cache.delete(f'pending_payment_{verify_token}')
+    if signup_fee_data:
+        cache.delete(f'pending_signup_fee_{verify_token}')
 
     # Send welcome message to subscriber + new subscriber alert to reseller
     try:
@@ -625,6 +695,98 @@ def portal_initiate_payment(request):
         'amount_kobo': amount_kobo,
         'email': verified_data['email'],
         'plan_name': plan.name,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_initiate_signup_payment(request):
+    """
+    Initialize a Paystack transaction for the account creation fee during signup.
+
+    Body:
+        verify_token  — from /api/portal/verify/
+
+    Returns:
+        reference, access_code, public_key, amount_kobo, email
+    """
+    import uuid
+
+    verify_token = request.data.get('verify_token', '')
+    if not verify_token:
+        return Response({'error': 'verify_token is required.'}, status=400)
+
+    verified_data = cache.get(f'verified_{verify_token}')
+    if not verified_data:
+        return Response({'error': 'Session expired. Please start over.'}, status=400)
+
+    try:
+        reseller = Reseller.objects.get(id=verified_data['reseller_id'])
+    except Reseller.DoesNotExist:
+        return Response({'error': 'Network not found.'}, status=400)
+
+    if not reseller.signup_fee_enabled or reseller.signup_fee_amount <= 0:
+        return Response({'error': 'This network does not charge a signup fee.'}, status=400)
+
+    if not reseller.payment_verified or not reseller.paystack_subaccount_code:
+        return Response({'error': 'This network does not accept online payments yet.'}, status=400)
+
+    secret_key = _get_paystack_secret_key()
+    public_key = _get_paystack_public_key()
+    if not secret_key or not public_key:
+        return Response({'error': 'Payment gateway not configured.'}, status=503)
+
+    reference = f'swf_{uuid.uuid4().hex[:20]}'
+    amount_kobo = int(reseller.signup_fee_amount * 100)
+    commission_pct = reseller.get_commission_pct()
+    fee_bearer = reseller.get_fee_bearer()
+    platform_share_kobo = int(amount_kobo * commission_pct / 100)
+
+    payload = {
+        'email': verified_data['email'],
+        'amount': amount_kobo,
+        'reference': reference,
+        'subaccount': reseller.paystack_subaccount_code,
+        'bearer': fee_bearer,
+        'transaction_charge': platform_share_kobo,
+        'metadata': {
+            'custom_fields': [
+                {'display_name': 'Phone', 'variable_name': 'phone', 'value': verified_data['phone']},
+                {'display_name': 'Type', 'variable_name': 'type', 'value': 'Account Creation Fee'},
+                {'display_name': 'Network', 'variable_name': 'network', 'value': reseller.name},
+            ],
+        },
+    }
+
+    try:
+        resp = http_requests.post(
+            'https://api.paystack.co/transaction/initialize',
+            json=payload,
+            headers={'Authorization': f'Bearer {secret_key}'},
+            timeout=15,
+        )
+        body = resp.json()
+    except Exception as exc:
+        logger.error(f'Paystack signup fee init error: {exc}')
+        return Response({'error': 'Payment gateway unavailable. Please try again.'}, status=502)
+
+    if not body.get('status'):
+        logger.error(f'Paystack signup fee init failed: {body}')
+        return Response({'error': body.get('message', 'Could not initialize payment.')}, status=400)
+
+    # Cache pending fee so set-pin can verify it later
+    cache.set(f'pending_signup_fee_{verify_token}', {
+        'reference': reference,
+        'amount_kobo': amount_kobo,
+    }, timeout=1800)
+
+    return Response({
+        'reference': reference,
+        'access_code': body['data']['access_code'],
+        'public_key': public_key,
+        'amount_kobo': amount_kobo,
+        'email': verified_data['email'],
+        'fee_amount': float(reseller.signup_fee_amount),
     })
 
 

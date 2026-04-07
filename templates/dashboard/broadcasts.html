@@ -5,49 +5,49 @@
 {% with active_tab='broadcasts' %}
 
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-heading font-bold">Broadcasts</h1>
+    <h1 class="text-xl font-headline font-bold">Broadcasts</h1>
 </div>
 
 <div class="max-w-2xl space-y-5">
 
     <!-- Compose -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">New Broadcast</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">New Broadcast</h2>
 
         <div class="mb-4">
             <label class="block text-sm font-medium mb-1">Type</label>
             <div class="grid grid-cols-3 gap-2">
                 <label class="cursor-pointer">
                     <input type="radio" name="btype" value="alert" class="sr-only peer" checked>
-                    <div class="peer-checked:border-primary peer-checked:bg-primary/5 border-2 border-border rounded-lg p-3 text-center text-sm transition">
+                    <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm transition">
                         <div class="text-lg mb-1">🔔</div>
                         <div class="font-semibold text-xs">Alert</div>
-                        <div class="text-xs text-text-secondary mt-0.5">Service notice</div>
+                        <div class="text-xs text-on-surface-variant mt-0.5">Service notice</div>
                     </div>
                 </label>
                 <label class="cursor-pointer">
                     <input type="radio" name="btype" value="promo" class="sr-only peer">
-                    <div class="peer-checked:border-primary peer-checked:bg-primary/5 border-2 border-border rounded-lg p-3 text-center text-sm transition">
+                    <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm transition">
                         <div class="text-lg mb-1">🎁</div>
                         <div class="font-semibold text-xs">Promo</div>
-                        <div class="text-xs text-text-secondary mt-0.5">Special offer</div>
+                        <div class="text-xs text-on-surface-variant mt-0.5">Special offer</div>
                     </div>
                 </label>
                 <label class="cursor-pointer">
                     <input type="radio" name="btype" value="marketing" class="sr-only peer">
-                    <div class="peer-checked:border-primary peer-checked:bg-primary/5 border-2 border-border rounded-lg p-3 text-center text-sm transition">
+                    <div class="peer-checked:ring-2 peer-checked:ring-primary peer-checked:bg-primary/5 bg-surface-container-low rounded-lg p-3 text-center text-sm transition">
                         <div class="text-lg mb-1">📣</div>
                         <div class="font-semibold text-xs">Marketing</div>
-                        <div class="text-xs text-text-secondary mt-0.5">General</div>
+                        <div class="text-xs text-on-surface-variant mt-0.5">General</div>
                     </div>
                 </label>
             </div>
-            <p class="text-xs text-text-secondary mt-2">Subscribers opt into Promo/Marketing — only opted-in subscribers will receive these. Use SMS for bulk sends to avoid WhatsApp account bans.</p>
+            <p class="text-xs text-on-surface-variant mt-2">Subscribers opt into Promo/Marketing — only opted-in subscribers will receive these. Use SMS for bulk sends to avoid WhatsApp account bans.</p>
         </div>
 
         <div class="mb-4">
             <label class="block text-sm font-medium mb-1">Channel</label>
-            <select id="b-channel" class="w-full px-3 py-2.5 border border-border rounded-lg text-sm">
+            <select id="b-channel" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                 <option value="sms">SMS (recommended for bulk)</option>
                 {% if wa_connected %}<option value="whatsapp">WhatsApp</option>{% endif %}
                 {% if wa_connected %}<option value="both">WhatsApp + SMS</option>{% endif %}
@@ -57,36 +57,36 @@
         <div class="mb-4">
             <label class="block text-sm font-medium mb-1">Message</label>
             <textarea id="b-body" rows="4" maxlength="500"
-                class="w-full px-3 py-2.5 border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
                 placeholder="Hi {{name}}, we have a special offer just for you..."></textarea>
             <div class="flex justify-between mt-1">
-                <p class="text-xs text-text-secondary">Variable: <code class="bg-gray-100 px-1 rounded">&#123;&#123;name&#125;&#125;</code></p>
-                <span id="b-char-count" class="text-xs text-text-secondary">0 / 500</span>
+                <p class="text-xs text-on-surface-variant">Variable: <code class="bg-surface-container px-1 rounded">&#123;&#123;name&#125;&#125;</code></p>
+                <span id="b-char-count" class="text-xs text-on-surface-variant">0 / 500</span>
             </div>
         </div>
 
-        <div id="b-preview" class="hidden mb-4 bg-gray-50 rounded-lg p-3 text-sm border border-border">
-            <p class="text-xs font-medium text-text-secondary mb-1">Preview — sending to <strong id="b-recipient-count">0</strong> subscriber(s)</p>
+        <div id="b-preview" class="hidden mb-4 bg-surface-container-low rounded-lg p-3 text-sm">
+            <p class="text-xs font-medium text-on-surface-variant mb-1">Preview — sending to <strong id="b-recipient-count">0</strong> subscriber(s)</p>
             <p id="b-preview-text" class="text-sm"></p>
         </div>
 
-        <div id="b-error" class="hidden mb-3 text-sm text-danger"></div>
+        <div id="b-error" class="hidden mb-3 text-sm text-error"></div>
 
         <div class="flex gap-3">
             <button onclick="previewBroadcast()"
-                class="flex-1 py-2.5 border border-border text-sm font-semibold rounded-lg hover:bg-gray-50 transition">
+                class="flex-1 py-2.5 bg-surface-container-low text-on-surface text-sm font-semibold rounded-lg hover:bg-surface-container transition">
                 Preview
             </button>
             <button id="b-send-btn" onclick="sendBroadcast()" disabled
-                class="flex-1 py-2.5 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary-dark transition disabled:opacity-40 disabled:cursor-not-allowed">
+                class="flex-1 py-2.5 bg-primary text-on-primary text-sm font-semibold rounded-lg hover:bg-primary-dim transition disabled:opacity-40 disabled:cursor-not-allowed">
                 Send Broadcast
             </button>
         </div>
     </div>
 
     <!-- History -->
-    <div class="bg-white rounded-xl border border-border p-5">
-        <h2 class="font-heading font-semibold text-sm uppercase tracking-wider text-text-secondary mb-4">History</h2>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">History</h2>
         <div id="broadcast-history">
             <div class="text-center py-6">
                 <div class="inline-block animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
@@ -202,33 +202,33 @@ function loadHistory() {
     .then(list => {
         const el = document.getElementById('broadcast-history');
         if (!list.length) {
-            el.innerHTML = '<p class="text-sm text-text-secondary text-center py-4">No broadcasts yet.</p>';
+            el.innerHTML = '<p class="text-sm text-on-surface-variant text-center py-4">No broadcasts yet.</p>';
             return;
         }
         el.innerHTML = list.map(b => {
             const progressBar = b.status === 'sending' || b.status === 'sent'
-                ? `<div class="bg-gray-100 rounded-full h-1.5 mt-2">
+                ? `<div class="bg-surface-container-highest rounded-full h-1.5 mt-2">
                      <div class="bg-primary h-1.5 rounded-full transition-all" style="width:${b.progress_pct}%"></div>
                    </div>`
                 : '';
             const statusBadge = {
-                draft: 'bg-gray-100 text-gray-600',
-                queued: 'bg-yellow-100 text-yellow-700',
-                sending: 'bg-blue-100 text-blue-700',
-                sent: 'bg-green-100 text-green-700',
-                cancelled: 'bg-gray-100 text-gray-500',
-            }[b.status] || 'bg-gray-100';
-            return `<div class="border border-border rounded-lg p-3 mb-3">
+                draft: 'bg-surface-container text-on-surface-variant',
+                queued: 'bg-secondary-container/50 text-on-secondary-container',
+                sending: 'bg-tertiary-container/30 text-on-tertiary-container',
+                sent: 'bg-primary-container/30 text-on-primary-container',
+                cancelled: 'bg-surface-container text-on-surface-variant',
+            }[b.status] || 'bg-surface-container';
+            return `<div class="bg-surface-container-low rounded-lg p-3 mb-3">
                 <div class="flex items-start justify-between mb-1">
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-semibold uppercase px-2 py-0.5 rounded ${statusBadge}">${b.status}</span>
-                        <span class="text-xs text-text-secondary">${b.type} · ${b.channel} · ${b.created_at}</span>
+                        <span class="text-xs text-on-surface-variant">${b.type} · ${b.channel} · ${b.created_at}</span>
                     </div>
-                    <span class="text-xs text-text-secondary">${b.sent_count}/${b.total_recipients} sent</span>
+                    <span class="text-xs text-on-surface-variant">${b.sent_count}/${b.total_recipients} sent</span>
                 </div>
-                <p class="text-sm text-gray-700">${b.body}</p>
+                <p class="text-sm text-on-surface">${b.body}</p>
                 ${progressBar}
-                ${b.status === 'queued' ? `<button onclick="cancelBroadcast(${b.id})" class="text-xs text-danger hover:underline mt-1">Cancel</button>` : ''}
+                ${b.status === 'queued' ? `<button onclick="cancelBroadcast(${b.id})" class="text-xs text-error hover:underline mt-1">Cancel</button>` : ''}
             </div>`;
         }).join('');
     });

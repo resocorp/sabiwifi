@@ -38,6 +38,24 @@ class PlatformSettings(models.Model):
     server_ip = models.GenericIPAddressField(default='127.0.0.1')
     server_wg_public_key = models.CharField(max_length=255, blank=True, default='')
 
+    # OpenWISP integration
+    openwisp_api_url = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='OpenWISP controller base URL, e.g. https://wisp.sabiwifi.com',
+    )
+    openwisp_api_token = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text='OpenWISP REST API bearer token (from OpenWISP admin → API tokens)',
+    )
+    openwisp_shared_secret = models.CharField(
+        max_length=128, blank=True, default='',
+        help_text='Shared secret baked into firmware for device auto-registration with OpenWISP',
+    )
+    openwisp_pool_org_id = models.UUIDField(
+        null=True, blank=True,
+        help_text='UUID of the OpenWISP "pool" organization where unclaimed devices land after first boot',
+    )
+
     # Operator notifications
     notification_phones = models.JSONField(
         default=list, blank=True,

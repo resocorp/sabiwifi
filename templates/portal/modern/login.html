@@ -4,36 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+            --secondary-container: #ffc96f;
+            --on-secondary-container: #614100;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F7F8FA; color: #1A1A2E; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
-        .container { width: 100%; max-width: 360px; }
-        .card { background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-        .logo { text-align: center; margin-bottom: 16px; }
+        body { font-family: 'Be Vietnam Pro', -apple-system, sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .container { width: 100%; max-width: 380px; }
+        .card { background: var(--surface-container-lowest); border-radius: 24px; padding: 36px 28px; box-shadow: 0px 20px 40px rgba(43,47,46,0.06); }
+        .logo { text-align: center; margin-bottom: 20px; }
         .logo img { max-width: 120px; max-height: 60px; }
-        h1 { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
-        .subtitle { font-size: 14px; color: #6B7280; text-align: center; margin-bottom: 24px; }
-        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-        input[type="tel"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 16px; }
-        input:focus { border-color: {{ branding.primary_color|default:"#0052CC" }}; box-shadow: 0 0 0 3px {{ branding.primary_color|default:"#0052CC" }}22; }
-        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
-        .btn-primary { background: {{ branding.primary_color|default:"#0052CC" }}; color: #fff; }
+        h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 6px; color: var(--on-surface); }
+        .subtitle { font-size: 14px; color: var(--on-surface-variant); text-align: center; margin-bottom: 28px; line-height: 1.5; }
+        label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--on-surface-variant); }
+        input[type="tel"], input[type="password"] { width: 100%; padding: 12px 14px; background: var(--surface-container-highest); border: none; border-radius: 12px; font-size: 14px; font-family: 'Be Vietnam Pro', -apple-system, sans-serif; color: var(--on-surface); outline: none; margin-bottom: 16px; transition: box-shadow 0.2s ease; }
+        input::placeholder { color: var(--on-surface-variant); opacity: 0.6; }
+        input:focus { box-shadow: 0 0 0 2px rgba(0,106,54,0.4); box-shadow: 0 0 0 2px var(--primary)40; }
+        .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 1rem; font-size: 15px; font-weight: 600; font-family: 'Be Vietnam Pro', -apple-system, sans-serif; cursor: pointer; text-align: center; text-decoration: none; transition: background 0.2s ease, transform 0.1s ease; }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-dim); }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn-outline { background: transparent; border: 1px solid #E5E7EB; color: #1A1A2E; margin-top: 8px; }
-        .link { color: {{ branding.primary_color|default:"#0052CC" }}; text-decoration: none; font-size: 13px; }
-        .divider { text-align: center; color: #6B7280; font-size: 12px; margin: 16px 0; position: relative; }
-        .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 1px; background: #E5E7EB; }
+        .btn-secondary { background: var(--surface-container); color: var(--on-surface); margin-top: 10px; }
+        .btn-secondary:hover { background: var(--surface-container-highest); }
+        .link { color: var(--primary); text-decoration: none; font-size: 13px; font-weight: 500; }
+        .link:hover { text-decoration: underline; }
+        .divider { text-align: center; color: var(--on-surface-variant); font-size: 12px; margin: 20px 0; position: relative; }
+        .divider::before, .divider::after { content: ''; position: absolute; top: 50%; width: 35%; height: 1px; background: var(--surface-container-highest); }
         .divider::before { left: 0; }
         .divider::after { right: 0; }
-        .error { background: #FEE2E2; border: 1px solid #FECACA; color: #991B1B; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
-        .success { background: #D1FAE5; border: 1px solid #A7F3D0; color: #065F46; padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+        .error { background: #fef2f2; color: var(--error); padding: 10px 14px; border-radius: 12px; font-size: 13px; margin-bottom: 16px; display: none; }
+        .success { background: var(--surface-container-low); color: var(--primary); padding: 10px 14px; border-radius: 12px; font-size: 13px; margin-bottom: 16px; display: none; }
         .text-center { text-align: center; }
-        .mt-3 { margin-top: 12px; }
-        .notice { border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
+        .mt-3 { margin-top: 14px; }
+        .notice { border-radius: 14px; padding: 14px 16px; font-size: 13px; margin-bottom: 20px; display: flex; gap: 10px; align-items: flex-start; line-height: 1.5; }
         .notice-icon { font-size: 20px; flex-shrink: 0; margin-top: -1px; }
-        .notice-amber { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; }
-        .notice-red { background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; }
+        .notice-amber { background: var(--secondary-container); color: var(--on-secondary-container); }
+        .notice-red { background: #fef2f2; color: var(--error); }
         .notice strong { display: block; margin-bottom: 2px; }
+        .footer-links { font-size: 13px; color: var(--on-surface-variant); }
+        .footer-links .link-separator { margin: 0 4px; }
+        .new-here { font-size: 14px; color: var(--on-surface-variant); margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -50,7 +75,7 @@
 
             {% if reason == 'session_ended' %}
             <div class="notice notice-amber">
-                <span class="notice-icon">⏱</span>
+                <span class="notice-icon">&#9201;</span>
                 <div>
                     <strong>Your session has ended</strong>
                     Your browsing time ran out or your plan expired. Log in again to reconnect.
@@ -58,7 +83,7 @@
             </div>
             {% elif error %}
             <div class="notice notice-red" id="server-notice">
-                <span class="notice-icon">⚠️</span>
+                <span class="notice-icon">&#9888;&#65039;</span>
                 <div id="server-notice-text"></div>
             </div>
             {% endif %}
@@ -70,15 +95,15 @@
                 <label>WiFi PIN</label>
                 <input type="password" id="pin" placeholder="----" maxlength="4" inputmode="numeric" required>
 
-                <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Log In</button>
+                <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Connect Now</button>
             </div>
 
-            <p class="text-center mt-3"><a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a> · <a href="/portal/account/?r={{ serial }}" class="link">My Account</a></p>
+            <p class="text-center mt-3 footer-links"><a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a><span class="link-separator">&middot;</span><a href="/portal/account/?r={{ serial }}" class="link">My Account</a></p>
 
             <div class="divider">or</div>
 
-            <p class="text-center" style="font-size:14px;">New here?</p>
-            <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-outline">Sign Up for Free</a>
+            <p class="text-center new-here">New here?</p>
+            <a href="{% url 'portal-signup' %}?r={{ serial }}&mac={{ mac }}&link-login={{ link_login }}&link-orig={{ link_orig }}" class="btn btn-secondary">Get Started</a>
         </div>
     </div>
 
@@ -93,6 +118,10 @@
     const serial = '{{ serial|escapejs }}';
     const linkLogin = '{{ link_login|escapejs }}';
     const linkOrig = '{{ link_orig|escapejs }}';
+
+    // UAM mode context (uspot/CoovaChilli captive portal)
+    const uamMode = {{ uam_mode|yesno:"true,false" }};
+    const uamLogonUrl = '{{ uam_logon_url|escapejs }}';
 
     // Translate raw MikroTik error codes into friendly messages
     const rawError = '{{ error|escapejs }}';
@@ -143,7 +172,7 @@
         if (!phone || !pin) { showMsg('Please enter phone and PIN.', 'error'); return; }
 
         btn.disabled = true;
-        btn.textContent = 'Logging in...';
+        btn.textContent = 'Connecting...';
 
         fetch('/api/portal/login/', {
             method: 'POST',
@@ -158,11 +187,11 @@
 
                 if (data.has_active_plan === false) {
                     btn.disabled = false;
-                    btn.textContent = 'Log In';
+                    btn.textContent = 'Connect Now';
                     // Show inline notice with a direct link — don't silently redirect
                     const noticeHtml = `
                         <div class="notice notice-amber" style="margin-bottom:16px;">
-                            <span class="notice-icon">📋</span>
+                            <span class="notice-icon">&#128203;</span>
                             <div>
                                 <strong>No active plan</strong>
                                 Your plan has expired or you don't have an active subscription.
@@ -177,7 +206,13 @@
 
                 showMsg('Connecting to WiFi...', 'success');
 
-                if (linkLogin) {
+                if (uamMode && uamLogonUrl) {
+                    // UAM/uspot captive portal: send PAP credentials to router
+                    const logonUrl = uamLogonUrl
+                        + '?username=' + encodeURIComponent(data.phone || phone)
+                        + '&password=' + encodeURIComponent(data.auth_token || '');
+                    window.location.href = logonUrl;
+                } else if (linkLogin) {
                     // Submit RADIUS credentials to MikroTik hotspot.
                     // Route through our connected page so subscriber sees account info,
                     // then auto-redirects to their original destination.
@@ -193,17 +228,17 @@
                 } else {
                     showMsg('Connected! You can now use the internet.', 'success');
                     btn.disabled = false;
-                    btn.textContent = 'Log In';
+                    btn.textContent = 'Connect Now';
                 }
             } else {
                 btn.disabled = false;
-                btn.textContent = 'Log In';
+                btn.textContent = 'Connect Now';
                 showMsg(data.error || 'Login failed.', 'error');
             }
         })
         .catch(() => {
             btn.disabled = false;
-            btn.textContent = 'Log In';
+            btn.textContent = 'Connect Now';
             showMsg('Network error. Please try again.', 'error');
         });
     }

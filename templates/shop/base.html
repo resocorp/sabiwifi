@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}SabiWiFi Shop{% endblock %}
+
+{% block extra_head %}
+{% block head_extra %}{% endblock %}
+{% endblock %}
+
+{% block body %}
+<!-- Header -->
+<header class="bg-surface-container-lowest shadow-ambient-sm sticky top-0 z-40">
+  <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+    <a href="/shop/" class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary text-2xl">wifi_tethering</span>
+      <span class="text-primary font-headline font-bold italic text-lg">SabiWiFi</span>
+      <span class="text-xs font-medium bg-primary-container text-on-primary-container px-2 py-0.5 rounded-full">Shop</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-on-surface-variant">
+      <a href="/shop/" class="hover:text-primary transition-colors">Products</a>
+      {% if user.is_authenticated %}
+      <a href="{% url 'dashboard-overview' %}" class="hover:text-primary transition-colors">Dashboard</a>
+      {% else %}
+      <a href="/" class="hover:text-primary transition-colors">Become a Reseller</a>
+      {% endif %}
+    </nav>
+    <div class="flex items-center gap-2">
+    <button id="theme-toggle" onclick="SabiTheme.cycle(); this.querySelector('span').textContent = SabiTheme.icon();"
+            class="text-on-surface-variant hover:text-on-surface p-1.5 rounded-lg hover:bg-surface-container transition">
+        <span class="material-symbols-outlined text-[20px]">brightness_auto</span>
+    </button>
+    <a href="/shop/cart/" class="relative flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dim transition-colors">
+      <span class="material-symbols-outlined text-lg">shopping_cart</span>
+      Cart
+      <span id="cart-badge" class="hidden absolute -top-1.5 -right-1.5 bg-secondary text-on-secondary text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center"></span>
+    </a>
+    </div>
+  </div>
+</header>
+<script>document.querySelector('#theme-toggle span').textContent = SabiTheme.icon();</script>
+
+<!-- Content -->
+<main>
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Footer -->
+<footer class="bg-surface-container-low mt-16 py-8">
+  <div class="max-w-5xl mx-auto px-4 text-center text-sm text-on-surface-variant">
+    <p class="font-headline font-semibold text-on-surface mb-1">SabiWiFi Shop</p>
+    <p>Quality networking equipment delivered across Nigeria.</p>
+    <p class="mt-4">
+      <a href="/shop/" class="hover:text-primary mx-2">Shop</a>
+      <a href="/shop/cart/" class="hover:text-primary mx-2">Cart</a>
+      {% if user.is_authenticated %}
+      <a href="{% url 'dashboard-overview' %}" class="hover:text-primary mx-2">Dashboard</a>
+      {% else %}
+      <a href="/" class="hover:text-primary mx-2">Become a Reseller</a>
+      {% endif %}
+    </p>
+  </div>
+</footer>
+
+<script>
+  // Update cart badge from localStorage
+  function updateCartBadge() {
+    const cart = JSON.parse(localStorage.getItem('sabiwifi_cart') || '[]');
+    const total = cart.reduce((s, i) => s + (i.qty || 1), 0);
+    const badge = document.getElementById('cart-badge');
+    if (badge) {
+      if (total > 0) {
+        badge.textContent = total > 9 ? '9+' : total;
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+      } else {
+        badge.classList.add('hidden');
+        badge.classList.remove('flex');
+      }
+    }
+  }
+  updateCartBadge();
+</script>
+{% block scripts %}{% endblock %}
+{% endblock %}

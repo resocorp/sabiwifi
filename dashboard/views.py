@@ -327,56 +327,240 @@ def routers_list(request):
 
 @login_required
 def router_add(request):
-    """Add router by serial number."""
+    """
+    Add a router to the reseller's account.
+
+    MikroTik: reseller enters the serial number printed on the device sticker.
+              Server generates WireGuard credentials and pushes them via RouterOS API.
+
+    OpenWrt:  reseller enters the MAC address printed on the device sticker.
+              Device auto-registered in SabiWiFi via heartbeat cron (runs every 2 min).
+              Server allocates WG tunnel IP + NAS secret, adds WG peer, and pushes
+              the per-device context vars to OpenWISP so templates re-apply within 5 min.
+    """
     reseller = _get_reseller(request)
     if not reseller:
         return redirect('login')
 
+    import logging
+    logger = logging.getLogger(__name__)
     errors = {}
+
     if request.method == 'POST':
-        serial = request.POST.get('serial_number', '').strip().upper()
-        if not serial:
-            errors['serial_number'] = ['Serial number is required.']
+        device_type = request.POST.get('device_type', 'mikrotik')
+
+        if device_type == 'openwrt':
+            _handle_openwrt_add(request, reseller, errors, logger)
         else:
-            try:
-                router = Router.objects.get(serial_number=serial)
-                if router.reseller is not None:
-                    errors['serial_number'] = ['This router is already assigned to another account.']
-                else:
-                    # Assign router
-                    from routers.views import _generate_credentials
-                    from django.core.cache import cache
-                    from radius.models import Nas
+            _handle_mikrotik_add(request, reseller, errors, logger)
 
-                    wg_private_key = _generate_credentials(router)
-                    router.reseller = reseller
-                    router.status = 'pending_provision'
-                    router.save()
-
-                    # Write NAS entry
-                    Nas.objects.update_or_create(
-                        nasname=router.wg_tunnel_ip,
-                        defaults={
-                            'shortname': router.serial_number,
-                            'type': 'other',
-                            'secret': router.nas_secret,
-                            'description': f'SabiWiFi router {router.serial_number}',
-                        }
-                    )
-
-                    cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
-                    messages.success(request, 'Router added! Waiting for it to come online...')
-                    return redirect('dashboard-overview')
-            except Router.DoesNotExist:
-                errors['serial_number'] = [
-                    "Serial number not found. Power on the router and wait a few "
-                    "minutes for it to register, then try again."
-                ]
+        if not errors:
+            return redirect('dashboard-overview')
 
     return render(request, 'dashboard/router_add.html', {
         'reseller': reseller,
         'errors': errors,
     })
+
+
+def _handle_mikrotik_add(request, reseller, errors, logger):
+    """Claim a MikroTik router by serial number (existing flow)."""
+    from routers.views import _generate_credentials
+    from routers.wg_utils import add_peer, WireGuardError
+    from django.core.cache import cache
+    from radius.models import Nas
+    from django.contrib import messages
+
+    serial = request.POST.get('serial_number', '').strip().upper()
+    if not serial:
+        errors['serial_number'] = ['Serial number is required.']
+        return
+
+    try:
+        router = Router.objects.get(serial_number=serial, device_type='mikrotik')
+    except Router.DoesNotExist:
+        errors['serial_number'] = [
+            "Serial number not found. Power on the router and wait a few "
+            "minutes for it to register, then try again."
+        ]
+        return
+
+    if router.reseller is not None:
+        errors['serial_number'] = ['This router is already assigned to another account.']
+        return
+
+    wg_private_key = _generate_credentials(router)
+    router.reseller = reseller
+    router.status = 'pending_provision'
+    router.save()
+
+    Nas.objects.update_or_create(
+        nasname=router.wg_tunnel_ip,
+        defaults={
+            'shortname': router.serial_number,
+            'type': 'other',
+            'secret': router.nas_secret,
+            'description': f'SabiWiFi router {router.serial_number}',
+        }
+    )
+
+    if router.wg_public_key:
+        try:
+            add_peer(router.wg_public_key, router.wg_tunnel_ip)
+        except WireGuardError as e:
+            logger.error(f"Failed to add WG peer for MikroTik {serial}: {e}")
+
+    cache.set(f'wg_privkey_{router.serial_number}', wg_private_key, timeout=86400)
+    messages.success(request, 'Router added! Waiting for it to come online...')
+
+
+def _handle_openwrt_add(request, reseller, errors, logger):
+    """
+    Claim an OpenWrt router by MAC address.
+
+    Flow:
+      1. Look up Router in local DB (auto-created by heartbeat)
+         OR find in OpenWISP if not yet in local DB
+      2. Allocate WireGuard tunnel IP + NAS secret
+      3. Add WireGuard peer on server (device already sent pubkey via heartbeat)
+      4. Create FreeRADIUS NAS entry
+      5. Create OpenWISPBinding (device → reseller org)
+      6. Update device context vars in OpenWISP (wg_tunnel_ip, nas_secret, ssid)
+    """
+    import secrets as secrets_mod
+    from django.contrib import messages
+    from routers.serial_utils import is_valid_mac, normalize_mac
+    from routers.views import _allocate_tunnel_ip
+    from routers.wg_utils import add_peer, WireGuardError
+    from radius.models import Nas
+
+    raw_mac = request.POST.get('mac_address', '').strip().upper().replace(':', '').replace('-', '')
+    if not raw_mac:
+        errors['mac_address'] = ['MAC address is required.']
+        return
+
+    if not is_valid_mac(raw_mac):
+        errors['mac_address'] = ['Invalid MAC address. Enter the 12-digit hex address from the sticker (e.g. A4B1C2D3E4F5).']
+        return
+
+    mac = normalize_mac(raw_mac)
+
+    # Try local DB first (populated by heartbeat cron)
+    router = Router.objects.filter(serial_number=mac, device_type='openwrt').first()
+
+    # If not in local DB, check OpenWISP
+    if not router:
+        router = _find_openwrt_in_openwisp(mac, logger)
+
+    if not router:
+        errors['mac_address'] = [
+            "Device not found. Make sure it's powered on and connected to the internet — "
+            "it should register within 2 minutes."
+        ]
+        return
+
+    if router.reseller is not None:
+        errors['mac_address'] = ['This router is already assigned to another account.']
+        return
+
+    # Allocate credentials
+    router.wg_tunnel_ip = _allocate_tunnel_ip()
+    router.nas_secret = secrets_mod.token_urlsafe(24)
+    router.reseller = reseller
+    router.status = 'pending_provision'
+    router.save()
+
+    # FreeRADIUS NAS entry
+    Nas.objects.update_or_create(
+        nasname=router.wg_tunnel_ip,
+        defaults={
+            'shortname': mac,
+            'type': 'other',
+            'secret': router.nas_secret,
+            'description': f'SabiWiFi OpenWrt {mac}',
+        }
+    )
+
+    # Add WireGuard peer (pubkey saved by heartbeat)
+    if router.wg_public_key:
+        try:
+            add_peer(router.wg_public_key, router.wg_tunnel_ip)
+        except WireGuardError as e:
+            logger.warning(f"WG peer add failed for OpenWrt {mac}: {e}")
+    else:
+        logger.warning(f"No WG public key yet for OpenWrt {mac} — peer will be added on next heartbeat")
+
+    # Register in OpenWISP and push context vars
+    _register_openwrt_in_openwisp(router, reseller, logger)
+
+    messages.success(request, 'Router added! Config will be pushed within 5 minutes.')
+
+
+def _find_openwrt_in_openwisp(mac, logger):
+    """
+    If a device has registered with OpenWISP but hasn't sent a heartbeat yet,
+    find it there and create the local Router record.
+    """
+    try:
+        from integrations.openwisp import OpenWISPClient, OpenWISPError
+        client = OpenWISPClient()
+        device = client.find_device_by_mac(mac)
+        if not device:
+            return None
+        # Create local Router mirroring the OpenWISP device
+        router, _ = Router.objects.get_or_create(
+            serial_number=mac,
+            defaults={'device_type': 'openwrt', 'status': 'available'},
+        )
+        return router
+    except Exception as e:
+        logger.info(f'OpenWISP lookup for {mac} failed (may not be configured yet): {e}')
+        return None
+
+
+def _register_openwrt_in_openwisp(router, reseller, logger):
+    """
+    Create OpenWISPBinding for the router, move device to reseller's org,
+    and push per-device context variables (wg_tunnel_ip, nas_secret, ssid).
+    """
+    try:
+        from integrations.openwisp import OpenWISPClient, OpenWISPError
+        from integrations.models import OpenWISPBinding
+
+        client = OpenWISPClient()
+        device = client.find_device_by_mac(router.serial_number)
+        if not device:
+            logger.warning(f'OpenWISP device not found for {router.serial_number} during claiming')
+            return
+
+        device_id = device['id']
+
+        # Move device to reseller's OpenWISP organization
+        if hasattr(reseller, 'openwisp_binding'):
+            org_id = str(reseller.openwisp_binding.openwisp_id)
+            client.move_device_to_org(device_id, org_id)
+
+        # Push per-device context variables for config templates
+        ssid = (reseller.branding or {}).get('ssid', 'SabiWiFi')
+        client.update_device_context(device_id, {
+            'wg_tunnel_ip': router.wg_tunnel_ip,
+            'nas_secret': router.nas_secret,
+            'ssid': ssid,
+            'ssid_5g': f'{ssid}-5G',
+        })
+
+        # Record the binding
+        OpenWISPBinding.objects.update_or_create(
+            router=router,
+            defaults={
+                'openwisp_id': device_id,
+                'openwisp_type': 'device',
+            },
+        )
+        logger.info(f'OpenWrt {router.serial_number} registered in OpenWISP: {device_id}')
+
+    except Exception as e:
+        logger.warning(f'OpenWISP registration for {router.serial_number} failed: {e}')
 
 
 @login_required
@@ -458,6 +642,20 @@ def settings_page(request):
                 reseller.branding = branding
                 reseller.save()
                 messages.success(request, 'WiFi network name updated!')
+
+        elif section == 'signup_fee':
+            from decimal import Decimal, InvalidOperation
+            if reseller.payment_verified:
+                reseller.signup_fee_enabled = request.POST.get('signup_fee_enabled') == '1'
+                try:
+                    amount = Decimal(request.POST.get('signup_fee_amount', '0') or '0')
+                    reseller.signup_fee_amount = max(Decimal('0'), amount)
+                except InvalidOperation:
+                    reseller.signup_fee_amount = Decimal('0')
+                reseller.save()
+                messages.success(request, 'Account creation fee updated!')
+            else:
+                messages.error(request, 'You must verify your bank account before enabling signup fees.')
 
         return redirect('dashboard-settings')
 

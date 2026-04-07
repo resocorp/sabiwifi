@@ -4,34 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connected — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}WiFi{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: {{ branding.primary_color|default:"#006a36" }};
+            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
+            --surface: #f4f7f5;
+            --surface-container-low: #eef2ef;
+            --surface-container: #e5e9e7;
+            --surface-container-highest: #d8dedc;
+            --surface-container-lowest: #ffffff;
+            --on-surface: #2b2f2e;
+            --on-surface-variant: #585c5b;
+            --error: #b31b25;
+        }
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1A1A2E;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+        body{font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg, var(--primary), #004621);color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
         .bg{position:fixed;top:0;left:0;right:0;bottom:0;z-index:0}
         .bg img{width:100%;height:100%;object-fit:cover}
-        .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:1}
+        .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(11,15,14,0.65);z-index:1}
         .container{position:relative;z-index:2;width:100%;max-width:360px}
+        .card{background:rgba(255,255,255,0.7);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-radius:1.5rem;padding:32px 24px;box-shadow:0px 20px 40px rgba(43,47,46,0.06)}
         .logo{text-align:center;margin-bottom:12px}
         .logo img{max-width:100px;max-height:50px}
         .icon{font-size:48px;text-align:center;margin-bottom:10px}
-        h1{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px}
+        h1{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:22px;font-weight:700;text-align:center;margin-bottom:4px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.3)}
         .subtitle{font-size:14px;color:rgba(255,255,255,.7);text-align:center;margin-bottom:20px}
-        .info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:14px}
-        .info-row:last-child{border-bottom:none}
-        .info-label{color:rgba(255,255,255,.6)}
-        .info-value{font-weight:500;text-align:right;max-width:58%}
-        .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:600;background:rgba(0,179,65,.25);color:#6EE7B7;margin-left:4px;white-space:nowrap}
-        .divider{border:none;border-top:1px solid rgba(255,255,255,.1);margin:16px 0}
-        .account-note{background:rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.5;border:1px solid rgba(255,255,255,.12)}
-        .account-note strong{display:block;margin-bottom:3px}
-        .account-note a{color:{{ branding.primary_color|default:"#00B341" }};font-weight:600;text-decoration:none}
-        .countdown-bar-wrap{background:rgba(255,255,255,.1);border-radius:99px;height:4px;margin-bottom:10px;overflow:hidden}
-        .countdown-bar{height:4px;border-radius:99px;background:{{ branding.primary_color|default:"#00B341" }};width:100%;transition:width 1s linear}
-        .countdown-text{font-size:12px;color:rgba(255,255,255,.4);text-align:center;margin-bottom:16px}
-        .btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;text-align:center}
-        .btn-primary{background:{{ branding.primary_color|default:"#00B341" }};color:#fff}
-        .skeleton{background:rgba(255,255,255,.1);border-radius:4px;height:13px;margin:8px 0;animation:shimmer 1.2s ease-in-out infinite}
+        .info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:14px}
+        .info-row + .info-row{padding-top:9px}
+        .info-label{color:var(--on-surface-variant)}
+        .info-value{font-weight:500;text-align:right;max-width:58%;color:var(--on-surface)}
+        .badge{display:inline-block;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:600;background:rgba(0,106,54,.15);color:var(--primary);margin-left:4px;white-space:nowrap}
+        .divider{height:1px;background:var(--surface-container-highest);margin:16px 0}
+        .account-note{background:rgba(255,255,255,0.5);border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:16px;line-height:1.5}
+        .account-note strong{display:block;margin-bottom:3px;color:var(--on-surface)}
+        .account-note a{color:var(--primary);font-weight:600;text-decoration:none}
+        .countdown-bar-wrap{background:var(--surface-container);border-radius:99px;height:4px;margin-bottom:10px;overflow:hidden}
+        .countdown-bar{height:4px;border-radius:99px;background:var(--primary);width:100%;transition:width 1s linear}
+        .countdown-text{font-size:12px;color:var(--on-surface-variant);text-align:center;margin-bottom:16px}
+        .btn{display:block;width:100%;padding:14px;border:none;border-radius:1rem;font-size:15px;font-family:'Be Vietnam Pro',sans-serif;font-weight:700;cursor:pointer;text-align:center}
+        .btn-primary{background:var(--primary);color:#fff}
+        .skeleton{background:var(--surface-container);border-radius:4px;height:13px;margin:8px 0;animation:shimmer 1.2s ease-in-out infinite}
         @keyframes shimmer{0%,100%{opacity:1}50%{opacity:.3}}
+        .header-section{margin-bottom:24px}
+        .card-content-text{color:var(--on-surface-variant)}
     </style>
 </head>
 <body>
@@ -41,30 +59,34 @@
     <div class="overlay"></div>
 
     <div class="container">
-        {% if branding.logo %}
-        <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
-        {% endif %}
+        <div class="header-section">
+            {% if branding.logo %}
+            <div class="logo"><img src="{{ branding.logo }}" alt="Logo"></div>
+            {% endif %}
 
-        <div class="icon">✅</div>
-        <h1>You're Connected!</h1>
-        <p class="subtitle">Welcome to {% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}the WiFi{% endif %}</p>
-
-        <div id="account-info">
-            <div class="skeleton" style="width:75%"></div>
-            <div class="skeleton" style="width:55%"></div>
-            <div class="skeleton" style="width:65%"></div>
+            <div class="icon">✅</div>
+            <h1>You're Connected!</h1>
+            <p class="subtitle">Welcome to {% if branding.portal_title %}{{ branding.portal_title }}{% elif reseller %}{{ reseller.name }}{% else %}the WiFi{% endif %}</p>
         </div>
 
-        <hr class="divider">
+        <div class="card">
+            <div id="account-info">
+                <div class="skeleton" style="width:75%"></div>
+                <div class="skeleton" style="width:55%"></div>
+                <div class="skeleton" style="width:65%"></div>
+            </div>
 
-        <div class="account-note">
-            <strong>Manage your account anytime</strong>
-            Visit <a id="account-link" href="/portal/account/?r={{ serial|urlencode }}">My Account</a> to view your plan, change your PIN, or top up.
+            <div class="divider"></div>
+
+            <div class="account-note">
+                <strong>Manage your account anytime</strong>
+                <span class="card-content-text">Visit <a id="account-link" href="/portal/account/?r={{ serial|urlencode }}">My Account</a> to view your plan, change your PIN, or top up.</span>
+            </div>
+
+            <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdown-bar"></div></div>
+            <p class="countdown-text">Redirecting in <strong id="countdown-num">15</strong>s &mdash; or</p>
+            <button class="btn btn-primary" onclick="goNow()">Start Browsing Now</button>
         </div>
-
-        <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdown-bar"></div></div>
-        <p class="countdown-text">Redirecting in <strong id="countdown-num">15</strong>s &mdash; or</p>
-        <button class="btn btn-primary" onclick="goNow()">Start Browsing Now</button>
     </div>
 
     <script>
@@ -103,7 +125,7 @@
                       + '<div class="info-row"><span class="info-label">Speed</span><span class="info-value">' + s.speed_display + '</span></div>'
                       + '<div class="info-row"><span class="info-label">Expires</span><span class="info-value">' + exp + '</span></div>';
             } else {
-                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value" style="color:#FCA5A5;">No active plan</span></div>';
+                html += '<div class="info-row"><span class="info-label">Plan</span><span class="info-value" style="color:var(--error);">No active plan</span></div>';
             }
             document.getElementById('account-info').innerHTML = html;
         })

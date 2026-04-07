@@ -9,7 +9,7 @@ from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.utils import timezone
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -62,7 +62,7 @@ def _make_plan(reseller, name='Free Trial', price=0, days=0, hours=0.5,
     )
 
 
-def _make_subscriber(reseller, phone='+2348099999999', pin='1234'):
+def _make_subscriber(reseller, phone='08099999999', pin='1234'):
     sub = Subscriber.objects.create(
         reseller=reseller, phone=phone, email='sub@x.com', verified=True,
     )
@@ -81,7 +81,8 @@ def _signup_subscriber_via_api(client, reseller, phone='+2348077777777'):
         'reseller_slug': reseller.slug,
     }, format='json')
     assert resp.status_code == 200, resp.data
-    otp = resp.data['otp_debug']
+    local_phone = resp.data['phone']  # signup returns local format
+    otp = cache.get(f'otp_{local_phone}_{reseller.id}')['otp']
 
     # Step 2: Verify OTP
     resp = client.post(reverse('api-portal-verify'), {
@@ -325,17 +326,17 @@ class WF11to16_DashboardPagesTest(TestCase):
     def test_wf11_subscribers_list(self):
         resp = self.client.get(reverse('dashboard-subscribers'))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, '+2348099999999')
+        self.assertContains(resp, '08099999999')
 
     def test_wf11_subscribers_search(self):
         resp = self.client.get(reverse('dashboard-subscribers') + '?q=80999')
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, '+2348099999999')
+        self.assertContains(resp, '08099999999')
 
     def test_wf12_subscriber_detail(self):
         resp = self.client.get(reverse('dashboard-subscriber-detail', args=[self.sub.pk]))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, '+2348099999999')
+        self.assertContains(resp, '08099999999')
         self.assertContains(resp, 'Free Trial')
 
     def test_wf13_payments_page(self):
@@ -389,7 +390,7 @@ class WF17_SubscriberSignupTest(TestCase):
     def test_full_signup_flow(self):
         token = _signup_subscriber_via_api(self.c, self.reseller)
         self.assertEqual(len(token), 64)
-        sub = Subscriber.objects.get(phone='+2348077777777', reseller=self.reseller)
+        sub = Subscriber.objects.get(phone='08077777777', reseller=self.reseller)
         self.assertTrue(sub.verified)
         self.assertTrue(sub.check_pin('1234'))
 
@@ -443,6 +444,7 @@ class WF20_SelectFreePlanTest(TestCase):
         ).exists())
 
 
+@override_settings(PAYSTACK_SECRET_KEY='')
 class WF21_PaidPlanPaymentTest(TestCase):
     def setUp(self):
         self.reseller = _make_reseller(verified=True)
@@ -548,7 +550,7 @@ class WF26_ResetPINTest(TestCase):
             'phone': '+2348099999999',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
-        otp = resp.data['otp_debug']
+        otp = cache.get('pin_reset_08099999999')['otp']
         # Confirm with new PIN
         resp = self.c.post(reverse('api-portal-reset-pin-confirm'), {
             'phone': '+2348099999999', 'code': otp,
@@ -768,7 +770,7 @@ class WF37_ExpiryRemindersTest(TestCase):
         )
         out = StringIO()
         call_command('send_expiry_reminders', stdout=out)
-        self.assertIn('1 sent', out.getvalue())
+        self.assertIn('1 1-day', out.getvalue())
 
 
 class WF38_DailySummaryTest(TestCase):
