@@ -1,0 +1,65 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Traffic Report — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='reports' %}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-xl font-headline font-bold">Traffic Report</h1>
+        <div class="flex gap-3 mt-2 text-sm">
+            <span class="text-primary font-medium border-b-2 border-primary pb-0.5">Traffic</span>
+            <a href="{% url 'dashboard-session-report' %}" class="text-on-surface-variant hover:text-primary">Sessions</a>
+            <a href="{% url 'dashboard-financial-report' %}" class="text-on-surface-variant hover:text-primary">Financial</a>
+        </div>
+    </div>
+    <div class="flex items-center gap-2">
+        <select onchange="window.location='?days='+this.value" class="bg-surface-container-highest rounded-lg px-3 py-2 text-sm border-0 outline-none">
+            <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+            <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+            <option value="90" {% if days == 90 %}selected{% endif %}>90 days</option>
+        </select>
+        <a href="{% url 'dashboard-report-csv' 'traffic' %}?days={{ days }}"
+           class="bg-surface-container text-on-surface px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-highest transition">
+            Export CSV
+        </a>
+    </div>
+</div>
+
+{% if rows %}
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-surface-container-low text-on-surface-variant text-xs uppercase">
+                    <th class="px-4 py-3 text-left font-medium">User</th>
+                    <th class="px-4 py-3 text-left font-medium">Download</th>
+                    <th class="px-4 py-3 text-left font-medium">Upload</th>
+                    <th class="px-4 py-3 text-left font-medium">Total</th>
+                    <th class="px-4 py-3 text-left font-medium">Time</th>
+                    <th class="px-4 py-3 text-left font-medium">Sessions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-container">
+                {% for r in rows %}
+                <tr class="hover:bg-surface-container-low/50">
+                    <td class="px-4 py-3 font-medium">{{ r.username }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant">{{ r.dl_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant">{{ r.ul_display }}</td>
+                    <td class="px-4 py-3 font-medium">{{ r.data_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant">{{ r.time_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant">{{ r.total_sessions }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-8 text-center">
+    <p class="text-on-surface-variant">No traffic data for this period.</p>
+</div>
+{% endif %}
+
+{% endwith %}
+{% endblock %}

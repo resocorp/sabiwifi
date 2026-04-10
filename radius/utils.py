@@ -5,9 +5,44 @@ RADIUS utility functions:
 - Helper functions for radacct queries
 """
 import logging
-from radius.models import Radgroupreply, Radgroupcheck, Radusergroup, Radcheck
+import subprocess
+
+from radius.models import Radgroupreply, Radgroupcheck, Radusergroup, Radcheck, Nas
 
 logger = logging.getLogger(__name__)
+
+
+def upsert_nas_and_reload(nasname, shortname, secret, description=''):
+    """
+    Create or update a NAS entry in the FreeRADIUS nas table, then reload
+    FreeRADIUS so it picks up the change (it reads SQL clients at startup only).
+    """
+    Nas.objects.update_or_create(
+        nasname=nasname,
+        defaults={
+            'shortname': shortname,
+            'type': 'other',
+            'secret': secret,
+            'description': description,
+        }
+    )
+    _reload_freeradius()
+
+
+def _reload_freeradius():
+    """Restart FreeRADIUS so it re-reads clients from SQL.
+
+    FreeRADIUS 3 only loads SQL clients at startup — HUP/reload
+    does not re-read the NAS table, so a full restart is required.
+    """
+    try:
+        subprocess.run(
+            ['systemctl', 'restart', 'freeradius'],
+            capture_output=True, timeout=10,
+        )
+        logger.info('FreeRADIUS restarted after NAS change')
+    except Exception as e:
+        logger.warning(f'Failed to restart FreeRADIUS: {e}')
 
 
 def sync_plan_to_radius(plan):
@@ -28,12 +63,26 @@ def sync_plan_to_radius(plan):
 
     # --- Group Reply Attributes ---
 
-    # Mikrotik-Rate-Limit: upload/download speed
+    # Mikrotik-Rate-Limit: upload/download speed (MikroTik routers)
     Radgroupreply.objects.create(
         groupname=group_name,
         attribute='Mikrotik-Rate-Limit',
         op=':=',
         value=plan.mikrotik_rate_limit,
+    )
+
+    # WISPr-Bandwidth-Max-Down/Up: speed limits in bps (OpenWrt/uspot)
+    Radgroupreply.objects.create(
+        groupname=group_name,
+        attribute='WISPr-Bandwidth-Max-Down',
+        op=':=',
+        value=str(plan.download_mbps * 1_000_000),
+    )
+    Radgroupreply.objects.create(
+        groupname=group_name,
+        attribute='WISPr-Bandwidth-Max-Up',
+        op=':=',
+        value=str(plan.upload_mbps * 1_000_000),
     )
 
     # Session-Timeout (if time-limited plan)
@@ -45,6 +94,14 @@ def sync_plan_to_radius(plan):
             op=':=',
             value=str(timeout),
         )
+
+    # Idle-Timeout: disconnect after 10 minutes of no traffic
+    Radgroupreply.objects.create(
+        groupname=group_name,
+        attribute='Idle-Timeout',
+        op=':=',
+        value='600',
+    )
 
     # Acct-Interim-Interval (5 minutes for usage tracking)
     Radgroupreply.objects.create(
@@ -62,6 +119,35 @@ def sync_plan_to_radius(plan):
             attribute='Mikrotik-Total-Limit',
             op=':=',
             value=str(total_bytes),
+        )
+
+    # Mikrotik-Recv-Limit (download-only cap in bytes)
+    if plan.download_cap_gb is not None:
+        recv_bytes = int(float(plan.download_cap_gb) * 1024 * 1024 * 1024)
+        Radgroupreply.objects.create(
+            groupname=group_name,
+            attribute='Mikrotik-Recv-Limit',
+            op=':=',
+            value=str(recv_bytes),
+        )
+
+    # Mikrotik-Xmit-Limit (upload-only cap in bytes)
+    if plan.upload_cap_gb is not None:
+        xmit_bytes = int(float(plan.upload_cap_gb) * 1024 * 1024 * 1024)
+        Radgroupreply.objects.create(
+            groupname=group_name,
+            attribute='Mikrotik-Xmit-Limit',
+            op=':=',
+            value=str(xmit_bytes),
+        )
+
+    # Mikrotik-Address-Pool (IP pool assignment)
+    if plan.ip_pool_name:
+        Radgroupreply.objects.create(
+            groupname=group_name,
+            attribute='Mikrotik-Address-Pool',
+            op=':=',
+            value=plan.ip_pool_name,
         )
 
     # --- Group Check Attributes ---
@@ -124,16 +210,22 @@ def update_radcheck_password(subscriber):
 
 def disconnect_subscriber_sessions(subscriber):
     """
-    Send a RADIUS Disconnect-Message (DM, RFC 5176) to every NAS that has an
-    open accounting session for this subscriber.
+    Disconnect all open sessions for a subscriber.
 
-    Called at login time so MikroTik's Simultaneous-Use check doesn't reject
-    a new connection because of a stale or still-active session on another device.
-    Errors are logged but never raised — a CoA failure must not block login.
+    - MikroTik: RADIUS Disconnect-Message (DM, RFC 5176) on port 3799
+    - OpenWrt: SSH + ubus call to uspot das_disconnect
+
+    Called at login time so Simultaneous-Use check doesn't reject
+    a new connection because of a stale session on another device.
+    Also called from dashboard "Disconnect" button.
+    Errors are logged but never raised — a failure must not block login.
     """
     from radius.models import Radacct
     from routers.models import Router
 
+    handled_ips = set()
+
+    # 1. Disconnect via radacct open sessions (works for both router types)
     open_sessions = list(
         Radacct.objects.filter(
             username=subscriber.phone,
@@ -141,23 +233,43 @@ def disconnect_subscriber_sessions(subscriber):
         ).values('nasipaddress', 'acctsessionid')
     )
 
-    if not open_sessions:
-        return
-
     for session in open_sessions:
         nas_ip = str(session['nasipaddress'])
+        handled_ips.add(nas_ip)
         try:
             router = Router.objects.get(wg_tunnel_ip=nas_ip)
         except Router.DoesNotExist:
             logger.warning(f'CoA DM: no router found for NAS IP {nas_ip}')
             continue
 
-        _coa_disconnect(
-            username=subscriber.phone,
-            session_id=session.get('acctsessionid', ''),
-            nas_ip=nas_ip,
-            secret=router.nas_secret,
-        )
+        if router.device_type == 'openwrt':
+            _openwrt_disconnect(
+                username=subscriber.phone,
+                nas_ip=nas_ip,
+            )
+        else:
+            _coa_disconnect(
+                username=subscriber.phone,
+                session_id=session.get('acctsessionid', ''),
+                nas_ip=nas_ip,
+                secret=router.nas_secret,
+            )
+
+    # 2. For OpenWrt routers: also try direct disconnect via SSH even without
+    #    a radacct entry, since uspot tracks sessions in memory, not always
+    #    reflected in radacct (e.g. accounting hasn't started yet).
+    if subscriber.reseller_id:
+        openwrt_routers = Router.objects.filter(
+            reseller_id=subscriber.reseller_id,
+            device_type='openwrt',
+            status='online',
+        ).exclude(wg_tunnel_ip__in=handled_ips)
+        for router in openwrt_routers:
+            if router.wg_tunnel_ip:
+                _openwrt_disconnect(
+                    username=subscriber.phone,
+                    nas_ip=str(router.wg_tunnel_ip),
+                )
 
 
 def _coa_disconnect(username, session_id, nas_ip, secret):
@@ -207,6 +319,37 @@ def _coa_disconnect(username, session_id, nas_ip, secret):
         logger.warning(f'CoA DM error for {username} on {nas_ip}: {exc}')
     finally:
         sock.close()
+
+
+def _openwrt_disconnect(username, nas_ip):
+    """
+    Disconnect a user from an OpenWrt/uspot router via SSH + ubus.
+    uspot doesn't listen for RADIUS DAS packets; it uses ubus instead.
+    """
+    import json
+    import shlex
+
+    ubus_args = json.dumps({
+        'uspot': 'captive',
+        'request': {'User-Name': username},
+    })
+    cmd = [
+        'ssh', '-o', 'StrictHostKeyChecking=no',
+        '-o', 'ConnectTimeout=5',
+        f'root@{nas_ip}',
+        f'ubus call uspot das_disconnect {shlex.quote(ubus_args)}',
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
+        if result.returncode == 0 and 'true' in result.stdout:
+            logger.info(f'OpenWrt disconnect: {username} evicted from {nas_ip}')
+        else:
+            logger.warning(
+                f'OpenWrt disconnect: {username} on {nas_ip} — '
+                f'rc={result.returncode} out={result.stdout.strip()}'
+            )
+    except Exception as e:
+        logger.warning(f'OpenWrt disconnect error for {username} on {nas_ip}: {e}')
 
 
 def remove_subscriber_from_radius(subscriber):

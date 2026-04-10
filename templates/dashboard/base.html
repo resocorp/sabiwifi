@@ -31,9 +31,21 @@
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'routers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">router</span> Routers
             </a>
+            <a href="{% url 'dashboard-online-users' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'online_users' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">wifi_tethering</span> Online Users
+            </a>
+            <a href="{% url 'dashboard-voucher-batches' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'vouchers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">confirmation_number</span> Vouchers
+            </a>
             <a href="{% url 'dashboard-broadcasts' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'broadcasts' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">campaign</span> Broadcasts
+            </a>
+            <a href="{% url 'dashboard-traffic-report' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'reports' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
             </a>
             <a href="{% url 'shop-home' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-surface-container"

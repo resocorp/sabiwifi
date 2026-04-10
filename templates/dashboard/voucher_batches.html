@@ -1,0 +1,63 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Vouchers — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='vouchers' %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-headline font-bold">Voucher Cards</h1>
+    <a href="{% url 'dashboard-voucher-batch-create' %}"
+       class="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+        + Generate Batch
+    </a>
+</div>
+
+<div class="space-y-3">
+    {% for batch in batches %}
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <div class="flex items-start justify-between mb-2">
+            <div>
+                <h3 class="font-headline font-semibold">{{ batch.name }}</h3>
+                <p class="text-sm text-on-surface-variant">{{ batch.plan.name }} &middot; {{ batch.plan.duration_display }}</p>
+            </div>
+            <span class="text-xs font-medium px-2 py-0.5 rounded-full {% if batch.status == 'active' %}bg-primary-container/30 text-on-primary-container{% else %}bg-surface-container text-on-surface-variant{% endif %}">
+                {{ batch.status|upper }}
+            </span>
+        </div>
+        <div class="flex items-center gap-4 text-sm text-on-surface-variant mt-2">
+            <span>{{ batch.total }} total</span>
+            <span class="text-primary font-medium">{{ batch.available }} available</span>
+            <span>{{ batch.used }} used</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-2">
+            Created {{ batch.created_at|date:"M j, Y" }}
+            {% if batch.validity_type == 'fixed_date' and batch.validity_fixed_date %}
+                &middot; Expires {{ batch.validity_fixed_date|date:"M j, Y" }}
+            {% elif batch.validity_days %}
+                &middot; {{ batch.validity_days }} days from activation
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-3 mt-3 pt-3 border-t border-surface-container">
+            <a href="{% url 'dashboard-voucher-batch-detail' batch.pk %}" class="text-sm text-primary hover:underline">View Cards</a>
+            <a href="{% url 'dashboard-voucher-batch-csv' batch.pk %}" class="text-sm text-on-surface-variant hover:text-primary">Export CSV</a>
+            <form method="post" action="{% url 'dashboard-voucher-batch-toggle' batch.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="text-sm {% if batch.status == 'active' %}text-on-surface-variant hover:text-error{% else %}text-primary hover:underline{% endif %}">
+                    {% if batch.status == 'active' %}Disable{% else %}Enable{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% empty %}
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-8 text-center">
+        <span class="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-3">confirmation_number</span>
+        <p class="text-on-surface-variant mb-4">No voucher batches yet. Generate your first batch to start selling prepaid cards.</p>
+        <a href="{% url 'dashboard-voucher-batch-create' %}" class="inline-block bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+            Generate First Batch
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+{% endwith %}
+{% endblock %}

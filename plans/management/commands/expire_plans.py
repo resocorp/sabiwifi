@@ -42,6 +42,40 @@ class Command(BaseCommand):
         for sub in expired:
             subscriber = sub.subscriber
             try:
+                # Check auto-renewal before expiring
+                if (sub.plan.allow_auto_renew and subscriber.auto_renew_enabled
+                        and not sub.plan.is_free):
+                    try:
+                        from billing.wallet import renew_plan_from_wallet
+                        new_sub = renew_plan_from_wallet(subscriber, sub.plan)
+                        if new_sub:
+                            sub.status = 'expired'
+                            sub.save(update_fields=['status', 'updated_at'])
+                            try:
+                                from notifications.notify import notify_subscriber
+                                notify_subscriber(subscriber, 'auto_renewal_success', {
+                                    'name': subscriber.phone,
+                                    'plan': sub.plan.name,
+                                })
+                            except Exception:
+                                pass
+                            logger.info(f'Auto-renewed: {subscriber.phone} plan={sub.plan.name}')
+                            ok += 1
+                            continue
+                        else:
+                            # Insufficient balance — notify and proceed with expiry
+                            try:
+                                from notifications.notify import notify_subscriber
+                                notify_subscriber(subscriber, 'auto_renewal_failed', {
+                                    'name': subscriber.phone,
+                                    'plan': sub.plan.name,
+                                    'link': f'https://app.sabiwifi.com/portal/account/?r={subscriber.reseller.slug}',
+                                })
+                            except Exception:
+                                pass
+                    except Exception as renew_exc:
+                        logger.warning(f'Auto-renewal failed for {subscriber.phone}: {renew_exc}')
+
                 # Mark expired first so concurrent login attempts see no active plan
                 sub.status = 'expired'
                 sub.save(update_fields=['status', 'updated_at'])

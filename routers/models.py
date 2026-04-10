@@ -23,6 +23,12 @@ class Router(models.Model):
         ('openwrt', 'OpenWrt'),
     ]
 
+    SERVICE_MODE_CHOICES = [
+        ('hotspot', 'Hotspot Only'),
+        ('pppoe', 'PPPoE Only'),
+        ('both', 'Hotspot + PPPoE'),
+    ]
+
     serial_number = models.CharField(max_length=50, unique=True)
     device_type = models.CharField(
         max_length=10, choices=DEVICE_TYPE_CHOICES, default='mikrotik',
@@ -33,6 +39,10 @@ class Router(models.Model):
         null=True, blank=True, related_name='routers'
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
+    service_mode = models.CharField(
+        max_length=10, choices=SERVICE_MODE_CHOICES, default='hotspot',
+        help_text='Hotspot (captive portal), PPPoE, or both.'
+    )
     location_name = models.CharField(max_length=200, blank=True, default='')
 
     # WireGuard

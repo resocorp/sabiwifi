@@ -111,6 +111,63 @@ def plans_list(request):
     })
 
 
+def _extract_plan_form_data(POST):
+    """Extract all plan fields from POST data."""
+    def _int(val, default=0):
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _decimal(val):
+        if not val:
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    data = {
+        'name': POST.get('name', '').strip(),
+        'download_mbps': POST.get('download_mbps', 5),
+        'upload_mbps': POST.get('upload_mbps', 5),
+        'duration_days': POST.get('duration_days', 30),
+        'duration_hours': POST.get('duration_hours', 0),
+        'data_cap_gb': _decimal(POST.get('data_cap_gb')),
+        'download_cap_gb': _decimal(POST.get('download_cap_gb')),
+        'upload_cap_gb': _decimal(POST.get('upload_cap_gb')),
+        'burst_download_mbps': _int(POST.get('burst_download_mbps')),
+        'burst_upload_mbps': _int(POST.get('burst_upload_mbps')),
+        'burst_threshold_download_mbps': _int(POST.get('burst_threshold_download_mbps')),
+        'burst_threshold_upload_mbps': _int(POST.get('burst_threshold_upload_mbps')),
+        'burst_time_seconds': _int(POST.get('burst_time_seconds')),
+        'priority': _int(POST.get('priority'), 8),
+        'online_time_limit_minutes': _int(POST.get('online_time_limit_minutes')),
+        'ip_pool_name': POST.get('ip_pool_name', '').strip(),
+        'daily_download_mb': _int(POST.get('daily_download_mb')),
+        'daily_upload_mb': _int(POST.get('daily_upload_mb')),
+        'daily_total_mb': _int(POST.get('daily_total_mb')),
+        'daily_time_minutes': _int(POST.get('daily_time_minutes')),
+        'max_devices': POST.get('max_devices', 1),
+        'price_ngn': POST.get('price_ngn', 0),
+        'allow_auto_renew': POST.get('allow_auto_renew') == 'on',
+    }
+
+    fallback = POST.get('fallback_plan')
+    if fallback:
+        data['fallback_plan'] = _int(fallback) or None
+    else:
+        data['fallback_plan'] = None
+
+    daily_fallback = POST.get('daily_fallback_plan')
+    if daily_fallback:
+        data['daily_fallback_plan'] = _int(daily_fallback) or None
+    else:
+        data['daily_fallback_plan'] = None
+
+    return data
+
+
 @login_required
 def plan_create(request):
     """Create a new service plan."""
@@ -124,16 +181,7 @@ def plan_create(request):
     if request.method == 'POST':
         from plans.serializers import ServicePlanSerializer
 
-        form_data = {
-            'name': request.POST.get('name', '').strip(),
-            'download_mbps': request.POST.get('download_mbps', 5),
-            'upload_mbps': request.POST.get('upload_mbps', 5),
-            'duration_days': request.POST.get('duration_days', 30),
-            'duration_hours': request.POST.get('duration_hours', 0),
-            'data_cap_gb': request.POST.get('data_cap_gb') or None,
-            'max_devices': request.POST.get('max_devices', 1),
-            'price_ngn': request.POST.get('price_ngn', 0),
-        }
+        form_data = _extract_plan_form_data(request.POST)
 
         # Build a mock request for serializer context
         class MockRequest:
@@ -151,11 +199,14 @@ def plan_create(request):
         else:
             errors = serializer.errors
 
+    fallback_plans = ServicePlan.objects.filter(reseller=reseller).order_by('name')
+
     return render(request, 'dashboard/plan_form.html', {
         'reseller': reseller,
         'errors': errors,
         'form_data': form_data,
         'is_edit': False,
+        'fallback_plans': fallback_plans,
     })
 
 
@@ -172,16 +223,7 @@ def plan_edit(request, pk):
     if request.method == 'POST':
         from plans.serializers import ServicePlanSerializer
 
-        form_data = {
-            'name': request.POST.get('name', '').strip(),
-            'download_mbps': request.POST.get('download_mbps', 5),
-            'upload_mbps': request.POST.get('upload_mbps', 5),
-            'duration_days': request.POST.get('duration_days', 30),
-            'duration_hours': request.POST.get('duration_hours', 0),
-            'data_cap_gb': request.POST.get('data_cap_gb') or None,
-            'max_devices': request.POST.get('max_devices', 1),
-            'price_ngn': request.POST.get('price_ngn', 0),
-        }
+        form_data = _extract_plan_form_data(request.POST)
 
         class MockRequest:
             def __init__(self, user):
@@ -198,6 +240,8 @@ def plan_edit(request, pk):
         else:
             errors = serializer.errors
 
+    fallback_plans = ServicePlan.objects.filter(reseller=reseller).exclude(pk=plan.pk).order_by('name')
+
     return render(request, 'dashboard/plan_form.html', {
         'reseller': reseller,
         'plan': plan,
@@ -209,9 +253,27 @@ def plan_edit(request, pk):
             'duration_days': plan.duration_days,
             'duration_hours': plan.duration_hours,
             'data_cap_gb': plan.data_cap_gb,
+            'download_cap_gb': plan.download_cap_gb,
+            'upload_cap_gb': plan.upload_cap_gb,
+            'burst_download_mbps': plan.burst_download_mbps,
+            'burst_upload_mbps': plan.burst_upload_mbps,
+            'burst_threshold_download_mbps': plan.burst_threshold_download_mbps,
+            'burst_threshold_upload_mbps': plan.burst_threshold_upload_mbps,
+            'burst_time_seconds': plan.burst_time_seconds,
+            'priority': plan.priority,
+            'online_time_limit_minutes': plan.online_time_limit_minutes,
+            'ip_pool_name': plan.ip_pool_name,
+            'fallback_plan': plan.fallback_plan_id,
+            'daily_fallback_plan': plan.daily_fallback_plan_id,
+            'daily_download_mb': plan.daily_download_mb,
+            'daily_upload_mb': plan.daily_upload_mb,
+            'daily_total_mb': plan.daily_total_mb,
+            'daily_time_minutes': plan.daily_time_minutes,
             'max_devices': plan.max_devices,
             'price_ngn': plan.price_ngn,
+            'allow_auto_renew': plan.allow_auto_renew,
         },
+        'fallback_plans': fallback_plans,
         'is_edit': True,
     })
 
@@ -368,7 +430,6 @@ def _handle_mikrotik_add(request, reseller, errors, logger):
     from routers.views import _generate_credentials
     from routers.wg_utils import add_peer, WireGuardError
     from django.core.cache import cache
-    from radius.models import Nas
     from django.contrib import messages
 
     serial = request.POST.get('serial_number', '').strip().upper()
@@ -394,14 +455,12 @@ def _handle_mikrotik_add(request, reseller, errors, logger):
     router.status = 'pending_provision'
     router.save()
 
-    Nas.objects.update_or_create(
+    from radius.utils import upsert_nas_and_reload
+    upsert_nas_and_reload(
         nasname=router.wg_tunnel_ip,
-        defaults={
-            'shortname': router.serial_number,
-            'type': 'other',
-            'secret': router.nas_secret,
-            'description': f'SabiWiFi router {router.serial_number}',
-        }
+        shortname=router.serial_number,
+        secret=router.nas_secret,
+        description=f'SabiWiFi router {router.serial_number}',
     )
 
     if router.wg_public_key:
@@ -432,7 +491,6 @@ def _handle_openwrt_add(request, reseller, errors, logger):
     from routers.serial_utils import is_valid_mac, normalize_mac
     from routers.views import _allocate_tunnel_ip
     from routers.wg_utils import add_peer, WireGuardError
-    from radius.models import Nas
 
     raw_mac = request.POST.get('mac_address', '').strip().upper().replace(':', '').replace('-', '')
     if not raw_mac:
@@ -470,15 +528,13 @@ def _handle_openwrt_add(request, reseller, errors, logger):
     router.status = 'pending_provision'
     router.save()
 
-    # FreeRADIUS NAS entry
-    Nas.objects.update_or_create(
+    # FreeRADIUS NAS entry + reload
+    from radius.utils import upsert_nas_and_reload
+    upsert_nas_and_reload(
         nasname=router.wg_tunnel_ip,
-        defaults={
-            'shortname': mac,
-            'type': 'other',
-            'secret': router.nas_secret,
-            'description': f'SabiWiFi OpenWrt {mac}',
-        }
+        shortname=mac,
+        secret=router.nas_secret,
+        description=f'SabiWiFi OpenWrt {mac}',
     )
 
     # Add WireGuard peer (pubkey saved by heartbeat)
@@ -679,3 +735,524 @@ def broadcasts_page(request):
         'reseller': reseller,
         'wa_connected': wa_connected,
     })
+
+
+# ── Voucher Management ──────────────────────────────────────────────
+
+@login_required
+def voucher_batches(request):
+    """List all voucher batches for this reseller."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import VoucherBatch
+    from django.db.models import Count, Q
+
+    batches = VoucherBatch.objects.filter(reseller=reseller).select_related('plan').annotate(
+        total=Count('vouchers'),
+        used=Count('vouchers', filter=~Q(vouchers__status='unused')),
+        available=Count('vouchers', filter=Q(vouchers__status='unused')),
+    ).order_by('-created_at')
+
+    return render(request, 'dashboard/voucher_batches.html', {
+        'reseller': reseller,
+        'batches': batches,
+        'active_tab': 'vouchers',
+    })
+
+
+@login_required
+def voucher_batch_create(request):
+    """Create a new voucher batch."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    plans = ServicePlan.objects.filter(reseller=reseller, is_active=True)
+
+    if request.method == 'POST':
+        from vouchers.models import VoucherBatch
+        from vouchers.utils import generate_voucher_batch
+
+        plan_id = request.POST.get('plan')
+        try:
+            plan = ServicePlan.objects.get(pk=plan_id, reseller=reseller)
+        except ServicePlan.DoesNotExist:
+            messages.error(request, 'Invalid plan selected.')
+            return render(request, 'dashboard/voucher_batch_form.html', {
+                'reseller': reseller, 'plans': plans, 'active_tab': 'vouchers',
+            })
+
+        quantity = int(request.POST.get('quantity', 10))
+        if quantity < 1 or quantity > 5000:
+            messages.error(request, 'Quantity must be between 1 and 5000.')
+            return render(request, 'dashboard/voucher_batch_form.html', {
+                'reseller': reseller, 'plans': plans, 'active_tab': 'vouchers',
+            })
+
+        batch = VoucherBatch.objects.create(
+            reseller=reseller,
+            plan=plan,
+            name=request.POST.get('name', f'{plan.name} batch'),
+            quantity=quantity,
+            pin_length=int(request.POST.get('pin_length', 8)),
+            prefix=request.POST.get('prefix', '').strip().upper(),
+            validity_type=request.POST.get('validity_type', 'from_activation'),
+            validity_days=int(request.POST.get('validity_days', 0)) or None,
+            validity_fixed_date=request.POST.get('validity_fixed_date') or None,
+            simultaneous_use=int(request.POST.get('simultaneous_use', 1)),
+        )
+        count = generate_voucher_batch(batch)
+        messages.success(request, f'Generated {count} vouchers.')
+        return redirect('dashboard-voucher-batch-detail', pk=batch.pk)
+
+    return render(request, 'dashboard/voucher_batch_form.html', {
+        'reseller': reseller,
+        'plans': plans,
+        'active_tab': 'vouchers',
+    })
+
+
+@login_required
+def voucher_batch_detail(request, pk):
+    """View vouchers in a batch."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import VoucherBatch
+    batch = get_object_or_404(VoucherBatch, pk=pk, reseller=reseller)
+    vouchers = batch.vouchers.select_related('subscriber').order_by('pin')
+
+    return render(request, 'dashboard/voucher_batch_detail.html', {
+        'reseller': reseller,
+        'batch': batch,
+        'vouchers': vouchers,
+        'active_tab': 'vouchers',
+    })
+
+
+@login_required
+def voucher_batch_export_csv(request, pk):
+    """Export voucher PINs as CSV for printing."""
+    import csv
+    from django.http import HttpResponse
+
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import VoucherBatch
+    batch = get_object_or_404(VoucherBatch, pk=pk, reseller=reseller)
+    vouchers = batch.vouchers.order_by('pin')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="vouchers-{batch.pk}.csv"'
+
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow(['id', 'pin', 'plan', 'status'])
+    for v in vouchers:
+        writer.writerow([v.pk, v.pin, v.plan.name, v.status])
+
+    return response
+
+
+@login_required
+def voucher_batch_toggle(request, pk):
+    """Disable or re-enable a voucher batch."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import VoucherBatch
+    batch = get_object_or_404(VoucherBatch, pk=pk, reseller=reseller)
+
+    if request.method == 'POST':
+        if batch.status == 'active':
+            batch.status = 'disabled'
+            batch.vouchers.filter(status='unused').update(status='disabled')
+            messages.success(request, f'Batch "{batch.name}" disabled. Unused vouchers revoked.')
+        else:
+            batch.status = 'active'
+            batch.vouchers.filter(status='disabled').update(status='unused')
+            messages.success(request, f'Batch "{batch.name}" re-enabled.')
+        batch.save(update_fields=['status'])
+
+    return redirect('dashboard-voucher-batches')
+
+
+# ── Refill Cards ─────────────────────────────────────────────────────
+
+@login_required
+def refill_batches(request):
+    """List all refill card batches."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import RefillCardBatch
+    from django.db.models import Count, Q
+
+    batches = RefillCardBatch.objects.filter(reseller=reseller).annotate(
+        total=Count('refill_cards'),
+        used=Count('refill_cards', filter=Q(refill_cards__status='used')),
+        available=Count('refill_cards', filter=Q(refill_cards__status='unused')),
+    ).order_by('-created_at')
+
+    return render(request, 'dashboard/refill_batches.html', {
+        'reseller': reseller,
+        'batches': batches,
+        'active_tab': 'vouchers',
+    })
+
+
+@login_required
+def refill_batch_create(request):
+    """Create a new refill card batch."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    if request.method == 'POST':
+        from vouchers.models import RefillCardBatch
+        from vouchers.utils import generate_refill_batch
+
+        quantity = int(request.POST.get('quantity', 10))
+        if quantity < 1 or quantity > 5000:
+            messages.error(request, 'Quantity must be between 1 and 5000.')
+            return redirect('dashboard-refill-batch-create')
+
+        value = request.POST.get('value_ngn', '0')
+        batch = RefillCardBatch.objects.create(
+            reseller=reseller,
+            name=request.POST.get('name', f'₦{value} refill batch'),
+            quantity=quantity,
+            value_ngn=value,
+            pin_length=int(request.POST.get('pin_length', 10)),
+            prefix=request.POST.get('prefix', '').strip().upper(),
+        )
+        count = generate_refill_batch(batch)
+        messages.success(request, f'Generated {count} refill cards.')
+        return redirect('dashboard-refill-batches')
+
+    return render(request, 'dashboard/refill_batch_form.html', {
+        'reseller': reseller,
+        'active_tab': 'vouchers',
+    })
+
+
+@login_required
+def refill_batch_export_csv(request, pk):
+    """Export refill card PINs as CSV."""
+    import csv
+    from django.http import HttpResponse
+
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from vouchers.models import RefillCardBatch
+    batch = get_object_or_404(RefillCardBatch, pk=pk, reseller=reseller)
+    cards = batch.refill_cards.order_by('pin')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="refill-cards-{batch.pk}.csv"'
+
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow(['id', 'pin', 'value_ngn', 'status'])
+    for c in cards:
+        writer.writerow([c.pk, c.pin, c.value_ngn, c.status])
+
+    return response
+
+
+# ── Online Users & Session Management ────────────────────────────────
+
+@login_required
+def online_users(request):
+    """Show currently connected users from radacct."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from radius.models import Radacct
+    from django.db import connection
+
+    # Efficient single query: join radacct with subscriber, filtered by reseller
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT ra.username, ra.nasipaddress, ra.acctstarttime,
+                   ra.acctsessiontime, ra.acctinputoctets, ra.acctoutputoctets,
+                   ra.framedipaddress, ra.acctsessionid, s.id as subscriber_id
+            FROM radacct ra
+            JOIN accounts_subscriber s ON s.phone = ra.username
+            WHERE ra.acctstoptime IS NULL
+              AND s.reseller_id = %s
+            ORDER BY ra.acctstarttime DESC
+        """, [reseller.pk])
+        columns = [col[0] for col in cursor.description]
+        sessions = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    # Map NAS IPs to router names
+    router_map = {}
+    if sessions:
+        nas_ips = {s['nasipaddress'] for s in sessions}
+        routers = Router.objects.filter(wg_tunnel_ip__in=nas_ips).values('wg_tunnel_ip', 'location_name', 'serial_number')
+        router_map = {r['wg_tunnel_ip']: r['location_name'] or r['serial_number'] for r in routers}
+
+    for s in sessions:
+        s['router_name'] = router_map.get(s['nasipaddress'], s['nasipaddress'])
+        # Format data for display
+        dl = s.get('acctoutputoctets') or 0
+        ul = s.get('acctinputoctets') or 0
+        total_mb = (dl + ul) / (1024 * 1024)
+        s['data_display'] = f'{total_mb:.1f} MB' if total_mb < 1024 else f'{total_mb / 1024:.2f} GB'
+        session_time = s.get('acctsessiontime') or 0
+        hours, remainder = divmod(session_time, 3600)
+        minutes, _ = divmod(remainder, 60)
+        s['time_display'] = f'{hours}h {minutes}m' if hours else f'{minutes}m'
+
+    return render(request, 'dashboard/online_users.html', {
+        'reseller': reseller,
+        'sessions': sessions,
+        'session_count': len(sessions),
+        'active_tab': 'online_users',
+    })
+
+
+@login_required
+def disconnect_user(request, pk):
+    """Manually disconnect a subscriber's sessions via CoA."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    subscriber = get_object_or_404(Subscriber, pk=pk, reseller=reseller)
+
+    if request.method == 'POST':
+        from radius.utils import disconnect_subscriber_sessions
+        disconnect_subscriber_sessions(subscriber)
+        messages.success(request, f'Disconnect sent for {subscriber.phone}.')
+
+    return redirect('dashboard-online-users')
+
+
+# ── Reports & Analytics ──────────────────────────────────────────────
+
+@login_required
+def traffic_report(request):
+    """Per-subscriber traffic usage report from radacct."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from django.db import connection
+    from datetime import timedelta
+
+    days = int(request.GET.get('days', 30))
+    since = timezone.now() - timedelta(days=days)
+
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT ra.username,
+                   SUM(ra.acctoutputoctets) as total_download,
+                   SUM(ra.acctinputoctets) as total_upload,
+                   SUM(ra.acctsessiontime) as total_time,
+                   COUNT(*) as total_sessions
+            FROM radacct ra
+            JOIN accounts_subscriber s ON s.phone = ra.username
+            WHERE s.reseller_id = %s AND ra.acctstarttime >= %s
+            GROUP BY ra.username
+            ORDER BY total_download DESC
+            LIMIT 100
+        """, [reseller.pk, since])
+        columns = [col[0] for col in cursor.description]
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    for r in rows:
+        dl = r.get('total_download') or 0
+        ul = r.get('total_upload') or 0
+        total_mb = (dl + ul) / (1024 * 1024)
+        r['data_display'] = f'{total_mb:.1f} MB' if total_mb < 1024 else f'{total_mb / 1024:.2f} GB'
+        r['dl_display'] = f'{dl / (1024 * 1024):.1f} MB'
+        r['ul_display'] = f'{ul / (1024 * 1024):.1f} MB'
+        t = r.get('total_time') or 0
+        hours = t // 3600
+        minutes = (t % 3600) // 60
+        r['time_display'] = f'{hours}h {minutes}m'
+
+    return render(request, 'dashboard/traffic_report.html', {
+        'reseller': reseller,
+        'rows': rows,
+        'days': days,
+        'active_tab': 'reports',
+    })
+
+
+@login_required
+def session_report(request):
+    """Session history from radacct."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from django.db import connection
+    from datetime import timedelta
+
+    phone = request.GET.get('phone', '')
+    days = int(request.GET.get('days', 7))
+    since = timezone.now() - timedelta(days=days)
+
+    params = [reseller.pk, since]
+    phone_filter = ''
+    if phone:
+        phone_filter = 'AND ra.username = %s'
+        params.append(phone)
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT ra.username, ra.nasipaddress, ra.acctstarttime, ra.acctstoptime,
+                   ra.acctsessiontime, ra.acctinputoctets, ra.acctoutputoctets,
+                   ra.framedipaddress, ra.acctterminatecause
+            FROM radacct ra
+            JOIN accounts_subscriber s ON s.phone = ra.username
+            WHERE s.reseller_id = %s AND ra.acctstarttime >= %s {phone_filter}
+            ORDER BY ra.acctstarttime DESC
+            LIMIT 200
+        """, params)
+        columns = [col[0] for col in cursor.description]
+        sessions = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    router_map = {}
+    if sessions:
+        nas_ips = {s['nasipaddress'] for s in sessions}
+        routers_qs = Router.objects.filter(wg_tunnel_ip__in=nas_ips).values('wg_tunnel_ip', 'location_name', 'serial_number')
+        router_map = {r['wg_tunnel_ip']: r['location_name'] or r['serial_number'] for r in routers_qs}
+
+    for s in sessions:
+        s['router_name'] = router_map.get(s['nasipaddress'], s['nasipaddress'] or '—')
+        dl = s.get('acctoutputoctets') or 0
+        ul = s.get('acctinputoctets') or 0
+        total_mb = (dl + ul) / (1024 * 1024)
+        s['data_display'] = f'{total_mb:.1f} MB' if total_mb < 1024 else f'{total_mb / 1024:.2f} GB'
+        t = s.get('acctsessiontime') or 0
+        hours = t // 3600
+        minutes = (t % 3600) // 60
+        s['time_display'] = f'{hours}h {minutes}m'
+
+    return render(request, 'dashboard/session_report.html', {
+        'reseller': reseller,
+        'sessions': sessions,
+        'phone': phone,
+        'days': days,
+        'active_tab': 'reports',
+    })
+
+
+@login_required
+def financial_report(request):
+    """Revenue report from Payment model."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    from datetime import timedelta
+
+    days = int(request.GET.get('days', 30))
+    since = timezone.now() - timedelta(days=days)
+
+    payments = Payment.objects.filter(
+        reseller=reseller,
+        paystack_status='success',
+        created_at__gte=since,
+    ).select_related('plan', 'subscriber')
+
+    total_revenue = payments.aggregate(total=Sum('amount_ngn'))['total'] or 0
+    total_earnings = payments.aggregate(total=Sum('reseller_amount_ngn'))['total'] or 0
+
+    # Per-plan breakdown
+    plan_breakdown = payments.values('plan__name').annotate(
+        count=Count('id'),
+        revenue=Sum('amount_ngn'),
+    ).order_by('-revenue')
+
+    # Per-method breakdown
+    method_breakdown = payments.values('payment_method').annotate(
+        count=Count('id'),
+        revenue=Sum('amount_ngn'),
+    ).order_by('-revenue')
+
+    return render(request, 'dashboard/financial_report.html', {
+        'reseller': reseller,
+        'payments': payments.order_by('-created_at')[:100],
+        'total_revenue': total_revenue,
+        'total_earnings': total_earnings,
+        'plan_breakdown': plan_breakdown,
+        'method_breakdown': method_breakdown,
+        'days': days,
+        'active_tab': 'reports',
+    })
+
+
+@login_required
+def report_csv_export(request, report_type):
+    """Export report data as CSV."""
+    import csv
+    from django.http import StreamingHttpResponse
+    from datetime import timedelta
+
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    days = int(request.GET.get('days', 30))
+    since = timezone.now() - timedelta(days=days)
+
+    if report_type == 'traffic':
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT ra.username,
+                       SUM(ra.acctoutputoctets) as download_bytes,
+                       SUM(ra.acctinputoctets) as upload_bytes,
+                       SUM(ra.acctsessiontime) as online_seconds,
+                       COUNT(*) as sessions
+                FROM radacct ra
+                JOIN accounts_subscriber s ON s.phone = ra.username
+                WHERE s.reseller_id = %s AND ra.acctstarttime >= %s
+                GROUP BY ra.username
+                ORDER BY download_bytes DESC
+            """, [reseller.pk, since])
+            rows = cursor.fetchall()
+
+        def generate():
+            yield 'username;download_bytes;upload_bytes;online_seconds;sessions\n'
+            for row in rows:
+                yield f'{row[0]};{row[1]};{row[2]};{row[3]};{row[4]}\n'
+
+        response = StreamingHttpResponse(generate(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="traffic-report-{days}d.csv"'
+        return response
+
+    elif report_type == 'financial':
+        payments = Payment.objects.filter(
+            reseller=reseller, paystack_status='success', created_at__gte=since,
+        ).select_related('plan', 'subscriber').order_by('-created_at')
+
+        def generate():
+            yield 'date;subscriber;plan;amount;method;reseller_amount;platform_amount\n'
+            for p in payments.iterator():
+                yield (
+                    f'{p.created_at.strftime("%Y-%m-%d %H:%M")};'
+                    f'{p.subscriber.phone};'
+                    f'{p.plan.name if p.plan else "N/A"};'
+                    f'{p.amount_ngn};{p.payment_method};'
+                    f'{p.reseller_amount_ngn};{p.platform_amount_ngn}\n'
+                )
+
+        response = StreamingHttpResponse(generate(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="financial-report-{days}d.csv"'
+        return response
+
+    return redirect('dashboard-overview')

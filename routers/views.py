@@ -4,7 +4,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from routers.models import Router
@@ -91,16 +91,13 @@ def router_add(request):
         except WireGuardError as e:
             logger.error(f"Failed to add WG peer for OpenWrt {serial}: {e}")
 
-        # Write NAS entry for FreeRADIUS
-        from radius.models import Nas
-        Nas.objects.update_or_create(
+        # Write NAS entry for FreeRADIUS and reload
+        from radius.utils import upsert_nas_and_reload
+        upsert_nas_and_reload(
             nasname=router.wg_tunnel_ip,
-            defaults={
-                'shortname': router.serial_number,
-                'type': 'other',
-                'secret': router.nas_secret,
-                'description': f'SabiWiFi OpenWrt {router.serial_number}',
-            }
+            shortname=router.serial_number,
+            secret=router.nas_secret,
+            description=f'SabiWiFi OpenWrt {router.serial_number}',
         )
 
         logger.info(f"OpenWrt {serial} assigned to reseller {reseller.name}, "
@@ -114,15 +111,12 @@ def router_add(request):
         router.status = 'pending_provision'
         router.save()
 
-        from radius.models import Nas
-        Nas.objects.update_or_create(
+        from radius.utils import upsert_nas_and_reload
+        upsert_nas_and_reload(
             nasname=router.wg_tunnel_ip,
-            defaults={
-                'shortname': router.serial_number,
-                'type': 'other',
-                'secret': router.nas_secret,
-                'description': f'SabiWiFi router {router.serial_number}',
-            }
+            shortname=router.serial_number,
+            secret=router.nas_secret,
+            description=f'SabiWiFi router {router.serial_number}',
         )
 
         try:
@@ -194,16 +188,13 @@ def router_provision(request, serial):
         wg_private_key = _generate_credentials(router)
         router.save()
 
-        # Update NAS entry for FreeRADIUS
-        from radius.models import Nas
-        Nas.objects.update_or_create(
+        # Update NAS entry for FreeRADIUS and reload
+        from radius.utils import upsert_nas_and_reload
+        upsert_nas_and_reload(
+            nasname=str(router.wg_tunnel_ip),
             shortname=router.serial_number,
-            defaults={
-                'nasname': str(router.wg_tunnel_ip),
-                'type': 'other',
-                'secret': router.nas_secret,
-                'description': f'SabiWiFi router {router.serial_number}',
-            }
+            secret=router.nas_secret,
+            description=f'SabiWiFi router {router.serial_number}',
         )
 
         # Add new WG peer
@@ -297,6 +288,10 @@ def router_heartbeat(request, serial):
         RouterHealthLog.objects.create(router=router, event='online')
         logger.info(f'Router {lookup_serial} recovered via heartbeat')
 
+    # Cache system stats from OpenWrt heartbeat query parameters
+    if device_type == 'openwrt' and request.GET.get('cpu') is not None:
+        _cache_openwrt_stats(request, router)
+
     # For OpenWrt devices needing provisioning: return the full provision script
     # inline in the heartbeat response. The heartbeat script on the router detects
     # "#!/bin/sh" and executes it. Script is idempotent so re-delivery is safe.
@@ -313,6 +308,67 @@ def router_heartbeat(request, serial):
         return HttpResponse(script, content_type='text/plain')
 
     return HttpResponse('# ok', content_type='text/plain')
+
+
+def _cache_openwrt_stats(request, router):
+    """Parse system stats from OpenWrt heartbeat query params and cache in Redis."""
+    from django.core.cache import cache
+
+    def _int(val, default=0):
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _fmt_bytes(nbytes):
+        nbytes = _int(nbytes)
+        for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+            if nbytes < 1024:
+                return f'{nbytes:.1f} {unit}' if unit != 'B' else f'{nbytes} B'
+            nbytes /= 1024
+        return f'{nbytes:.1f} PB'
+
+    uptime_secs = _int(request.GET.get('uptime'))
+    days = uptime_secs // 86400
+    hours = (uptime_secs % 86400) // 3600
+    mins = (uptime_secs % 3600) // 60
+    if days:
+        uptime_str = f'{days}d {hours}h'
+    elif hours:
+        uptime_str = f'{hours}h {mins}m'
+    else:
+        uptime_str = f'{mins}m'
+
+    stats = {
+        'cpu_load': _int(request.GET.get('cpu')),
+        'memory_pct': _int(request.GET.get('mem')),
+        'uptime': uptime_str or '--',
+        'connected_devices': _int(request.GET.get('wifi_clients')),
+        'wan_rx': _fmt_bytes(request.GET.get('wan_rx')),
+        'wan_tx': _fmt_bytes(request.GET.get('wan_tx')),
+        'wifi': [
+            {
+                'name': 'guest',
+                'band': '2.4 GHz',
+                'ssid': '',
+                'enabled': True,
+                'running': True,
+                'has_password': False,
+                'clients': _int(request.GET.get('guest_clients')),
+            },
+            {
+                'name': 'guest5',
+                'band': '5 GHz',
+                'ssid': '',
+                'enabled': True,
+                'running': True,
+                'has_password': False,
+                'clients': _int(request.GET.get('guest5_clients')),
+            },
+        ],
+    }
+
+    cache.set(f'openwrt_stats_{router.serial_number}', stats, timeout=300)
 
 
 @api_view(['GET'])
@@ -443,7 +499,7 @@ def router_stats(request, pk):
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     if router.device_type == 'openwrt':
-        return _router_stats_openwisp(router)
+        return _router_stats_openwrt(router)
 
     from routers.routeros_utils import get_router_stats as fetch_stats, RouterOSError
     try:
@@ -459,29 +515,35 @@ def router_stats(request, pk):
         )
 
 
-def _router_stats_openwisp(router):
-    """Fetch stats for an OpenWrt router from OpenWISP monitoring API."""
-    try:
-        from integrations.models import OpenWISPBinding
-        from integrations.openwisp import OpenWISPClient, OpenWISPError
-        binding = OpenWISPBinding.objects.filter(router=router).first()
-        if not binding:
-            return Response(
-                {'error': 'Router not yet registered in OpenWISP. Claim it first.'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        client = OpenWISPClient()
-        monitoring = client.get_device_monitoring(str(binding.openwisp_id))
-        stats = client.parse_metrics(monitoring)
-        stats['serial_number'] = router.serial_number
-        stats['router_status'] = router.status
-        return Response(stats)
-    except Exception as e:
-        logger.error(f"OpenWISP stats fetch failed for {router.serial_number}: {e}")
+def _router_stats_openwrt(router):
+    """Fetch stats for an OpenWrt router from heartbeat cache (Redis)."""
+    from django.core.cache import cache
+
+    stats = cache.get(f'openwrt_stats_{router.serial_number}')
+    if not stats:
         return Response(
-            {'error': f'Cannot reach OpenWISP monitoring: {e}'},
-            status=status.HTTP_502_BAD_GATEWAY,
+            {'error': 'No recent stats available. Router may not have reported yet.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+
+    # Populate WiFi SSIDs from reseller branding
+    wifi_ssid = 'SabiWiFi'
+    wifi_ssid_5g = 'SabiWiFi-5G'
+    if router.reseller and router.reseller.branding:
+        custom = router.reseller.branding.get('ssid', '')
+        if custom:
+            wifi_ssid = custom
+            wifi_ssid_5g = f'{custom}-5G'
+
+    for entry in stats.get('wifi', []):
+        if entry['band'] == '2.4 GHz':
+            entry['ssid'] = wifi_ssid
+        elif entry['band'] == '5 GHz':
+            entry['ssid'] = wifi_ssid_5g
+
+    stats['serial_number'] = router.serial_number
+    stats['router_status'] = router.status
+    return Response(stats)
 
 
 @api_view(['POST'])
@@ -596,6 +658,25 @@ def router_health_log(request, pk):
         for log in logs
     ]
     return Response({'logs': data})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def router_service_mode(request, pk):
+    """Update service mode (hotspot/pppoe/both) for a router."""
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    mode = request.data.get('service_mode', '')
+    if mode not in ('hotspot', 'pppoe', 'both'):
+        return Response({'error': 'Invalid service mode.'}, status=400)
+
+    router.service_mode = mode
+    router.save(update_fields=['service_mode'])
+    return Response({'status': f'Service mode set to {router.get_service_mode_display()}.'})
 
 
 # ── OpenWISP Webhook ────────────────────────────────────────────────────────
@@ -759,16 +840,13 @@ def openwrt_provision(request, mac):
             except WireGuardError as e:
                 logger.error(f"Failed to add WG peer for OpenWrt {mac}: {e}")
 
-        # Write NAS entry for FreeRADIUS
-        from radius.models import Nas
-        Nas.objects.update_or_create(
+        # Write NAS entry for FreeRADIUS and reload
+        from radius.utils import upsert_nas_and_reload
+        upsert_nas_and_reload(
             nasname=router.wg_tunnel_ip,
-            defaults={
-                'shortname': mac,
-                'type': 'other',
-                'secret': router.nas_secret,
-                'description': f'SabiWiFi OpenWrt {mac}',
-            }
+            shortname=mac,
+            secret=router.nas_secret,
+            description=f'SabiWiFi OpenWrt {mac}',
         )
 
     # Generate provision script

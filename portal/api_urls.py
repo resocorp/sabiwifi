@@ -16,4 +16,9 @@ urlpatterns = [
     path('disconnect/', views.portal_disconnect, name='api-portal-disconnect'),
     path('initiate-payment/', views.portal_initiate_payment, name='api-portal-initiate-payment'),
     path('initiate-signup-payment/', views.portal_initiate_signup_payment, name='api-portal-initiate-signup-payment'),
+    path('voucher-login/', views.portal_voucher_login, name='api-portal-voucher-login'),
+    path('voucher-status/', views.portal_voucher_status, name='api-portal-voucher-status'),
+    path('redeem-refill/', views.portal_redeem_refill, name='api-portal-redeem-refill'),
+    path('wallet/', views.portal_wallet_info, name='api-portal-wallet'),
+    path('wallet/purchase/', views.portal_purchase_from_wallet, name='api-portal-wallet-purchase'),
 ]

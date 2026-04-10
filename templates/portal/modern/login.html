@@ -88,6 +88,13 @@
             </div>
             {% endif %}
 
+            <!-- Login Tabs -->
+            <div class="tabs" style="display:flex;gap:0;margin-bottom:20px;background:var(--surface-container);border-radius:12px;padding:3px;">
+                <button type="button" onclick="switchTab('phone')" id="tab-phone" class="tab-btn" style="flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',-apple-system,sans-serif;cursor:pointer;background:var(--surface-container-lowest);color:var(--on-surface);transition:all 0.2s;">Phone + PIN</button>
+                <button type="button" onclick="switchTab('voucher')" id="tab-voucher" class="tab-btn" style="flex:1;padding:10px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',-apple-system,sans-serif;cursor:pointer;background:transparent;color:var(--on-surface-variant);transition:all 0.2s;">Voucher</button>
+            </div>
+
+            <!-- Phone + PIN form -->
             <div id="login-form">
                 <label>Phone Number</label>
                 <input type="tel" id="phone" placeholder="08066..." required inputmode="numeric">
@@ -96,6 +103,14 @@
                 <input type="password" id="pin" placeholder="----" maxlength="4" inputmode="numeric" required>
 
                 <button type="button" id="login-btn" class="btn btn-primary" onclick="doLogin()">Connect Now</button>
+            </div>
+
+            <!-- Voucher form -->
+            <div id="voucher-form" style="display:none;">
+                <label>Voucher Code</label>
+                <input type="text" id="voucher-pin" placeholder="Enter voucher PIN" inputmode="numeric" style="width:100%;padding:12px 14px;background:var(--surface-container-highest);border:none;border-radius:12px;font-size:14px;font-family:'Be Vietnam Pro',-apple-system,sans-serif;color:var(--on-surface);outline:none;margin-bottom:16px;transition:box-shadow 0.2s ease;letter-spacing:2px;text-align:center;">
+
+                <button type="button" id="voucher-btn" class="btn btn-primary" onclick="doVoucherLogin()">Activate &amp; Connect</button>
             </div>
 
             <p class="text-center mt-3 footer-links"><a href="/portal/account/?r={{ serial }}" class="link">Forgot PIN?</a><span class="link-separator">&middot;</span><a href="/portal/account/?r={{ serial }}" class="link">My Account</a></p>
@@ -246,6 +261,66 @@
     document.getElementById('pin').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') doLogin();
     });
+    document.getElementById('voucher-pin').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') doVoucherLogin();
+    });
+
+    function switchTab(tab) {
+        document.getElementById('login-form').style.display = tab === 'phone' ? '' : 'none';
+        document.getElementById('voucher-form').style.display = tab === 'voucher' ? '' : 'none';
+        document.getElementById('tab-phone').style.background = tab === 'phone' ? 'var(--surface-container-lowest)' : 'transparent';
+        document.getElementById('tab-phone').style.color = tab === 'phone' ? 'var(--on-surface)' : 'var(--on-surface-variant)';
+        document.getElementById('tab-voucher').style.background = tab === 'voucher' ? 'var(--surface-container-lowest)' : 'transparent';
+        document.getElementById('tab-voucher').style.color = tab === 'voucher' ? 'var(--on-surface)' : 'var(--on-surface-variant)';
+        document.getElementById('msg').style.display = 'none';
+    }
+
+    function doVoucherLogin() {
+        const pin = document.getElementById('voucher-pin').value.trim();
+        const btn = document.getElementById('voucher-btn');
+        if (!pin) { showMsg('Please enter your voucher code.', 'error'); return; }
+        btn.disabled = true; btn.textContent = 'Activating...';
+
+        fetch('/api/portal/voucher-login/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin: pin, serial: serial}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (ok) {
+                if (data.auth_token) localStorage.setItem('sabiwifi_token', data.auth_token);
+                showMsg('Voucher activated! Connecting...', 'success');
+
+                if (uamMode && uamLogonUrl) {
+                    const logonUrl = uamLogonUrl
+                        + '?username=' + encodeURIComponent(data.phone || pin)
+                        + '&password=' + encodeURIComponent(data.auth_token || '');
+                    window.location.href = logonUrl;
+                } else if (linkLogin) {
+                    const connectedUrl = window.location.protocol + '//' + window.location.host
+                        + '/portal/connected/?r=' + encodeURIComponent(serial)
+                        + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
+                    const form = document.getElementById('hotspot-form');
+                    document.getElementById('hs-username').value = data.phone || pin;
+                    document.getElementById('hs-password').value = data.auth_token || '';
+                    document.getElementById('hs-dst').value = connectedUrl;
+                    form.action = linkLogin;
+                    form.submit();
+                } else {
+                    showMsg('Connected! You can now use the internet.', 'success');
+                    btn.disabled = false; btn.textContent = 'Activate & Connect';
+                }
+            } else {
+                btn.disabled = false; btn.textContent = 'Activate & Connect';
+                showMsg(data.error || 'Voucher activation failed.', 'error');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false; btn.textContent = 'Activate & Connect';
+            showMsg('Network error. Please try again.', 'error');
+        });
+    }
     </script>
 </body>
 </html>

@@ -1,0 +1,84 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ batch.name }} — Vouchers{% endblock %}
+
+{% block content %}
+{% with active_tab='vouchers' %}
+
+<div class="mb-6">
+    <a href="{% url 'dashboard-voucher-batches' %}" class="text-sm text-primary hover:underline">&larr; Back to Vouchers</a>
+    <div class="flex items-center justify-between mt-2">
+        <div>
+            <h1 class="text-xl font-headline font-bold">{{ batch.name }}</h1>
+            <p class="text-sm text-on-surface-variant">{{ batch.plan.name }} &middot; {{ batch.plan.duration_display }} &middot; {% if batch.plan.is_free %}Free{% else %}₦{{ batch.plan.price_ngn|floatformat:0 }}{% endif %}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'dashboard-voucher-batch-csv' batch.pk %}"
+               class="bg-surface-container text-on-surface px-4 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-highest transition">
+                Export CSV
+            </a>
+            <form method="post" action="{% url 'dashboard-voucher-batch-toggle' batch.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium {% if batch.status == 'active' %}bg-error-container/20 text-on-error-container hover:bg-error-container/40{% else %}bg-primary text-on-primary hover:bg-primary-dim{% endif %} transition">
+                    {% if batch.status == 'active' %}Disable Batch{% else %}Enable Batch{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 text-center">
+        <div class="text-2xl font-mono font-bold">{{ batch.quantity }}</div>
+        <div class="text-xs text-on-surface-variant">Total</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 text-center">
+        <div class="text-2xl font-mono font-bold text-primary">{{ batch.vouchers_available }}</div>
+        <div class="text-xs text-on-surface-variant">Available</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 text-center">
+        <div class="text-2xl font-mono font-bold">{{ batch.vouchers_used }}</div>
+        <div class="text-xs text-on-surface-variant">Used</div>
+    </div>
+</div>
+
+<!-- Voucher Table -->
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-surface-container-low text-on-surface-variant text-xs uppercase">
+                    <th class="px-4 py-3 text-left font-medium">PIN</th>
+                    <th class="px-4 py-3 text-left font-medium">Status</th>
+                    <th class="px-4 py-3 text-left font-medium">Activated</th>
+                    <th class="px-4 py-3 text-left font-medium">Expires</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-container">
+                {% for v in vouchers %}
+                <tr class="hover:bg-surface-container-low/50">
+                    <td class="px-4 py-3 font-mono font-medium">{{ v.pin }}</td>
+                    <td class="px-4 py-3">
+                        <span class="text-xs font-medium px-2 py-0.5 rounded-full
+                            {% if v.status == 'unused' %}bg-surface-container text-on-surface-variant
+                            {% elif v.status == 'active' %}bg-primary-container/30 text-on-primary-container
+                            {% elif v.status == 'expired' %}bg-error-container/20 text-on-error-container
+                            {% else %}bg-surface-container text-on-surface-variant{% endif %}">
+                            {{ v.status|upper }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-on-surface-variant">
+                        {% if v.activated_at %}{{ v.activated_at|date:"M j, Y H:i" }}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-on-surface-variant">
+                        {% if v.expires_at %}{{ v.expires_at|date:"M j, Y H:i" }}{% else %}&mdash;{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endwith %}
+{% endblock %}

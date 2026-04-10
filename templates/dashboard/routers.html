@@ -27,7 +27,7 @@
 
 <div class="space-y-3">
     {% for router in routers %}
-    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden" id="router-card-{{ router.pk }}">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden" id="router-card-{{ router.pk }}" data-device-type="{{ router.device_type }}">
         <!-- Card Header (always visible, clickable to expand) -->
         <div class="p-4 cursor-pointer hover:bg-surface-container-low transition"
              onclick="toggleRouter({{ router.pk }})">
@@ -116,6 +116,33 @@
                 <div class="px-4 pb-2" id="wifi-section-{{ router.pk }}">
                     <!-- Populated by JS -->
                 </div>
+
+                <!-- Service Mode (MikroTik only) -->
+                {% if router.device_type != 'openwrt' %}
+                <div class="px-4 pb-3">
+                    <div class="bg-surface-container-low rounded-lg p-3">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-on-surface-variant font-medium mb-1">Service Mode</p>
+                                <p class="text-sm font-medium" id="mode-label-{{ router.pk }}">{{ router.get_service_mode_display }}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <select id="mode-select-{{ router.pk }}" class="px-2 py-1.5 text-sm bg-surface-container-highest rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40">
+                                    <option value="hotspot" {% if router.service_mode == 'hotspot' %}selected{% endif %}>Hotspot</option>
+                                    <option value="pppoe" {% if router.service_mode == 'pppoe' %}selected{% endif %}>PPPoE</option>
+                                    <option value="both" {% if router.service_mode == 'both' %}selected{% endif %}>Both</option>
+                                </select>
+                                <button onclick="saveServiceMode({{ router.pk }})"
+                                        id="mode-btn-{{ router.pk }}"
+                                        class="px-3 py-1.5 bg-primary text-on-primary text-xs rounded-lg hover:bg-primary-dim transition">
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                        <p id="mode-msg-{{ router.pk }}" class="text-xs mt-1 hidden"></p>
+                    </div>
+                </div>
+                {% endif %}
 
                 <!-- Health Log -->
                 <div class="px-4 pb-4">
@@ -262,6 +289,10 @@ function renderWifi(pk, wifiList) {
         return;
     }
 
+    const card = document.getElementById('router-card-' + pk);
+    const deviceType = card ? card.dataset.deviceType : 'mikrotik';
+    const isOpenWrt = deviceType === 'openwrt';
+
     let html = '<p class="text-xs text-on-surface-variant font-medium mb-2">WiFi Interfaces</p>';
 
     wifiList.forEach((wifi, idx) => {
@@ -271,6 +302,15 @@ function renderWifi(pk, wifiList) {
         const statusText = wifi.running ? 'Active' : (wifi.enabled ? 'Enabled' : 'Disabled');
         const lockIcon = wifi.has_password ? '&#128274;' : '&#128275;';
         const secText = wifi.has_password ? 'WPA2/3' : 'Open';
+
+        const passwordField = isOpenWrt ? '' : `
+                <div class="flex-1">
+                    <label class="text-xs text-on-surface-variant">Password</label>
+                    <input type="text" id="pass-${pk}-${wifi.name}" value=""
+                           class="w-full px-2 py-1.5 text-sm bg-surface-container-highest rounded-lg"
+                           placeholder="${wifi.has_password ? 'Change password' : 'Set password (min 8 chars)'}"
+                           minlength="8" maxlength="63">
+                </div>`;
 
         html += `
         <div class="bg-surface-container-low rounded-lg p-3 mb-2">
@@ -292,13 +332,7 @@ function renderWifi(pk, wifiList) {
                            class="w-full px-2 py-1.5 text-sm bg-surface-container-highest rounded-lg"
                            placeholder="Network name" maxlength="32">
                 </div>
-                <div class="flex-1">
-                    <label class="text-xs text-on-surface-variant">Password</label>
-                    <input type="text" id="pass-${pk}-${wifi.name}" value=""
-                           class="w-full px-2 py-1.5 text-sm bg-surface-container-highest rounded-lg"
-                           placeholder="${wifi.has_password ? 'Change password' : 'Set password (min 8 chars)'}"
-                           minlength="8" maxlength="63">
-                </div>
+                ${passwordField}
                 <div class="flex items-end">
                     <button onclick="saveWifi(${pk}, '${wifi.name}')"
                             id="save-btn-${pk}-${wifi.name}"
@@ -356,6 +390,44 @@ function saveWifi(pk, ifaceName) {
             passEl.value = '';
             // Refresh stats to show new SSID
             setTimeout(() => fetchStats(pk), 500);
+        } else {
+            showMsg(msg, data.error || 'Update failed.', 'text-error');
+        }
+    })
+    .catch(err => {
+        showMsg(msg, 'Network error: ' + err.message, 'text-error');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+    });
+}
+
+function saveServiceMode(pk) {
+    const select = document.getElementById('mode-select-' + pk);
+    const btn = document.getElementById('mode-btn-' + pk);
+    const msg = document.getElementById('mode-msg-' + pk);
+    const label = document.getElementById('mode-label-' + pk);
+    const mode = select.value;
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    fetch('/api/routers/' + pk + '/service-mode/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({service_mode: mode}),
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (ok) {
+            const labels = {hotspot: 'Hotspot', pppoe: 'PPPoE', both: 'Both'};
+            label.textContent = labels[mode] || mode;
+            showMsg(msg, data.status || 'Service mode updated!', 'text-primary');
         } else {
             showMsg(msg, data.error || 'Update failed.', 'text-error');
         }

@@ -120,9 +120,10 @@
 
     function renderInfo(data) {
         const s = data.subscription;
+        const isVoucher = /^\d{4,8}$/.test(data.phone);
         let html = `
             <div class="info-row">
-                <span class="info-label">Phone</span>
+                <span class="info-label">${isVoucher ? 'Voucher' : 'Phone'}</span>
                 <span class="info-value">${data.phone || '—'}</span>
             </div>`;
         if (s) {

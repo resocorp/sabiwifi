@@ -14,4 +14,26 @@ urlpatterns = [
     path('routers/add/', views.router_add, name='dashboard-router-add'),
     path('settings/', views.settings_page, name='dashboard-settings'),
     path('broadcasts/', views.broadcasts_page, name='dashboard-broadcasts'),
+
+    # Vouchers
+    path('vouchers/', views.voucher_batches, name='dashboard-voucher-batches'),
+    path('vouchers/create/', views.voucher_batch_create, name='dashboard-voucher-batch-create'),
+    path('vouchers/<int:pk>/', views.voucher_batch_detail, name='dashboard-voucher-batch-detail'),
+    path('vouchers/<int:pk>/csv/', views.voucher_batch_export_csv, name='dashboard-voucher-batch-csv'),
+    path('vouchers/<int:pk>/toggle/', views.voucher_batch_toggle, name='dashboard-voucher-batch-toggle'),
+
+    # Refill Cards
+    path('refill-cards/', views.refill_batches, name='dashboard-refill-batches'),
+    path('refill-cards/create/', views.refill_batch_create, name='dashboard-refill-batch-create'),
+    path('refill-cards/<int:pk>/csv/', views.refill_batch_export_csv, name='dashboard-refill-batch-csv'),
+
+    # Online Users
+    path('online-users/', views.online_users, name='dashboard-online-users'),
+    path('online-users/<int:pk>/disconnect/', views.disconnect_user, name='dashboard-disconnect-user'),
+
+    # Reports
+    path('reports/traffic/', views.traffic_report, name='dashboard-traffic-report'),
+    path('reports/sessions/', views.session_report, name='dashboard-session-report'),
+    path('reports/financial/', views.financial_report, name='dashboard-financial-report'),
+    path('reports/export/<str:report_type>/', views.report_csv_export, name='dashboard-report-csv'),
 ]

@@ -42,6 +42,8 @@ INCLUDE_PACKAGES = [
     'luci',                  # Web GUI — kept for dev/testing, strip for production
     'uspot',
     'uspot-www',             # HTML templates + CSS for captive portal pages
+    'uspotfilter',           # nftables firewall interface for uspot
+    'ratelimit',             # Per-client bandwidth limiting (HTB shaper)
     'curl',
     'ca-certificates',       # Required for HTTPS (heartbeat)
 ]
@@ -311,8 +313,8 @@ logger -t sabiwifi "First boot complete. Waiting for provisioning via heartbeat.
             f.write(f"""\
 #!/bin/sh
 # SabiWiFi heartbeat — runs every 2 min via cron.
-# Sends MAC + WG pubkey to server. If server returns a provision script
-# (starts with #!/bin/sh), executes it to configure the captive portal.
+# Sends MAC + WG pubkey + system stats to server. If server returns a
+# provision script (starts with #!/bin/sh), executes it.
 
 MAC=""
 for IFACE in eth0 br-lan eth1; do
@@ -326,9 +328,61 @@ done
 WG_PUB=""
 [ -f /etc/sabiwifi/wg_public.key ] && WG_PUB=$(cat /etc/sabiwifi/wg_public.key)
 
+# ── Collect system stats ──
+
+# CPU: sample /proc/stat twice with 1s gap
+read_cpu() {{ awk '/^cpu / {{print $2+$3+$4+$5+$6+$7+$8, $5}}' /proc/stat; }}
+CPU1=$(read_cpu)
+sleep 1
+CPU2=$(read_cpu)
+CPU_PCT=$(echo "$CPU1 $CPU2" | awk '{{
+    td=$3-$1; id=$4-$2;
+    if(td>0) printf "%d",100*(td-id)/td; else print "0"
+}}')
+
+# Memory
+MEM_TOTAL=$(awk '/^MemTotal/ {{print $2}}' /proc/meminfo)
+MEM_AVAIL=$(awk '/^MemAvailable/ {{print $2}}' /proc/meminfo)
+[ -z "$MEM_AVAIL" ] && MEM_AVAIL=$(awk '/^MemFree/ {{print $2}}' /proc/meminfo)
+if [ "$MEM_TOTAL" -gt 0 ] 2>/dev/null; then
+    MEM_PCT=$(( (MEM_TOTAL - MEM_AVAIL) * 100 / MEM_TOTAL ))
+else
+    MEM_PCT=0
+fi
+
+# Uptime (seconds)
+UPTIME=$(awk '{{printf "%d", $1}}' /proc/uptime)
+
+# WiFi clients per interface
+WIFI_CLIENTS=0
+GUEST_CLIENTS=0
+GUEST5_CLIENTS=0
+for WDEV in $(iw dev 2>/dev/null | awk '/Interface/{{print $2}}'); do
+    COUNT=$(iw dev "$WDEV" station dump 2>/dev/null | grep -c "^Station")
+    WIFI_CLIENTS=$((WIFI_CLIENTS + COUNT))
+    SSID=$(iwinfo "$WDEV" info 2>/dev/null | awk -F'"' '/ESSID/{{print $2}}')
+    case "$SSID" in
+        *-5G) GUEST5_CLIENTS=$COUNT ;;
+        *)    GUEST_CLIENTS=$COUNT ;;
+    esac
+done
+
+# DHCP leases
+DHCP_LEASES=0
+[ -f /tmp/dhcp.leases ] && DHCP_LEASES=$(wc -l < /tmp/dhcp.leases)
+
+# WAN traffic
+WAN_RX=$(cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null || echo 0)
+WAN_TX=$(cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null || echo 0)
+
+# ── Send heartbeat with stats ──
+STATS="cpu=$CPU_PCT&mem=$MEM_PCT&uptime=$UPTIME&wifi_clients=$WIFI_CLIENTS"
+STATS="$STATS&guest_clients=$GUEST_CLIENTS&guest5_clients=$GUEST5_CLIENTS"
+STATS="$STATS&dhcp_leases=$DHCP_LEASES&wan_rx=$WAN_RX&wan_tx=$WAN_TX"
+
 RESPONSE=$(curl -sf --max-time 10 \\
     -H "X-WG-Public-Key: $WG_PUB" \\
-    "https://{platform_domain}/api/routers/heartbeat/$MAC/")
+    "https://{platform_domain}/api/routers/heartbeat/$MAC/?$STATS")
 [ $? -ne 0 ] && exit 1
 
 # Server returns provision script inline when device needs provisioning
@@ -339,7 +393,6 @@ if echo "$RESPONSE" | head -1 | grep -q "^#!/bin/sh"; then
     /bin/sh /tmp/sabiwifi-provision.sh >> /tmp/sabiwifi-provision.log 2>&1
     RESULT=$?
     logger -t sabiwifi "heartbeat: provision script finished (exit=$RESULT)"
-    # Keep log for debugging, remove script
     rm -f /tmp/sabiwifi-provision.sh
 fi
 """)

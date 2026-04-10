@@ -75,7 +75,7 @@ PROVISION_TEMPLATE = """\
 
 # --- 8. RADIUS (auth via WireGuard tunnel to server) ---
 :do {{ /radius remove [find comment="sabiwifi"] }} on-error={{}}
-/radius add service=hotspot address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
+/radius add service={radius_services} address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
 # --- 9. Hotspot server profile + server (RouterOS v7 syntax) ---
 /ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
@@ -108,6 +108,7 @@ PROVISION_TEMPLATE = """\
 :do {{ /interface/bridge/port remove [find interface=wifi2] }} on-error={{}}
 :do {{ /interface/bridge/port add bridge=hotspot-br interface=wifi2 }} on-error={{}}
 
+{pppoe_block}
 # --- 11. Firewall ---
 :do {{ /ip firewall filter add chain=input protocol=udp dst-port=51820 action=accept comment="SabiWiFi WireGuard" }} on-error={{}}
 :do {{ /ip firewall filter add chain=input in-interface=wg0 action=accept comment="SabiWiFi WG management" }} on-error={{}}
@@ -141,6 +142,27 @@ def generate_provision_rsc(router, wg_private_key):
             wifi_ssid = custom_ssid
             wifi_ssid_5g = f'{custom_ssid}-5G'
 
+    # RADIUS services based on router service_mode
+    mode = getattr(router, 'service_mode', 'hotspot')
+    if mode == 'pppoe':
+        radius_services = 'ppp'
+    elif mode == 'both':
+        radius_services = 'hotspot,ppp'
+    else:
+        radius_services = 'hotspot'
+
+    # PPPoE server block (only when PPPoE is enabled)
+    pppoe_block = ''
+    if mode in ('pppoe', 'both'):
+        pppoe_service_name = wifi_ssid.replace(' ', '-') + '-PPPoE' if wifi_ssid else 'SabiWiFi-PPPoE'
+        pppoe_block = f"""
+# --- 10b. PPPoE Server ---
+/ppp profile set default use-radius=yes only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1
+:do {{{{ /ip pool add name=pppoe-pool ranges=10.9.0.2-10.9.255.254 }}}} on-error={{{{}}}}
+/ppp profile set default local-address=10.9.0.1 remote-address=pppoe-pool
+:do {{{{ /interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=default one-session-per-host=yes max-sessions=200 }}}} on-error={{{{}}}}
+"""
+
     return PROVISION_TEMPLATE.format(
         serial_number=router.serial_number,
         timestamp=timezone.now().isoformat(),
@@ -154,4 +176,6 @@ def generate_provision_rsc(router, wg_private_key):
         nas_secret=router.nas_secret,
         wifi_ssid=wifi_ssid,
         wifi_ssid_5g=wifi_ssid_5g,
+        radius_services=radius_services,
+        pppoe_block=pppoe_block,
     )

@@ -24,10 +24,75 @@ class ServicePlan(models.Model):
         help_text="Duration in hours (e.g. 0.50 for 30 min). Used when duration_days=0."
     )
 
-    # Data cap
+    # Data caps
     data_cap_gb = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
-        help_text="Data cap in GB. Null = unlimited."
+        help_text="Total data cap in GB. Null = unlimited."
+    )
+    download_cap_gb = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Download-only cap in GB. Null = unlimited."
+    )
+    upload_cap_gb = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Upload-only cap in GB. Null = unlimited."
+    )
+
+    # Burst (MikroTik)
+    burst_download_mbps = models.PositiveIntegerField(
+        default=0, help_text="Burst download speed in Mbps (0=disabled)"
+    )
+    burst_upload_mbps = models.PositiveIntegerField(
+        default=0, help_text="Burst upload speed in Mbps (0=disabled)"
+    )
+    burst_threshold_download_mbps = models.PositiveIntegerField(
+        default=0, help_text="Burst threshold download (0=use base speed)"
+    )
+    burst_threshold_upload_mbps = models.PositiveIntegerField(
+        default=0, help_text="Burst threshold upload (0=use base speed)"
+    )
+    burst_time_seconds = models.PositiveIntegerField(
+        default=0, help_text="Burst duration in seconds"
+    )
+    priority = models.PositiveIntegerField(
+        default=8, help_text="Queue priority 1(highest) to 8(lowest)"
+    )
+
+    # Cumulative online time limit
+    online_time_limit_minutes = models.PositiveIntegerField(
+        default=0, help_text="Total online minutes allowed across sessions (0=unlimited)"
+    )
+
+    # IP Pool
+    ip_pool_name = models.CharField(
+        max_length=64, blank=True, default='',
+        help_text="MikroTik IP pool name to assign to this plan's subscribers"
+    )
+
+    # Fallback plan (throttle instead of disconnect when cap reached)
+    fallback_plan = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='fallback_for',
+        help_text="Plan activated when data/time limit reached (instead of disconnect)"
+    )
+
+    # Daily quotas
+    daily_download_mb = models.PositiveIntegerField(
+        default=0, help_text="Daily download quota in MB (0=unlimited)"
+    )
+    daily_upload_mb = models.PositiveIntegerField(
+        default=0, help_text="Daily upload quota in MB (0=unlimited)"
+    )
+    daily_total_mb = models.PositiveIntegerField(
+        default=0, help_text="Daily total traffic quota in MB (0=unlimited)"
+    )
+    daily_time_minutes = models.PositiveIntegerField(
+        default=0, help_text="Daily online time quota in minutes (0=unlimited)"
+    )
+    daily_fallback_plan = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='daily_fallback_for',
+        help_text="Plan activated when daily quota exceeded"
     )
 
     # Devices
@@ -46,6 +111,7 @@ class ServicePlan(models.Model):
         help_text="Auto-created by the system (e.g. default Free Trial). Prevents duplicate auto-creation."
     )
     is_active = models.BooleanField(default=True, help_text="Whether this plan is available to subscribers")
+    allow_auto_renew = models.BooleanField(default=True, help_text="Allow wallet-based auto-renewal on expiry")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -99,9 +165,28 @@ class ServicePlan(models.Model):
 
     @property
     def mikrotik_rate_limit(self):
-        """MikroTik rate limit string: upload/download format."""
+        """
+        MikroTik rate limit string.
+        Simple: upload/download (e.g. '2048k/10240k')
+        Burst:  rx/tx rx-burst/tx-burst rx-thresh/tx-thresh bt/bt priority
+        """
         up_k = self.upload_mbps * 1024
         down_k = self.download_mbps * 1024
+
+        if self.burst_download_mbps and self.burst_upload_mbps:
+            b_up_k = self.burst_upload_mbps * 1024
+            b_down_k = self.burst_download_mbps * 1024
+            t_up_k = (self.burst_threshold_upload_mbps or self.upload_mbps) * 1024
+            t_down_k = (self.burst_threshold_download_mbps or self.download_mbps) * 1024
+            bt = self.burst_time_seconds or 10
+            return (
+                f'{up_k}k/{down_k}k '
+                f'{b_up_k}k/{b_down_k}k '
+                f'{t_up_k}k/{t_down_k}k '
+                f'{bt}/{bt} '
+                f'{self.priority}'
+            )
+
         return f'{up_k}k/{down_k}k'
 
     @property
@@ -122,6 +207,7 @@ class Subscription(models.Model):
         ('active', 'Active'),
         ('expired', 'Expired'),
         ('cancelled', 'Cancelled'),
+        ('limited', 'Limited'),  # On fallback plan due to cap/quota
     ]
 
     subscriber = models.ForeignKey(
@@ -145,3 +231,31 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f'{self.subscriber.phone} → {self.plan.name} ({self.status})'
+
+
+class DailyUsageSnapshot(models.Model):
+    """
+    Daily traffic/time usage per subscriber.
+    Used for daily quota enforcement and traffic reports.
+    Populated by check_usage command and nightly aggregation.
+    """
+    subscriber = models.ForeignKey(
+        'accounts.Subscriber', on_delete=models.CASCADE, related_name='daily_usage'
+    )
+    date = models.DateField()
+    download_bytes = models.BigIntegerField(default=0)
+    upload_bytes = models.BigIntegerField(default=0)
+    online_seconds = models.IntegerField(default=0)
+    sessions = models.IntegerField(default=0)
+    quota_exceeded = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ['subscriber', 'date']
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['date']),
+        ]
+
+    def __str__(self):
+        total_mb = (self.download_bytes + self.upload_bytes) / (1024 * 1024)
+        return f'{self.subscriber.phone} {self.date} — {total_mb:.1f} MB'

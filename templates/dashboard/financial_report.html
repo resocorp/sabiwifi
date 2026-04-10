@@ -1,0 +1,102 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Financial Report — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='reports' %}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-xl font-headline font-bold">Financial Report</h1>
+        <div class="flex gap-3 mt-2 text-sm">
+            <a href="{% url 'dashboard-traffic-report' %}" class="text-on-surface-variant hover:text-primary">Traffic</a>
+            <a href="{% url 'dashboard-session-report' %}" class="text-on-surface-variant hover:text-primary">Sessions</a>
+            <span class="text-primary font-medium border-b-2 border-primary pb-0.5">Financial</span>
+        </div>
+    </div>
+    <div class="flex items-center gap-2">
+        <select onchange="window.location='?days='+this.value" class="bg-surface-container-highest rounded-lg px-3 py-2 text-sm border-0 outline-none">
+            <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+            <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+            <option value="90" {% if days == 90 %}selected{% endif %}>90 days</option>
+        </select>
+        <a href="{% url 'dashboard-report-csv' 'financial' %}?days={{ days }}"
+           class="bg-surface-container text-on-surface px-3 py-2 rounded-lg text-sm font-medium hover:bg-surface-container-highest transition">
+            Export CSV
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-2 gap-3 mb-6">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <div class="text-xs text-on-surface-variant mb-1">Total Revenue</div>
+        <div class="text-2xl font-mono font-bold">₦{{ total_revenue|floatformat:0 }}</div>
+    </div>
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <div class="text-xs text-on-surface-variant mb-1">Your Earnings</div>
+        <div class="text-2xl font-mono font-bold text-primary">₦{{ total_earnings|floatformat:0 }}</div>
+    </div>
+</div>
+
+<!-- Plan Breakdown -->
+{% if plan_breakdown %}
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-4">
+    <h3 class="font-headline font-semibold mb-3">Revenue by Plan</h3>
+    <div class="space-y-2">
+        {% for p in plan_breakdown %}
+        <div class="flex items-center justify-between text-sm">
+            <span>{{ p.plan__name|default:"N/A" }} <span class="text-on-surface-variant">({{ p.count }}x)</span></span>
+            <span class="font-mono font-medium">₦{{ p.revenue|floatformat:0 }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Payment Method Breakdown -->
+{% if method_breakdown %}
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-4">
+    <h3 class="font-headline font-semibold mb-3">By Payment Method</h3>
+    <div class="space-y-2">
+        {% for m in method_breakdown %}
+        <div class="flex items-center justify-between text-sm">
+            <span>{{ m.payment_method|title }} <span class="text-on-surface-variant">({{ m.count }}x)</span></span>
+            <span class="font-mono font-medium">₦{{ m.revenue|floatformat:0 }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Payments -->
+{% if payments %}
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-surface-container-low text-on-surface-variant text-xs uppercase">
+                    <th class="px-4 py-3 text-left font-medium">Date</th>
+                    <th class="px-4 py-3 text-left font-medium">Subscriber</th>
+                    <th class="px-4 py-3 text-left font-medium">Plan</th>
+                    <th class="px-4 py-3 text-left font-medium">Amount</th>
+                    <th class="px-4 py-3 text-left font-medium">Method</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-surface-container">
+                {% for p in payments %}
+                <tr class="hover:bg-surface-container-low/50">
+                    <td class="px-4 py-3 text-on-surface-variant text-xs">{{ p.created_at|date:"M j H:i" }}</td>
+                    <td class="px-4 py-3 font-medium">{{ p.subscriber.phone }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant">{{ p.plan.name|default:"N/A" }}</td>
+                    <td class="px-4 py-3 font-mono font-medium">₦{{ p.amount_ngn|floatformat:0 }}</td>
+                    <td class="px-4 py-3 text-xs text-on-surface-variant">{{ p.payment_method|title }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endwith %}
+{% endblock %}

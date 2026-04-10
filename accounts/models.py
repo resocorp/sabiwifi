@@ -180,6 +180,10 @@ class Subscriber(models.Model):
     auth_token = models.CharField(max_length=64, blank=True, default='')
     verified = models.BooleanField(default=False)
     signup_fee_paid = models.BooleanField(default=False)
+    is_voucher_user = models.BooleanField(
+        default=False, help_text='True if this subscriber was created via voucher activation.'
+    )
+    auto_renew_enabled = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

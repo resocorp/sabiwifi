@@ -1,0 +1,56 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Generate Refill Cards — SabiWiFi{% endblock %}
+
+{% block content %}
+{% with active_tab='vouchers' %}
+
+<div class="mb-6">
+    <a href="{% url 'dashboard-refill-batches' %}" class="text-sm text-primary hover:underline">&larr; Back to Refill Cards</a>
+    <h1 class="text-xl font-headline font-bold mt-2">Generate Refill Card Batch</h1>
+</div>
+
+<form method="post" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-6 max-w-lg space-y-5">
+    {% csrf_token %}
+
+    <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Batch Name</label>
+        <input type="text" name="name" placeholder="e.g. ₦500 refill cards" required
+               class="w-full px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface text-sm border-0 focus:ring-2 focus:ring-primary/40 outline-none">
+    </div>
+
+    <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Card Value (₦)</label>
+        <input type="number" name="value_ngn" placeholder="500" min="50" step="50" required
+               class="w-full px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface text-sm border-0 focus:ring-2 focus:ring-primary/40 outline-none">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1">Quantity</label>
+            <input type="number" name="quantity" value="100" min="1" max="5000" required
+                   class="w-full px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface text-sm border-0 focus:ring-2 focus:ring-primary/40 outline-none">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1">PIN Length</label>
+            <select name="pin_length"
+                    class="w-full px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface text-sm border-0 focus:ring-2 focus:ring-primary/40 outline-none">
+                <option value="8">8 digits</option>
+                <option value="10" selected>10 digits</option>
+                <option value="12">12 digits</option>
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">PIN Prefix (optional)</label>
+        <input type="text" name="prefix" maxlength="6" placeholder="e.g. RF"
+               class="w-full px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface text-sm border-0 focus:ring-2 focus:ring-primary/40 outline-none">
+    </div>
+
+    <button type="submit" class="w-full bg-primary text-on-primary py-3 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+        Generate Refill Cards
+    </button>
+</form>
+
+{% endwith %}
+{% endblock %}

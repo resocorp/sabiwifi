@@ -10,6 +10,8 @@ class Payment(models.Model):
     PAYMENT_TYPE_CHOICES = [
         ('plan', 'Plan Purchase'),
         ('signup_fee', 'Account Creation Fee'),
+        ('wallet_topup', 'Wallet Top-up'),
+        ('auto_renewal', 'Auto Renewal'),
     ]
 
     PAYMENT_METHOD_CHOICES = [
@@ -17,6 +19,8 @@ class Payment(models.Model):
         ('bank_transfer', 'Bank Transfer'),
         ('ussd', 'USSD'),
         ('free', 'Free Plan'),
+        ('wallet', 'Wallet Balance'),
+        ('refill_card', 'Refill Card'),
     ]
 
     STATUS_CHOICES = [
@@ -76,3 +80,44 @@ class Payment(models.Model):
 
     def __str__(self):
         return f'₦{self.amount_ngn} - {self.subscriber.phone} ({self.paystack_status})'
+
+
+class Wallet(models.Model):
+    """Prepaid balance wallet for a subscriber."""
+    subscriber = models.OneToOneField(
+        'accounts.Subscriber', on_delete=models.CASCADE, related_name='wallet'
+    )
+    balance_ngn = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.subscriber.phone} — ₦{self.balance_ngn}'
+
+
+class WalletTransaction(models.Model):
+    """Audit trail for every wallet balance mutation."""
+    TRANSACTION_TYPE_CHOICES = [
+        ('refill_card', 'Refill Card'),
+        ('paystack_topup', 'Paystack Top-up'),
+        ('plan_purchase', 'Plan Purchase'),
+        ('plan_renewal', 'Plan Auto-Renewal'),
+        ('reseller_credit', 'Reseller Credit'),
+        ('reseller_debit', 'Reseller Debit'),
+        ('refund', 'Refund'),
+    ]
+
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='transactions')
+    amount_ngn = models.DecimalField(max_digits=10, decimal_places=2)  # positive=credit, negative=debit
+    balance_after = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    reference = models.CharField(max_length=200, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=100, default='system')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        sign = '+' if self.amount_ngn >= 0 else ''
+        return f'{sign}₦{self.amount_ngn} ({self.transaction_type})'

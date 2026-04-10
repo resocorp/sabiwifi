@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'notifications',
     'shop',
     'integrations',
+    'vouchers',
 ]
 
 MIDDLEWARE = [

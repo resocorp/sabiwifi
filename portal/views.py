@@ -1225,3 +1225,219 @@ def portal_disconnect(request):
         'message': 'All devices disconnected.',
         'auth_token': subscriber.auth_token,  # updated token for continued account access
     })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_redeem_refill(request):
+    """Redeem a refill card to credit subscriber's wallet."""
+    auth_token = request.META.get('HTTP_X_AUTH_TOKEN', '')
+    refill_pin = (request.data.get('pin') or '').strip()
+
+    if not auth_token:
+        return Response({'error': 'Authentication required.'}, status=401)
+    if not refill_pin:
+        return Response({'error': 'Refill card PIN is required.'}, status=400)
+
+    try:
+        subscriber = Subscriber.objects.get(auth_token=auth_token)
+    except Subscriber.DoesNotExist:
+        return Response({'error': 'Invalid session.'}, status=401)
+
+    from vouchers.models import RefillCard
+    from billing.wallet import credit_wallet
+
+    try:
+        card = RefillCard.objects.get(reseller=subscriber.reseller, pin=refill_pin)
+    except RefillCard.DoesNotExist:
+        return Response({'error': 'Invalid refill card.'}, status=400)
+
+    if card.status == 'used':
+        return Response({'error': 'This refill card has already been used.'}, status=400)
+    if card.status == 'disabled':
+        return Response({'error': 'This refill card has been disabled.'}, status=400)
+
+    card.status = 'used'
+    card.redeemed_by = subscriber
+    card.redeemed_at = timezone.now()
+    card.save()
+
+    txn = credit_wallet(
+        subscriber, card.value_ngn, 'refill_card',
+        reference=card.pin,
+        description=f'Refill card ₦{card.value_ngn}',
+    )
+
+    return Response({
+        'message': f'₦{card.value_ngn} added to your wallet.',
+        'balance': str(txn.balance_after),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def portal_wallet_info(request):
+    """Get subscriber wallet balance and recent transactions."""
+    auth_token = request.META.get('HTTP_X_AUTH_TOKEN', '')
+    if not auth_token:
+        return Response({'error': 'Authentication required.'}, status=401)
+
+    try:
+        subscriber = Subscriber.objects.get(auth_token=auth_token)
+    except Subscriber.DoesNotExist:
+        return Response({'error': 'Invalid session.'}, status=401)
+
+    from billing.wallet import get_or_create_wallet
+    wallet = get_or_create_wallet(subscriber)
+    transactions = wallet.transactions.order_by('-created_at')[:20]
+
+    return Response({
+        'balance': str(wallet.balance_ngn),
+        'transactions': [
+            {
+                'amount': str(t.amount_ngn),
+                'balance_after': str(t.balance_after),
+                'type': t.transaction_type,
+                'description': t.description,
+                'created_at': t.created_at.isoformat(),
+            }
+            for t in transactions
+        ],
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_purchase_from_wallet(request):
+    """Purchase a plan using wallet balance."""
+    auth_token = request.META.get('HTTP_X_AUTH_TOKEN', '')
+    plan_id = request.data.get('plan_id')
+
+    if not auth_token:
+        return Response({'error': 'Authentication required.'}, status=401)
+    if not plan_id:
+        return Response({'error': 'Plan ID is required.'}, status=400)
+
+    try:
+        subscriber = Subscriber.objects.get(auth_token=auth_token)
+    except Subscriber.DoesNotExist:
+        return Response({'error': 'Invalid session.'}, status=401)
+
+    try:
+        plan = ServicePlan.objects.get(pk=plan_id, reseller=subscriber.reseller, is_active=True)
+    except ServicePlan.DoesNotExist:
+        return Response({'error': 'Plan not found.'}, status=400)
+
+    from billing.wallet import purchase_plan_from_wallet, InsufficientBalance
+
+    try:
+        sub = purchase_plan_from_wallet(subscriber, plan)
+    except InsufficientBalance:
+        return Response({'error': 'Insufficient wallet balance.'}, status=400)
+
+    disconnect_subscriber_sessions(subscriber)
+
+    return Response({
+        'message': f'{plan.name} activated from wallet.',
+        'plan_name': plan.name,
+        'expiry_date': sub.expiry_date.isoformat(),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_voucher_login(request):
+    """Activate and login with a prepaid voucher PIN."""
+    pin = (request.data.get('pin') or '').strip()
+    serial = request.data.get('serial', '')
+    reseller_slug = request.data.get('reseller_slug', '')
+
+    if not pin:
+        return Response({'error': 'Voucher PIN is required.'}, status=400)
+
+    reseller = _resolve_reseller(request)
+    if not reseller:
+        return Response({'error': 'Could not identify network.'}, status=400)
+
+    from vouchers.models import Voucher
+    from vouchers.radius import activate_voucher
+
+    try:
+        voucher = Voucher.objects.select_related(
+            'batch', 'plan', 'reseller', 'subscriber'
+        ).get(reseller=reseller, pin=pin)
+    except Voucher.DoesNotExist:
+        return Response({'error': 'Invalid voucher code.'}, status=400)
+
+    if voucher.status == 'disabled':
+        return Response({'error': 'This voucher has been disabled.'}, status=400)
+    if voucher.status == 'expired':
+        return Response({'error': 'This voucher has expired.'}, status=400)
+    if voucher.batch.status == 'disabled':
+        return Response({'error': 'This voucher batch has been disabled.'}, status=400)
+
+    # Check actual expiry time (voucher.status may not have been updated yet)
+    if voucher.expires_at and voucher.expires_at <= timezone.now():
+        voucher.status = 'expired'
+        voucher.save(update_fields=['status'])
+        # Also expire the subscription and clean RADIUS
+        if voucher.subscriber:
+            Subscription.objects.filter(
+                subscriber=voucher.subscriber, status='active'
+            ).update(status='expired')
+            remove_subscriber_from_radius(voucher.subscriber)
+        return Response({'error': 'This voucher has expired.'}, status=400)
+
+    # Check if voucher is already used by a different session
+    if voucher.status == 'active' and voucher.subscriber:
+        # Re-login: refresh token and re-sync RADIUS
+        subscriber, auth_token = activate_voucher(voucher)
+    elif voucher.status == 'unused':
+        subscriber, auth_token = activate_voucher(voucher)
+    else:
+        return Response({'error': 'This voucher cannot be used.'}, status=400)
+
+    # Evict stale sessions
+    disconnect_subscriber_sessions(subscriber)
+
+    return Response({
+        'message': 'Voucher activated.',
+        'auth_token': subscriber.auth_token,
+        'phone': subscriber.phone,  # = voucher PIN (used as RADIUS username)
+        'reseller_slug': reseller.slug,
+        'has_active_plan': True,
+        'plan_name': voucher.plan.name,
+        'expires_at': voucher.expires_at.isoformat() if voucher.expires_at else None,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_voucher_status(request):
+    """Check voucher status without re-activating. Returns auth_token for account access."""
+    pin = (request.data.get('pin') or '').strip()
+    if not pin:
+        return Response({'error': 'Voucher code is required.'}, status=400)
+
+    from vouchers.models import Voucher
+
+    try:
+        voucher = Voucher.objects.select_related(
+            'plan', 'reseller', 'subscriber'
+        ).get(pin=pin)
+    except Voucher.DoesNotExist:
+        return Response({'error': 'Invalid voucher code.'}, status=400)
+
+    if voucher.status == 'unused':
+        return Response({'error': 'This voucher has not been activated yet.'}, status=400)
+    if voucher.status == 'disabled':
+        return Response({'error': 'This voucher has been disabled.'}, status=400)
+
+    subscriber = voucher.subscriber
+    if not subscriber:
+        return Response({'error': 'No account found for this voucher.'}, status=400)
+
+    return Response({
+        'auth_token': subscriber.auth_token,
+        'reseller_slug': voucher.reseller.slug,
+    })

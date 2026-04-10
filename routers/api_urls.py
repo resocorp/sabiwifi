@@ -18,4 +18,5 @@ urlpatterns = [
     path('<int:pk>/ssid/', views.router_ssid, name='api-router-ssid'),
     path('<int:pk>/wifi/', views.router_wifi, name='api-router-wifi'),
     path('<int:pk>/health-log/', views.router_health_log, name='api-router-health-log'),
+    path('<int:pk>/service-mode/', views.router_service_mode, name='api-router-service-mode'),
 ]

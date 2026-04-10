@@ -182,6 +182,7 @@ uci set uspot.captive.acct_server='10.99.0.1'
 uci set uspot.captive.acct_port='1813'
 uci set uspot.captive.acct_secret='{nas_secret}'
 uci set uspot.captive.acct_interval='300'
+uci set uspot.captive.counters='1'
 uci set uspot.captive.das_port='3799'
 
 # ============================================
@@ -338,6 +339,17 @@ chmod 600 /etc/radcli/servers
 sed -i 's/^authserver.*/authserver 10.99.0.1/' /etc/radcli/radiusclient.conf
 sed -i 's/^acctserver.*/acctserver 10.99.0.1/' /etc/radcli/radiusclient.conf
 
+# Restore default radcli dictionary from ROM and append attributes that
+# FreeRADIUS may include in responses (Message-Authenticator for BlastRADIUS
+# protection, Acct-Interim-Interval for accounting).
+cp /rom/etc/radcli/dictionary /etc/radcli/dictionary
+echo 'ATTRIBUTE	Message-Authenticator	80	string' >> /etc/radcli/dictionary
+echo 'ATTRIBUTE	Acct-Interim-Interval	85	integer' >> /etc/radcli/dictionary
+
+# Fix uspot RADIUS attribute: 'Password' is not mapped to RADIUS attribute 2
+# (User-Password) by radcli. Replace with 'User-Password' so PAP auth works.
+sed -i "s/request\\['Password'\\]/request['User-Password']/g" /usr/share/uspot/uspot.uc
+
 # ============================================
 # PHASE 10: Commit and restart services
 # ============================================
@@ -364,6 +376,11 @@ done
 
 /etc/init.d/firewall restart
 /etc/init.d/uhttpd restart
+/etc/init.d/ratelimit enable 2>/dev/null
+/etc/init.d/ratelimit restart
+/etc/init.d/uspotfilter enable 2>/dev/null
+/etc/init.d/uspotfilter restart
+sleep 1
 /etc/init.d/uspot restart
 
 # ============================================
@@ -391,6 +408,32 @@ else
     logger -t sabiwifi "WARNING: uhttpd not listening on 10.8.0.1:80"
 fi
 
+# Check uspotfilter is running
+if pgrep -f uspotfilter > /dev/null 2>&1; then
+    logger -t sabiwifi "OK: uspotfilter is running"
+else
+    logger -t sabiwifi "ERROR: uspotfilter is not running"
+fi
+
+# ============================================
+# PHASE 11b: Hotplug — restart uspot when captive iface comes up
+# ============================================
+# If hostapd delays WiFi init, br-captive is recreated and uspot's BPF
+# traffic-counting filters are lost. This hotplug hook re-attaches them.
+
+mkdir -p /etc/hotplug.d/iface
+cat > /etc/hotplug.d/iface/90-uspot-bpf << 'HOTPLUG_EOF'
+#!/bin/sh
+# Restart uspot when the captive interface comes up so BPF tc filters
+# (traffic accounting) are re-attached to the fresh br-captive device.
+[ "$INTERFACE" = "captive" ] && [ "$ACTION" = "ifup" ] && {
+    logger -t sabiwifi "captive ifup: restarting uspot to re-attach BPF counters"
+    sleep 2
+    /etc/init.d/uspot restart
+}
+HOTPLUG_EOF
+chmod +x /etc/hotplug.d/iface/90-uspot-bpf
+
 # ============================================
 # PHASE 12: Mark provisioned
 # ============================================
@@ -400,6 +443,107 @@ echo "{device_mac}" > /etc/sabiwifi/provisioned
 date >> /etc/sabiwifi/provisioned
 
 logger -t sabiwifi "Provisioning complete for {device_mac}"
+
+# ============================================
+# PHASE 13: Update heartbeat script with stats reporting
+# ============================================
+
+cat > /usr/bin/sabiwifi-heartbeat << 'HEARTBEAT_EOF'
+#!/bin/sh
+# SabiWiFi heartbeat — runs every 2 min via cron.
+# Sends MAC + WG pubkey + system stats to server.
+
+MAC=""
+for IFACE in eth0 br-lan eth1; do
+    if [ -f /sys/class/net/$IFACE/address ]; then
+        MAC=$(cat /sys/class/net/$IFACE/address | tr -d ':' | tr 'a-f' 'A-F')
+        [ -n "$MAC" ] && break
+    fi
+done
+[ -z "$MAC" ] && exit 1
+
+WG_PUB=""
+[ -f /etc/sabiwifi/wg_public.key ] && WG_PUB=$(cat /etc/sabiwifi/wg_public.key)
+
+# ── Collect system stats ──
+
+# CPU: sample /proc/stat twice with 1s gap
+read_cpu() { awk '/^cpu / {print $2+$3+$4+$5+$6+$7+$8, $5}' /proc/stat; }
+CPU1=$(read_cpu)
+sleep 1
+CPU2=$(read_cpu)
+CPU_PCT=$(echo "$CPU1 $CPU2" | awk '{
+    td=$3-$1; id=$4-$2;
+    if(td>0) printf "%d",100*(td-id)/td; else print "0"
+}')
+
+# Memory
+MEM_TOTAL=$(awk '/^MemTotal/ {print $2}' /proc/meminfo)
+MEM_AVAIL=$(awk '/^MemAvailable/ {print $2}' /proc/meminfo)
+[ -z "$MEM_AVAIL" ] && MEM_AVAIL=$(awk '/^MemFree/ {print $2}' /proc/meminfo)
+if [ "$MEM_TOTAL" -gt 0 ] 2>/dev/null; then
+    MEM_PCT=$(( (MEM_TOTAL - MEM_AVAIL) * 100 / MEM_TOTAL ))
+else
+    MEM_PCT=0
+fi
+
+# Uptime (seconds)
+UPTIME=$(awk '{printf "%d", $1}' /proc/uptime)
+
+# WiFi clients per interface
+WIFI_CLIENTS=0
+GUEST_CLIENTS=0
+GUEST5_CLIENTS=0
+for WDEV in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
+    COUNT=$(iw dev "$WDEV" station dump 2>/dev/null | grep -c "^Station")
+    WIFI_CLIENTS=$((WIFI_CLIENTS + COUNT))
+    SSID=$(iwinfo "$WDEV" info 2>/dev/null | awk -F'"' '/ESSID/{print $2}')
+    case "$SSID" in
+        *-5G) GUEST5_CLIENTS=$COUNT ;;
+        *)    GUEST_CLIENTS=$COUNT ;;
+    esac
+done
+
+# DHCP leases
+DHCP_LEASES=0
+[ -f /tmp/dhcp.leases ] && DHCP_LEASES=$(wc -l < /tmp/dhcp.leases)
+
+# WAN traffic
+WAN_RX=$(cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null || echo 0)
+WAN_TX=$(cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null || echo 0)
+
+# ── Send heartbeat with stats ──
+STATS="cpu=$CPU_PCT&mem=$MEM_PCT&uptime=$UPTIME&wifi_clients=$WIFI_CLIENTS"
+STATS="$STATS&guest_clients=$GUEST_CLIENTS&guest5_clients=$GUEST5_CLIENTS"
+STATS="$STATS&dhcp_leases=$DHCP_LEASES&wan_rx=$WAN_RX&wan_tx=$WAN_TX"
+
+RESPONSE=$(curl -sf --max-time 10 \
+    -H "X-WG-Public-Key: $WG_PUB" \
+    "SABIWIFI_SERVER_PLACEHOLDER/api/routers/heartbeat/$MAC/?$STATS")
+[ $? -ne 0 ] && exit 1
+
+# Server returns provision script inline when device needs provisioning
+if echo "$RESPONSE" | head -1 | grep -q "^#!/bin/sh"; then
+    logger -t sabiwifi "heartbeat: received provision script, executing..."
+    echo "$RESPONSE" > /tmp/sabiwifi-provision.sh
+    chmod +x /tmp/sabiwifi-provision.sh
+    /bin/sh /tmp/sabiwifi-provision.sh >> /tmp/sabiwifi-provision.log 2>&1
+    RESULT=$?
+    logger -t sabiwifi "heartbeat: provision script finished (exit=$RESULT)"
+    rm -f /tmp/sabiwifi-provision.sh
+fi
+HEARTBEAT_EOF
+
+# Inject the actual server URL (can't use Python format inside single-quoted heredoc)
+sed -i 's|SABIWIFI_SERVER_PLACEHOLDER|https://{platform_domain}|g' /usr/bin/sabiwifi-heartbeat
+chmod +x /usr/bin/sabiwifi-heartbeat
+
+# Ensure cron is set up
+grep -q sabiwifi-heartbeat /etc/crontabs/root 2>/dev/null || \
+    echo "*/2 * * * * /usr/bin/sabiwifi-heartbeat" >> /etc/crontabs/root
+/etc/init.d/cron restart 2>/dev/null
+
+logger -t sabiwifi "Heartbeat script updated with stats reporting"
 """
 
 

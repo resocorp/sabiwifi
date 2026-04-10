@@ -14,8 +14,16 @@ class ServicePlanSerializer(serializers.ModelSerializer):
         model = ServicePlan
         fields = [
             'id', 'name', 'slug', 'download_mbps', 'upload_mbps',
-            'duration_days', 'duration_hours', 'data_cap_gb', 'max_devices',
-            'price_ngn', 'is_trial', 'is_active', 'is_system_created',
+            'duration_days', 'duration_hours', 'data_cap_gb',
+            'download_cap_gb', 'upload_cap_gb',
+            'burst_download_mbps', 'burst_upload_mbps',
+            'burst_threshold_download_mbps', 'burst_threshold_upload_mbps',
+            'burst_time_seconds', 'priority',
+            'online_time_limit_minutes', 'ip_pool_name',
+            'fallback_plan', 'daily_fallback_plan',
+            'daily_download_mb', 'daily_upload_mb', 'daily_total_mb', 'daily_time_minutes',
+            'max_devices', 'price_ngn', 'is_trial', 'is_active', 'is_system_created',
+            'allow_auto_renew',
             'speed_display', 'duration_display', 'data_cap_display',
             'active_subscribers', 'created_at', 'updated_at',
         ]

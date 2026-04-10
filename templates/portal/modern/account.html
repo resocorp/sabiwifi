@@ -75,14 +75,31 @@
                 {% endif %}
                 <h1>My Account</h1>
                 <div id="login-msg"></div>
-                <label>Phone Number</label>
-                <input type="tel" id="login-phone" placeholder="08066..." inputmode="numeric">
-                <label>WiFi PIN</label>
-                <input type="password" id="login-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
-                <button class="btn btn-primary mt-16" id="login-btn" onclick="doLogin()">Log In</button>
-                <p class="text-center text-muted mt-8">
-                    <a href="#" onclick="showSection('reset-section'); return false;" style="color: var(--primary); text-decoration: none;">Forgot PIN?</a>
-                </p>
+
+                <!-- Login tabs -->
+                <div style="display:flex;gap:4px;background:var(--surface-container);border-radius:12px;padding:3px;margin-bottom:16px;">
+                    <button type="button" onclick="switchLoginTab('phone')" id="ltab-phone" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;background:var(--surface-container-lowest);color:var(--on-surface);transition:all 0.2s;">Phone &amp; PIN</button>
+                    <button type="button" onclick="switchLoginTab('voucher')" id="ltab-voucher" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;background:transparent;color:var(--on-surface-variant);transition:all 0.2s;">Voucher Code</button>
+                </div>
+
+                <!-- Phone + PIN login -->
+                <div id="login-phone-form">
+                    <label>Phone Number</label>
+                    <input type="tel" id="login-phone" placeholder="08066..." inputmode="numeric">
+                    <label>WiFi PIN</label>
+                    <input type="password" id="login-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                    <button class="btn btn-primary mt-16" id="login-btn" onclick="doLogin()">Log In</button>
+                    <p class="text-center text-muted mt-8">
+                        <a href="#" onclick="showSection('reset-section'); return false;" style="color: var(--primary); text-decoration: none;">Forgot PIN?</a>
+                    </p>
+                </div>
+
+                <!-- Voucher code login -->
+                <div id="login-voucher-form" style="display:none;">
+                    <label>Voucher Code</label>
+                    <input type="text" id="login-voucher-pin" placeholder="Enter voucher code" inputmode="numeric" style="font-size:18px;text-align:center;letter-spacing:4px;">
+                    <button class="btn btn-primary mt-16" id="voucher-login-btn" onclick="doVoucherLogin()">Check Account</button>
+                </div>
             </div>
         </div>
 
@@ -504,6 +521,49 @@
             }
         }).catch(() => {});
     }
+
+    // --- Login tab switcher ---
+    function switchLoginTab(tab) {
+        document.getElementById('login-phone-form').style.display = tab === 'phone' ? '' : 'none';
+        document.getElementById('login-voucher-form').style.display = tab === 'voucher' ? '' : 'none';
+        document.getElementById('ltab-phone').style.background = tab === 'phone' ? 'var(--surface-container-lowest)' : 'transparent';
+        document.getElementById('ltab-phone').style.color = tab === 'phone' ? 'var(--on-surface)' : 'var(--on-surface-variant)';
+        document.getElementById('ltab-voucher').style.background = tab === 'voucher' ? 'var(--surface-container-lowest)' : 'transparent';
+        document.getElementById('ltab-voucher').style.color = tab === 'voucher' ? 'var(--on-surface)' : 'var(--on-surface-variant)';
+        hideMsg('login-msg');
+    }
+
+    // --- Voucher Login ---
+    function doVoucherLogin() {
+        const pin = document.getElementById('login-voucher-pin').value.trim();
+        const btn = document.getElementById('voucher-login-btn');
+        if (!pin) { showMsg('login-msg', 'Enter your voucher code.', 'error'); return; }
+        hideMsg('login-msg');
+        btn.disabled = true; btn.textContent = 'Checking...';
+
+        fetch('/api/portal/voucher-status/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pin}),
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            btn.disabled = false; btn.textContent = 'Check Account';
+            if (ok) {
+                authToken = data.auth_token;
+                resellerSlug = data.reseller_slug || resellerSlug;
+                localStorage.setItem('sabiwifi_token', authToken);
+                loadAccount();
+            } else {
+                showMsg('login-msg', data.error || 'Could not find account.', 'error');
+            }
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = 'Check Account'; showMsg('login-msg', 'Network error.', 'error'); });
+    }
+
+    document.getElementById('login-voucher-pin').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') doVoucherLogin();
+    });
 
     // --- Auto-login if token exists ---
     if (authToken) {

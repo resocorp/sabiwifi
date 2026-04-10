@@ -5,11 +5,11 @@
 {% with active_tab='plans' %}
 
 <div class="mb-6">
-    <a href="{% url 'dashboard-plans' %}" class="text-sm text-on-surface-variant hover:text-primary">← Plans</a>
+    <a href="{% url 'dashboard-plans' %}" class="text-sm text-on-surface-variant hover:text-primary">&larr; Plans</a>
     <h1 class="text-xl font-headline font-bold mt-2">{% if is_edit %}Edit Plan{% else %}Create New Plan{% endif %}</h1>
 </div>
 
-<form method="post" class="max-w-lg">
+<form method="post" class="max-w-2xl">
     {% csrf_token %}
 
     {% if errors.non_field_errors %}
@@ -18,102 +18,267 @@
     </div>
     {% endif %}
 
-    <!-- Plan Name -->
-    <div class="mb-4">
-        <label class="block text-sm font-medium mb-1">Plan Name</label>
-        <input type="text" name="name" value="{{ form_data.name|default:'' }}" placeholder="e.g. Monthly Basic"
-               class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-        {% if errors.name %}<p class="text-xs text-error mt-1">{{ errors.name.0 }}</p>{% endif %}
+    <!-- ===== BASIC SETTINGS ===== -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-4">
+        <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide mb-4">Basic Settings</h2>
+
+        <!-- Plan Name -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-1">Plan Name</label>
+            <input type="text" name="name" value="{{ form_data.name|default:'' }}" placeholder="e.g. Monthly Basic"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            {% if errors.name %}<p class="text-xs text-error mt-1">{{ errors.name.0 }}</p>{% endif %}
+        </div>
+
+        <!-- Speed -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Download Speed (Mbps)</label>
+                <input type="number" name="download_mbps" value="{{ form_data.download_mbps|default:'5' }}" min="1" max="1000"
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Upload Speed (Mbps)</label>
+                <input type="number" name="upload_mbps" value="{{ form_data.upload_mbps|default:'5' }}" min="1" max="1000"
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+        </div>
+
+        <!-- Duration -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Duration (days)</label>
+                <input type="number" name="duration_days" value="{{ form_data.duration_days|default:'30' }}" min="0"
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Duration (hours)</label>
+                <input type="number" name="duration_hours" value="{{ form_data.duration_hours|default:'0' }}" min="0" step="0.25"
+                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <p class="text-xs text-on-surface-variant mt-1">Use hours for short plans (e.g. 0.5 = 30 min)</p>
+            </div>
+        </div>
+
+        <!-- Data Cap -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-1">Total Data Cap (GB)</label>
+            <input type="number" name="data_cap_gb" value="{{ form_data.data_cap_gb|default:'' }}" min="0" step="0.1"
+                   placeholder="Leave empty for unlimited"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+            <p class="text-xs text-on-surface-variant mt-1">Combined upload + download cap. Leave empty for unlimited.</p>
+        </div>
+
+        <!-- Max Devices -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-1">Max Devices</label>
+            <select name="max_devices" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <option value="1" {% if form_data.max_devices == 1 or not form_data.max_devices %}selected{% endif %}>1</option>
+                <option value="2" {% if form_data.max_devices == 2 %}selected{% endif %}>2</option>
+                <option value="3" {% if form_data.max_devices == 3 %}selected{% endif %}>3</option>
+                <option value="5" {% if form_data.max_devices == 5 %}selected{% endif %}>5</option>
+                <option value="10" {% if form_data.max_devices == 10 %}selected{% endif %}>10</option>
+            </select>
+        </div>
+
+        <!-- Price -->
+        <div class="mb-2">
+            <label class="block text-sm font-medium mb-1">Price</label>
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium">&#8358;</span>
+                <input type="number" name="price_ngn" value="{{ form_data.price_ngn|default:'0' }}" min="0" step="50"
+                       class="flex-1 px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
+            </div>
+            {% if errors.price_ngn %}
+            <div class="bg-secondary-container/30 rounded-lg p-3 mt-2 text-sm text-on-secondary-container">
+                <span class="material-symbols-outlined text-[16px]">warning</span> {{ errors.price_ngn.0 }}
+                <a href="{% url 'dashboard-settings' %}" class="text-primary hover:underline ml-1">Add Bank Account &rarr;</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Auto-renew toggle -->
+        <div class="flex items-center gap-3 mt-4">
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" name="allow_auto_renew" class="sr-only peer"
+                       {% if form_data.allow_auto_renew or form_data.allow_auto_renew == None %}checked{% endif %}>
+                <div class="w-9 h-5 bg-outline-variant rounded-full peer peer-checked:bg-primary transition after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
+            <span class="text-sm font-medium">Allow auto-renewal from wallet</span>
+        </div>
     </div>
 
-    <!-- Speed -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-        <div>
-            <label class="block text-sm font-medium mb-1">Download Speed</label>
-            <div class="flex items-center gap-2">
-                <select name="download_mbps" class="flex-1 px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-                    {% for speed in "1,2,3,5,10,15,20,30"|make_list %}
+    <!-- ===== SEPARATE DATA CAPS ===== -->
+    <details class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mb-4 group" {% if form_data.download_cap_gb or form_data.upload_cap_gb %}open{% endif %}>
+        <summary class="p-5 cursor-pointer flex items-center justify-between hover:bg-surface-container-low transition rounded-xl">
+            <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Separate Download / Upload Caps</h2>
+            <svg class="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-5 pb-5">
+            <p class="text-xs text-on-surface-variant mb-3">Set independent caps for download and upload. These are enforced by MikroTik via RADIUS attributes.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Download Cap (GB)</label>
+                    <input type="number" name="download_cap_gb" value="{{ form_data.download_cap_gb|default:'' }}" min="0" step="0.1"
+                           placeholder="Unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Upload Cap (GB)</label>
+                    <input type="number" name="upload_cap_gb" value="{{ form_data.upload_cap_gb|default:'' }}" min="0" step="0.1"
+                           placeholder="Unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <!-- ===== BURST SPEED ===== -->
+    <details class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mb-4 group" {% if form_data.burst_download_mbps %}open{% endif %}>
+        <summary class="p-5 cursor-pointer flex items-center justify-between hover:bg-surface-container-low transition rounded-xl">
+            <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Burst Speed</h2>
+            <svg class="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-5 pb-5">
+            <p class="text-xs text-on-surface-variant mb-3">Temporary speed boost when a user first connects. After the burst time expires, speed drops to the base rate.</p>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Burst Download (Mbps)</label>
+                    <input type="number" name="burst_download_mbps" value="{{ form_data.burst_download_mbps|default:'0' }}" min="0" max="1000"
+                           placeholder="0 = disabled"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Burst Upload (Mbps)</label>
+                    <input type="number" name="burst_upload_mbps" value="{{ form_data.burst_upload_mbps|default:'0' }}" min="0" max="1000"
+                           placeholder="0 = disabled"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Burst Threshold DL (Mbps)</label>
+                    <input type="number" name="burst_threshold_download_mbps" value="{{ form_data.burst_threshold_download_mbps|default:'0' }}" min="0"
+                           placeholder="0 = use base speed"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <p class="text-xs text-on-surface-variant mt-1">0 = use base download speed</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Burst Threshold UL (Mbps)</label>
+                    <input type="number" name="burst_threshold_upload_mbps" value="{{ form_data.burst_threshold_upload_mbps|default:'0' }}" min="0"
+                           placeholder="0 = use base speed"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <p class="text-xs text-on-surface-variant mt-1">0 = use base upload speed</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Burst Time (seconds)</label>
+                    <input type="number" name="burst_time_seconds" value="{{ form_data.burst_time_seconds|default:'0' }}" min="0" max="600"
+                           placeholder="e.g. 30"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Priority</label>
+                    <select name="priority" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                        <option value="1" {% if form_data.priority == 1 %}selected{% endif %}>1 (highest)</option>
+                        <option value="2" {% if form_data.priority == 2 %}selected{% endif %}>2</option>
+                        <option value="3" {% if form_data.priority == 3 %}selected{% endif %}>3</option>
+                        <option value="4" {% if form_data.priority == 4 %}selected{% endif %}>4</option>
+                        <option value="5" {% if form_data.priority == 5 %}selected{% endif %}>5</option>
+                        <option value="6" {% if form_data.priority == 6 %}selected{% endif %}>6</option>
+                        <option value="7" {% if form_data.priority == 7 %}selected{% endif %}>7</option>
+                        <option value="8" {% if form_data.priority == 8 or not form_data.priority %}selected{% endif %}>8 (lowest)</option>
+                    </select>
+                    <p class="text-xs text-on-surface-variant mt-1">Queue priority: 1 = highest, 8 = lowest</p>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <!-- ===== DAILY QUOTAS ===== -->
+    <details class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mb-4 group" {% if form_data.daily_total_mb or form_data.daily_download_mb or form_data.daily_upload_mb or form_data.daily_time_minutes %}open{% endif %}>
+        <summary class="p-5 cursor-pointer flex items-center justify-between hover:bg-surface-container-low transition rounded-xl">
+            <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Daily Quotas</h2>
+            <svg class="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-5 pb-5">
+            <p class="text-xs text-on-surface-variant mb-3">Daily usage limits that reset at midnight. When exceeded, the subscriber is switched to the daily fallback plan (or disconnected if none set).</p>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Daily Total (MB)</label>
+                    <input type="number" name="daily_total_mb" value="{{ form_data.daily_total_mb|default:'0' }}" min="0"
+                           placeholder="0 = unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Daily Online Time (min)</label>
+                    <input type="number" name="daily_time_minutes" value="{{ form_data.daily_time_minutes|default:'0' }}" min="0"
+                           placeholder="0 = unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Daily Download (MB)</label>
+                    <input type="number" name="daily_download_mb" value="{{ form_data.daily_download_mb|default:'0' }}" min="0"
+                           placeholder="0 = unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Daily Upload (MB)</label>
+                    <input type="number" name="daily_upload_mb" value="{{ form_data.daily_upload_mb|default:'0' }}" min="0"
+                           placeholder="0 = unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Daily Fallback Plan</label>
+                <select name="daily_fallback_plan" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <option value="">None (disconnect when exceeded)</option>
+                    {% for fp in fallback_plans %}
+                    <option value="{{ fp.pk }}" {% if form_data.daily_fallback_plan == fp.pk %}selected{% endif %}>{{ fp.name }} ({{ fp.download_mbps }}/{{ fp.upload_mbps }} Mbps)</option>
                     {% endfor %}
-                    <option value="1" {% if form_data.download_mbps == 1 %}selected{% endif %}>1</option>
-                    <option value="2" {% if form_data.download_mbps == 2 %}selected{% endif %}>2</option>
-                    <option value="3" {% if form_data.download_mbps == 3 %}selected{% endif %}>3</option>
-                    <option value="5" {% if form_data.download_mbps == 5 or not form_data.download_mbps %}selected{% endif %}>5</option>
-                    <option value="10" {% if form_data.download_mbps == 10 %}selected{% endif %}>10</option>
-                    <option value="15" {% if form_data.download_mbps == 15 %}selected{% endif %}>15</option>
-                    <option value="20" {% if form_data.download_mbps == 20 %}selected{% endif %}>20</option>
-                    <option value="30" {% if form_data.download_mbps == 30 %}selected{% endif %}>30</option>
                 </select>
-                <span class="text-sm text-on-surface-variant">Mbps</span>
+                <p class="text-xs text-on-surface-variant mt-1">Subscriber switches to this plan when daily quota is exceeded. Restored at midnight.</p>
             </div>
         </div>
-        <div>
-            <label class="block text-sm font-medium mb-1">Upload Speed</label>
-            <div class="flex items-center gap-2">
-                <select name="upload_mbps" class="flex-1 px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-                    <option value="1" {% if form_data.upload_mbps == 1 %}selected{% endif %}>1</option>
-                    <option value="2" {% if form_data.upload_mbps == 2 %}selected{% endif %}>2</option>
-                    <option value="3" {% if form_data.upload_mbps == 3 %}selected{% endif %}>3</option>
-                    <option value="5" {% if form_data.upload_mbps == 5 or not form_data.upload_mbps %}selected{% endif %}>5</option>
-                    <option value="10" {% if form_data.upload_mbps == 10 %}selected{% endif %}>10</option>
-                    <option value="15" {% if form_data.upload_mbps == 15 %}selected{% endif %}>15</option>
-                    <option value="20" {% if form_data.upload_mbps == 20 %}selected{% endif %}>20</option>
-                    <option value="30" {% if form_data.upload_mbps == 30 %}selected{% endif %}>30</option>
+    </details>
+
+    <!-- ===== LIMITS & FALLBACK ===== -->
+    <details class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mb-4 group" {% if form_data.online_time_limit_minutes or form_data.fallback_plan or form_data.ip_pool_name %}open{% endif %}>
+        <summary class="p-5 cursor-pointer flex items-center justify-between hover:bg-surface-container-low transition rounded-xl">
+            <h2 class="text-sm font-semibold text-on-surface-variant uppercase tracking-wide">Advanced Limits & IP Pool</h2>
+            <svg class="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </summary>
+        <div class="px-5 pb-5">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Cumulative Online Time (min)</label>
+                    <input type="number" name="online_time_limit_minutes" value="{{ form_data.online_time_limit_minutes|default:'0' }}" min="0"
+                           placeholder="0 = unlimited"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <p class="text-xs text-on-surface-variant mt-1">Total online time across all sessions for the subscription lifetime. 0 = unlimited.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">IP Pool Name</label>
+                    <input type="text" name="ip_pool_name" value="{{ form_data.ip_pool_name|default:'' }}"
+                           placeholder="e.g. vip-pool"
+                           class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <p class="text-xs text-on-surface-variant mt-1">MikroTik IP pool name. Must exist on the router. Leave empty for default pool.</p>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Fallback Plan (on limit reached)</label>
+                <select name="fallback_plan" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                    <option value="">None (disconnect when limit reached)</option>
+                    {% for fp in fallback_plans %}
+                    <option value="{{ fp.pk }}" {% if form_data.fallback_plan == fp.pk %}selected{% endif %}>{{ fp.name }} ({{ fp.download_mbps }}/{{ fp.upload_mbps }} Mbps)</option>
+                    {% endfor %}
                 </select>
-                <span class="text-sm text-on-surface-variant">Mbps</span>
+                <p class="text-xs text-on-surface-variant mt-1">When data or time limit is reached, subscriber is throttled to this plan instead of being disconnected.</p>
             </div>
         </div>
-    </div>
-
-    <!-- Duration -->
-    <div class="grid grid-cols-2 gap-3 mb-4">
-        <div>
-            <label class="block text-sm font-medium mb-1">Duration (days)</label>
-            <input type="number" name="duration_days" value="{{ form_data.duration_days|default:'30' }}" min="0"
-                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-        </div>
-        <div>
-            <label class="block text-sm font-medium mb-1">Duration (hours)</label>
-            <input type="number" name="duration_hours" value="{{ form_data.duration_hours|default:'0' }}" min="0" step="0.25"
-                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-            <p class="text-xs text-on-surface-variant mt-1">Use hours for short plans (e.g. 0.5 = 30 min)</p>
-        </div>
-    </div>
-
-    <!-- Data Cap -->
-    <div class="mb-4">
-        <label class="block text-sm font-medium mb-1">Data Cap (GB)</label>
-        <input type="number" name="data_cap_gb" value="{{ form_data.data_cap_gb|default:'' }}" min="0" step="0.1"
-               placeholder="Leave empty for unlimited"
-               class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-        <p class="text-xs text-on-surface-variant mt-1">Leave empty for unlimited data</p>
-    </div>
-
-    <!-- Max Devices -->
-    <div class="mb-4">
-        <label class="block text-sm font-medium mb-1">Max Devices</label>
-        <select name="max_devices" class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
-            <option value="1" {% if form_data.max_devices == 1 or not form_data.max_devices %}selected{% endif %}>1</option>
-            <option value="2" {% if form_data.max_devices == 2 %}selected{% endif %}>2</option>
-            <option value="3" {% if form_data.max_devices == 3 %}selected{% endif %}>3</option>
-            <option value="5" {% if form_data.max_devices == 5 %}selected{% endif %}>5</option>
-        </select>
-    </div>
-
-    <!-- Price -->
-    <div class="mb-6">
-        <label class="block text-sm font-medium mb-1">Price</label>
-        <div class="flex items-center gap-2">
-            <span class="text-sm font-medium">₦</span>
-            <input type="number" name="price_ngn" value="{{ form_data.price_ngn|default:'0' }}" min="0" step="50"
-                   class="flex-1 px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
-        </div>
-        {% if errors.price_ngn %}
-        <div class="bg-secondary-container/30 rounded-lg p-3 mt-2 text-sm text-on-secondary-container">
-            <span class="material-symbols-outlined text-[16px]">warning</span> {{ errors.price_ngn.0 }}
-            <a href="{% url 'dashboard-settings' %}" class="text-primary hover:underline ml-1">Add Bank Account →</a>
-        </div>
-        {% endif %}
-    </div>
+    </details>
 
     <button type="submit"
             class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
