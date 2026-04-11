@@ -3,7 +3,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Sum, Count, Q, Prefetch
+from django.core.paginator import Paginator
+from django.db.models import Sum, Count, Q, Prefetch, Exists, OuterRef
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
@@ -290,7 +291,16 @@ def subscribers_list(request):
     if search:
         subscribers = subscribers.filter(phone__icontains=search)
 
-    # Prefetch active subscriptions in a single query (fixes N+1)
+    # Filter by active/expired at the DB level
+    has_active = Exists(
+        Subscription.objects.filter(subscriber=OuterRef('pk'), status='active')
+    )
+    if status_filter == 'active':
+        subscribers = subscribers.filter(has_active)
+    elif status_filter == 'expired':
+        subscribers = subscribers.exclude(has_active)
+
+    # Prefetch active subscriptions in a single query
     active_subs_prefetch = Prefetch(
         'subscriptions',
         queryset=Subscription.objects.filter(status='active').select_related('plan'),
@@ -298,25 +308,24 @@ def subscribers_list(request):
     )
     subscribers = subscribers.prefetch_related(active_subs_prefetch).order_by('-created_at')
 
+    paginator = Paginator(subscribers, 25)
+    page = paginator.get_page(request.GET.get('page'))
+
     subs_with_plans = []
-    for sub in subscribers:
+    for sub in page:
         current_sub = sub.active_subscriptions[0] if sub.active_subscriptions else None
         subs_with_plans.append({
             'subscriber': sub,
             'subscription': current_sub,
         })
 
-    if status_filter == 'active':
-        subs_with_plans = [s for s in subs_with_plans if s['subscription']]
-    elif status_filter == 'expired':
-        subs_with_plans = [s for s in subs_with_plans if not s['subscription']]
-
     return render(request, 'dashboard/subscribers_list.html', {
         'reseller': reseller,
         'subscribers': subs_with_plans,
+        'page_obj': page,
         'search': search,
         'status_filter': status_filter,
-        'total_count': len(subs_with_plans),
+        'total_count': paginator.count,
     })
 
 

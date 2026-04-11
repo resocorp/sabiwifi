@@ -58,5 +58,24 @@
     {% endfor %}
 </div>
 
+{% if page_obj.paginator.num_pages > 1 %}
+<!-- Pagination -->
+<nav class="flex items-center justify-between mt-6">
+    <p class="text-sm text-on-surface-variant">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </p>
+    <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+           class="px-3 py-2 rounded-lg text-sm bg-surface-container-low text-on-surface-variant hover:bg-surface-container">Prev</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+           class="px-3 py-2 rounded-lg text-sm bg-surface-container-low text-on-surface-variant hover:bg-surface-container">Next</a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}
+
 {% endwith %}
 {% endblock %}
