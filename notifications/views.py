@@ -66,10 +66,6 @@ def wa_webhook(request):
 
     if event == 'connected':
         phone = request.data.get('phone', '')
-        WhatsappSession.objects.update_or_create(
-            reseller__slug=slug,
-            defaults={},
-        )
         try:
             from accounts.models import Reseller
             reseller = Reseller.objects.get(slug=slug)
@@ -110,13 +106,12 @@ def wa_webhook(request):
                     log.status = 'failed'
                     log.error_detail = request.data.get('error', '')
                 log.save(update_fields=['status', 'sent_at', 'error_detail'])
-                # Update broadcast counters
+                # Update broadcast counters atomically
                 if log.broadcast_id:
+                    from django.db.models import F
                     field = 'sent_count' if event == 'sent' else 'failed_count'
                     Broadcast.objects.filter(pk=log.broadcast_id).update(
-                        **{field: getattr(
-                            Broadcast.objects.get(pk=log.broadcast_id), field
-                        ) + 1}
+                        **{field: F(field) + 1}
                     )
             except NotificationLog.DoesNotExist:
                 pass
