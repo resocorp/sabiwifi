@@ -3,11 +3,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Prefetch
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
 from billing.models import Payment
 from routers.models import Router
+
+
+class _SerializerRequest:
+    """Minimal request-like object for DRF serializer context."""
+    def __init__(self, user):
+        self.user = user
 
 
 def _get_reseller(request):
@@ -183,14 +189,9 @@ def plan_create(request):
 
         form_data = _extract_plan_form_data(request.POST)
 
-        # Build a mock request for serializer context
-        class MockRequest:
-            def __init__(self, user):
-                self.user = user
-
         serializer = ServicePlanSerializer(
             data=form_data,
-            context={'request': MockRequest(request.user)}
+            context={'request': _SerializerRequest(request.user)}
         )
         if serializer.is_valid():
             serializer.save()
@@ -225,13 +226,9 @@ def plan_edit(request, pk):
 
         form_data = _extract_plan_form_data(request.POST)
 
-        class MockRequest:
-            def __init__(self, user):
-                self.user = user
-
         serializer = ServicePlanSerializer(
             plan, data=form_data, partial=True,
-            context={'request': MockRequest(request.user)}
+            context={'request': _SerializerRequest(request.user)}
         )
         if serializer.is_valid():
             serializer.save()
@@ -293,12 +290,17 @@ def subscribers_list(request):
     if search:
         subscribers = subscribers.filter(phone__icontains=search)
 
-    # Annotate with current subscription
+    # Prefetch active subscriptions in a single query (fixes N+1)
+    active_subs_prefetch = Prefetch(
+        'subscriptions',
+        queryset=Subscription.objects.filter(status='active').select_related('plan'),
+        to_attr='active_subscriptions',
+    )
+    subscribers = subscribers.prefetch_related(active_subs_prefetch).order_by('-created_at')
+
     subs_with_plans = []
-    for sub in subscribers.order_by('-created_at'):
-        current_sub = Subscription.objects.filter(
-            subscriber=sub, status='active'
-        ).select_related('plan').first()
+    for sub in subscribers:
+        current_sub = sub.active_subscriptions[0] if sub.active_subscriptions else None
         subs_with_plans.append({
             'subscriber': sub,
             'subscription': current_sub,
