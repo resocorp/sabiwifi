@@ -11,6 +11,18 @@ logger = logging.getLogger(__name__)
 PAYSTACK_BASE_URL = 'https://api.paystack.co'
 
 
+def get_paystack_keys():
+    """Return (secret_key, public_key), falling back to PlatformSettings."""
+    secret = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
+    public = getattr(settings, 'PAYSTACK_PUBLIC_KEY', '')
+    if not secret:
+        from operator_panel.models import PlatformSettings
+        ps = PlatformSettings.load()
+        secret = ps.paystack_secret_key
+        public = ps.paystack_public_key
+    return secret, public
+
+
 class PaystackProvider(PaymentProvider):
     """Paystack integration with automatic split payments."""
 

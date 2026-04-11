@@ -28,14 +28,8 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 
 def _get_paystack_keys():
-    key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
-    pub = getattr(settings, 'PAYSTACK_PUBLIC_KEY', '')
-    if not key:
-        from operator_panel.models import PlatformSettings
-        ps = PlatformSettings.load()
-        key = ps.paystack_secret_key
-        pub = ps.paystack_public_key
-    return key, pub
+    from billing.providers.paystack import get_paystack_keys
+    return get_paystack_keys()
 
 
 def _get_shipping_for_state(state):
