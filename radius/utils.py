@@ -304,8 +304,8 @@ def _coa_disconnect(username, session_id, nas_ip, secret):
     packet = bytes([40, identifier]) + struct.pack('!H', length) + authenticator + attrs
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(3)
     try:
+        sock.settimeout(3)
         sock.sendto(packet, (nas_ip, 3799))
         resp, _ = sock.recvfrom(4096)
         code = resp[0] if resp else 0
