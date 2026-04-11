@@ -13,6 +13,7 @@ from rest_framework import status
 
 from accounts.models import Reseller, Subscriber
 from plans.models import ServicePlan, Subscription
+from plans.services import activate_subscription
 from billing.models import Payment
 from radius.utils import assign_subscriber_to_plan, update_radcheck_password, disconnect_subscriber_sessions, remove_subscriber_from_radius
 
@@ -287,22 +288,14 @@ def portal_verify_otp(request):
 
 def _get_paystack_secret_key():
     """Return Paystack secret key from settings or PlatformSettings."""
-    from django.conf import settings
-    key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
-    if not key:
-        from operator_panel.models import PlatformSettings
-        key = PlatformSettings.load().paystack_secret_key
-    return key
+    from billing.providers.paystack import get_paystack_keys
+    return get_paystack_keys()[0]
 
 
 def _get_paystack_public_key():
     """Return Paystack public key from settings or PlatformSettings."""
-    from django.conf import settings
-    key = getattr(settings, 'PAYSTACK_PUBLIC_KEY', '')
-    if not key:
-        from operator_panel.models import PlatformSettings
-        key = PlatformSettings.load().paystack_public_key
-    return key
+    from billing.providers.paystack import get_paystack_keys
+    return get_paystack_keys()[1]
 
 
 def _verify_paystack_payment(reference, expected_amount_kobo):
@@ -340,26 +333,7 @@ def _create_subscription(subscriber, plan, reseller, paystack_data=None):
     Create a Subscription + optional Payment record, assign RADIUS group.
     Returns the new Subscription.
     """
-    from datetime import timedelta
-    from radius.utils import create_default_trial_plan
-
-    now = timezone.now()
-    hours = float(plan.duration_hours or 0)
-    days = int(plan.duration_days or 0)
-    expiry = now + timedelta(days=days, hours=hours) if (days or hours) else now + timedelta(days=36500)
-
-    # Expire any existing active subscription
-    Subscription.objects.filter(subscriber=subscriber, status='active').update(status='expired')
-
-    sub = Subscription.objects.create(
-        subscriber=subscriber,
-        plan=plan,
-        reseller=reseller,
-        start_date=now,
-        expiry_date=expiry,
-        status='active',
-    )
-    assign_subscriber_to_plan(subscriber, plan)
+    sub = activate_subscription(subscriber, plan, reseller=reseller)
 
     # Create payment record
     if paystack_data:
@@ -841,26 +815,12 @@ def portal_login_api(request):
         assign_subscriber_to_plan(subscriber, current_sub.plan)
     else:
         # No active subscription — check if last plan was a free trial, auto-renew it
-        from datetime import timedelta
         last_sub = Subscription.objects.filter(
             subscriber=subscriber
         ).select_related('plan').order_by('-expiry_date').first()
 
         if last_sub and last_sub.plan.is_trial and last_sub.plan.is_free:
-            plan = last_sub.plan
-            now = timezone.now()
-            hours = float(plan.duration_hours or 0)
-            days = int(plan.duration_days or 0)
-            expiry = now + timedelta(days=days, hours=hours)
-            current_sub = Subscription.objects.create(
-                subscriber=subscriber,
-                plan=plan,
-                reseller=subscriber.reseller,
-                start_date=now,
-                expiry_date=expiry,
-                status='active',
-            )
-            assign_subscriber_to_plan(subscriber, plan)
+            current_sub = activate_subscription(subscriber, last_sub.plan)
             logger.info(f"Auto-renewed trial for {subscriber.phone}")
         else:
             # No active plan — remove from RADIUS so the hotspot auth fails.
@@ -1135,33 +1095,7 @@ def portal_change_plan(request):
 
     if plan.is_free:
         # Free plan — activate immediately
-        from datetime import timedelta
-        now = timezone.now()
-
-        if plan.duration_days > 0:
-            expiry = now + timedelta(days=plan.duration_days)
-        elif plan.duration_hours > 0:
-            expiry = now + timedelta(hours=float(plan.duration_hours))
-        else:
-            expiry = now + timedelta(days=365)
-
-        # Expire current subscription
-        Subscription.objects.filter(
-            subscriber=subscriber, status='active'
-        ).update(status='expired')
-
-        # Create new subscription
-        sub = Subscription.objects.create(
-            subscriber=subscriber,
-            plan=plan,
-            reseller=subscriber.reseller,
-            start_date=now,
-            expiry_date=expiry,
-            status='active',
-        )
-
-        # Update RADIUS
-        assign_subscriber_to_plan(subscriber, plan)
+        sub = activate_subscription(subscriber, plan)
 
         # Create a free payment record
         Payment.objects.create(
@@ -1178,7 +1112,7 @@ def portal_change_plan(request):
             'message': f'Plan activated: {plan.name}',
             'subscription': {
                 'plan_name': plan.name,
-                'expiry_date': expiry.isoformat(),
+                'expiry_date': sub.expiry_date.isoformat(),
             },
         })
     else:

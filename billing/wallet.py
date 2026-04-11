@@ -5,14 +5,11 @@ Uses select_for_update() to prevent race conditions.
 import logging
 import secrets
 from decimal import Decimal
-from datetime import timedelta
 
 from django.db import transaction
-from django.utils import timezone
 
 from billing.models import Wallet, WalletTransaction, Payment
-from plans.models import Subscription
-from radius.utils import assign_subscriber_to_plan
+from plans.services import activate_subscription
 
 logger = logging.getLogger(__name__)
 
@@ -96,29 +93,7 @@ def purchase_plan_from_wallet(subscriber, plan):
         description=f'Purchased {plan.name}',
     )
 
-    # Expire any current subscription
-    Subscription.objects.filter(
-        subscriber=subscriber, status='active'
-    ).update(status='expired')
-
-    now = timezone.now()
-    if plan.duration_days > 0:
-        expiry = now + timedelta(days=plan.duration_days)
-    elif plan.duration_hours > 0:
-        expiry = now + timedelta(hours=float(plan.duration_hours))
-    else:
-        expiry = now + timedelta(days=365)
-
-    sub = Subscription.objects.create(
-        subscriber=subscriber,
-        plan=plan,
-        reseller=subscriber.reseller,
-        start_date=now,
-        expiry_date=expiry,
-        status='active',
-    )
-
-    assign_subscriber_to_plan(subscriber, plan)
+    sub = activate_subscription(subscriber, plan)
 
     # Create Payment record for tracking
     Payment.objects.create(
@@ -154,28 +129,7 @@ def renew_plan_from_wallet(subscriber, plan):
         created_by='system',
     )
 
-    Subscription.objects.filter(
-        subscriber=subscriber, status='active'
-    ).update(status='expired')
-
-    now = timezone.now()
-    if plan.duration_days > 0:
-        expiry = now + timedelta(days=plan.duration_days)
-    elif plan.duration_hours > 0:
-        expiry = now + timedelta(hours=float(plan.duration_hours))
-    else:
-        expiry = now + timedelta(days=365)
-
-    sub = Subscription.objects.create(
-        subscriber=subscriber,
-        plan=plan,
-        reseller=subscriber.reseller,
-        start_date=now,
-        expiry_date=expiry,
-        status='active',
-    )
-
-    assign_subscriber_to_plan(subscriber, plan)
+    sub = activate_subscription(subscriber, plan)
 
     Payment.objects.create(
         subscriber=subscriber,

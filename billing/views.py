@@ -4,7 +4,6 @@ import hmac
 import json
 import secrets
 import logging
-from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -17,8 +16,8 @@ from rest_framework import status
 
 from accounts.models import Subscriber
 from plans.models import ServicePlan, Subscription
+from plans.services import activate_subscription
 from billing.models import Payment
-from radius.utils import assign_subscriber_to_plan
 
 logger = logging.getLogger(__name__)
 
@@ -117,11 +116,8 @@ def payment_initialize(request):
 
 def _get_secret_key():
     """Return Paystack secret key from settings or PlatformSettings singleton."""
-    key = getattr(settings, 'PAYSTACK_SECRET_KEY', '')
-    if not key:
-        from operator_panel.models import PlatformSettings
-        key = PlatformSettings.load().paystack_secret_key
-    return key
+    from billing.providers.paystack import get_paystack_keys
+    return get_paystack_keys()[0]
 
 
 @csrf_exempt
@@ -213,32 +209,7 @@ def _activate_payment(payment, paystack_data=None):
         logger.error(f"Payment {payment.id} has no plan.")
         return
 
-    # Calculate expiry
-    now = timezone.now()
-    if plan.duration_days > 0:
-        expiry = now + timedelta(days=plan.duration_days)
-    elif plan.duration_hours > 0:
-        expiry = now + timedelta(hours=float(plan.duration_hours))
-    else:
-        expiry = now + timedelta(days=365)
-
-    # Expire current active subscriptions
-    Subscription.objects.filter(
-        subscriber=subscriber, status='active'
-    ).update(status='expired')
-
-    # Create new subscription
-    Subscription.objects.create(
-        subscriber=subscriber,
-        plan=plan,
-        reseller=payment.reseller,
-        start_date=now,
-        expiry_date=expiry,
-        status='active',
-    )
-
-    # Update RADIUS group
-    assign_subscriber_to_plan(subscriber, plan)
+    activate_subscription(subscriber, plan, reseller=payment.reseller)
 
     logger.info(f"Plan {plan.name} activated for {subscriber.phone} (ref: {payment.paystack_reference})")
 
