@@ -65,7 +65,7 @@ class Command(BaseCommand):
             f"Daily Summary ({now.strftime('%b %d')}):\n"
             f"Revenue: ₦{yesterday_revenue:,.0f} ({yesterday_payments} payments, {yesterday_failures} failed)\n"
             f"Platform: ₦{platform_revenue:,.0f}\n"
-            f"Resellers: {total_resellers} active\n"
+            f"Partners: {total_resellers} active\n"
             f"Subs: {active_subs} active / {total_subscribers} total (+{new_subscribers} new)\n"
             f"Routers: {routers_online}/{routers_total} online"
         )

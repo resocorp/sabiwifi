@@ -12,7 +12,7 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">{{ active_resellers }}</p>
-            <p class="text-on-surface-variant text-xs mt-1">Active resellers</p>
+            <p class="text-on-surface-variant text-xs mt-1">Active partners</p>
             <p class="text-on-surface-variant text-[10px]">{{ total_resellers }} total</p>
         </div>
         <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
@@ -120,7 +120,7 @@
     {% if top_resellers %}
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm mt-6">
         <div class="bg-surface-container-low px-4 py-3 rounded-t-xl">
-            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider">Top Resellers This Month</h2>
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider">Top Partners This Month</h2>
         </div>
         <div class="divide-y divide-surface-container-high">
             {% for r in top_resellers %}

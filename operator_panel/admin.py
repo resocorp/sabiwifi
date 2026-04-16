@@ -107,11 +107,11 @@ class ResellerAdmin(SimpleHistoryAdmin):
 
     actions = ['suspend_resellers', 'activate_resellers']
 
-    @admin.action(description='Suspend selected resellers')
+    @admin.action(description='Suspend selected partners')
     def suspend_resellers(self, request, queryset):
         queryset.update(status='suspended')
 
-    @admin.action(description='Activate selected resellers')
+    @admin.action(description='Activate selected partners')
     def activate_resellers(self, request, queryset):
         queryset.update(status='active')
 

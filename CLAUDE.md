@@ -108,6 +108,7 @@ PlatformSettings  Singleton (pk=1). Commission %, API keys, platform domain.
 
 ## Important Conventions
 
+- **Naming (UI vs code)**: User-facing copy says **"Partner"**; code still uses `Reseller` (class names, FKs, URLs, slugs, RADIUS group prefix). When editing UI strings, use "Partner". When editing code, keep `reseller`. Full code rename deferred until product naming is final.
 - **Phone normalisation**: Always normalise to E.164 on write. `Country.to_international()` / `normalize_to_local()`.
 - **Reseller isolation**: Filter every query by `reseller`. Never return cross-tenant data.
 - **RADIUS group name**: `{reseller.slug}-{plan.slug}` — must match between Django and FreeRADIUS.

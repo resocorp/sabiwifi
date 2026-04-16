@@ -14,7 +14,7 @@ class PlatformSettings(models.Model):
     )
     default_fee_bearer = models.CharField(
         max_length=20, default='subaccount',
-        choices=[('account', 'Platform'), ('subaccount', 'Reseller')],
+        choices=[('account', 'Platform'), ('subaccount', 'Partner')],
         help_text="Who bears the Paystack transaction fee by default"
     )
     default_free_subscriber_limit = models.PositiveIntegerField(

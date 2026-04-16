@@ -63,7 +63,7 @@ class Payment(models.Model):
     )
     reseller_amount_ngn = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
-        help_text="Reseller's share of this payment"
+        help_text="Partner's share of this payment"
     )
     gateway_fee_ngn = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,

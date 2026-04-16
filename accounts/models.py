@@ -104,7 +104,7 @@ class Reseller(models.Model):
     )
     fee_bearer = models.CharField(
         max_length=20, blank=True, default='',
-        choices=[('', 'Platform Default'), ('account', 'Platform'), ('subaccount', 'Reseller')],
+        choices=[('', 'Platform Default'), ('account', 'Platform'), ('subaccount', 'Partner')],
         help_text="Override who bears the Paystack fee. Empty = use platform default."
     )
     free_subscriber_limit = models.PositiveIntegerField(
@@ -127,6 +127,8 @@ class Reseller(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Partner'
+        verbose_name_plural = 'Partners'
 
     def __str__(self):
         return self.name

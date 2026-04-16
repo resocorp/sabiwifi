@@ -20,7 +20,7 @@
       {% if user.is_authenticated %}
       <a href="{% url 'dashboard-overview' %}" class="hover:text-primary transition-colors">Dashboard</a>
       {% else %}
-      <a href="/" class="hover:text-primary transition-colors">Become a Reseller</a>
+      <a href="/" class="hover:text-primary transition-colors">Become a Partner</a>
       {% endif %}
     </nav>
     <div class="flex items-center gap-2">
@@ -54,7 +54,7 @@
       {% if user.is_authenticated %}
       <a href="{% url 'dashboard-overview' %}" class="hover:text-primary mx-2">Dashboard</a>
       {% else %}
-      <a href="/" class="hover:text-primary mx-2">Become a Reseller</a>
+      <a href="/" class="hover:text-primary mx-2">Become a Partner</a>
       {% endif %}
     </p>
   </div>

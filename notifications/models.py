@@ -87,8 +87,8 @@ class NotificationTemplate(models.Model):
         ('welcome', 'Welcome message'),
         ('router_offline', 'Router went offline'),
         ('router_recovered', 'Router back online'),
-        ('new_subscriber', 'New subscriber alert (to reseller)'),
-        ('payment_received', 'Payment received (to reseller)'),
+        ('new_subscriber', 'New subscriber alert (to partner)'),
+        ('payment_received', 'Payment received (to partner)'),
     ]
     EVENT_VARS = {
         'plan_expiry_3d':   ['name', 'plan', 'expiry_date', 'link'],
