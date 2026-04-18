@@ -61,9 +61,14 @@ class Router(models.Model):
     )
 
     # Health
-    last_seen = models.DateTimeField(null=True, blank=True)
+    last_seen = models.DateTimeField(null=True, blank=True,
+        help_text="Last heartbeat received (internet-alive signal).")
+    wg_last_handshake = models.DateTimeField(null=True, blank=True,
+        help_text="Last successful WireGuard handshake (tunnel-alive signal).")
     offline_since = models.DateTimeField(null=True, blank=True,
         help_text="When this router last went offline. Cleared when it comes back online.")
+    needs_reprovision = models.BooleanField(default=False,
+        help_text="When True, the next MikroTik heartbeat returns the provision script.")
     provision_count = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)

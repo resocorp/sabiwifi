@@ -243,6 +243,10 @@ def router_heartbeat(request, serial):
         device_type = 'mikrotik'
         lookup_serial = serial
 
+    # Feature flag: reject OpenWrt heartbeats until the subsystem ships.
+    if device_type == 'openwrt' and not getattr(settings, 'OPENWRT_ENABLED', False):
+        return HttpResponse('# openwrt disabled', content_type='text/plain')
+
     router = Router.objects.filter(serial_number=lookup_serial).first()
 
     # Auto-register OpenWrt device on first heartbeat (no phone-home needed)
@@ -292,13 +296,11 @@ def router_heartbeat(request, serial):
     if device_type == 'openwrt' and request.GET.get('cpu') is not None:
         _cache_openwrt_stats(request, router)
 
-    # For OpenWrt devices needing provisioning: return the full provision script
-    # inline in the heartbeat response. The heartbeat script on the router detects
-    # "#!/bin/sh" and executes it. Script is idempotent so re-delivery is safe.
+    # ── OpenWrt: return full provision script when pending ──
+    # The heartbeat script detects "#!/bin/sh" and executes it.
     if device_type == 'openwrt' and router.reseller and router.status == 'pending_provision':
         from routers.openwrt_provision import generate_openwrt_provision
         script = generate_openwrt_provision(router)
-        # Mark as provisioned + increment count
         from django.db.models import F
         Router.objects.filter(pk=router.pk).update(
             status='provisioned',
@@ -306,6 +308,29 @@ def router_heartbeat(request, serial):
         )
         logger.info(f"Provision script delivered to OpenWrt {lookup_serial} via heartbeat")
         return HttpResponse(script, content_type='text/plain')
+
+    # ── MikroTik: return re-provision script when server knows the device ──
+    # needs it (fresh claim, failed WG handshake flagged by check_routers, or
+    # manual retrigger). The router's heartbeat script detects the
+    # "# SABIWIFI-REPROVISION-v1" sentinel and /import-s the body.
+    if (
+        device_type == 'mikrotik'
+        and router.reseller
+        and (router.status == 'pending_provision' or router.needs_reprovision)
+        and router.wg_private_key
+    ):
+        rsc = generate_provision_rsc(router, router.wg_private_key)
+        from django.db.models import F
+        Router.objects.filter(pk=router.pk).update(
+            status='provisioned',
+            provision_count=F('provision_count') + 1,
+            needs_reprovision=False,
+        )
+        logger.info(
+            f"Re-provision delivered to MikroTik {lookup_serial} via heartbeat "
+            f"(was {router.status}, needs_reprovision={router.needs_reprovision})"
+        )
+        return HttpResponse(rsc, content_type='text/plain')
 
     return HttpResponse('# ok', content_type='text/plain')
 
@@ -785,6 +810,9 @@ def openwrt_provision(request, mac):
       2. Return '# not ready' until a reseller claims the device
       3. Once claimed, return full UCI provision script
     """
+    if not getattr(settings, 'OPENWRT_ENABLED', False):
+        return HttpResponse('# openwrt disabled', content_type='text/plain')
+
     mac = normalize_mac(mac)
 
     if not is_valid_mac(mac):
