@@ -10,6 +10,7 @@ from django.conf import settings
 
 
 PROVISION_TEMPLATE = """\
+# SABIWIFI-REPROVISION-v1
 # ============================================
 # SabiWiFi Provision Script
 # Router: {serial_number}
@@ -116,10 +117,15 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip firewall filter add chain=forward connection-state=established,related action=accept comment="SabiWiFi forward" }} on-error={{}}
 :do {{ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="SabiWiFi NAT" }} on-error={{}}
 
-# --- 12. Heartbeat with self-healing WG tunnel ---
+# --- 12. Bidirectional heartbeat + self-healing WG tunnel ---
+# The heartbeat fetches a response body. If the server needs to push a
+# re-provision (e.g. WG handshake never happened), the body begins with
+# the sentinel "# SABIWIFI-REPROVISION-v1" — in which case the script
+# /import-s the body. Plain "# ok" responses are discarded. This removes
+# the one-shot provision limitation that left earlier devices unrecoverable.
 :do {{ /system scheduler remove [find name=sabiwifi-heartbeat] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-heartbeat] }} on-error={{}}
-/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" mode=https check-certificate=no keep-result=no }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
+/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" dst-path=sabiwifi-hb.rsc mode=https check-certificate=no }} on-error={{}}\\r\\n:local body \\"\\"\\r\\n:do {{ :set body [/file get [/file find name=sabiwifi-hb.rsc] contents] }} on-error={{}}\\r\\n:if ([:pick \\$body 0 25] = \\"# SABIWIFI-REPROVISION-v1\\") do={{ :log info \\"SabiWiFi: server requested re-provision\\"; /import sabiwifi-hb.rsc }}\\r\\n:do {{ /file remove sabiwifi-hb.rsc }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
 /system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
 
 :log info "SabiWiFi: provisioning complete for {serial_number}"

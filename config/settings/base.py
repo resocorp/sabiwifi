@@ -157,6 +157,15 @@ PLATFORM_DOMAIN = config('PLATFORM_DOMAIN', default='app.sabiwifi.com')
 # OpenWrt firmware image path (built by manage.py build_openwrt_firmware)
 OPENWRT_FIRMWARE_PATH = '/opt/openwrt-imagebuilder/bin/firmware-latest.bin'
 
+# Feature flag: while MikroTik is the focus of v1.0, OpenWrt runtime
+# entry points are kept disabled by default. When False:
+#   - /api/routers/openwrt-provision/<mac>/ returns 404
+#   - The heartbeat endpoint rejects OpenWrt devices (MAC-format serials)
+#     with "# not found"
+# Flip to True in prod.py (or via the OPENWRT_ENABLED env var) once OpenWrt
+# support is ready to ship.
+OPENWRT_ENABLED = config('OPENWRT_ENABLED', default=False, cast=bool)
+
 # Login URL for @login_required redirects
 TEST_RUNNER = 'tests.test_runner.SabiWiFiTestRunner'
 

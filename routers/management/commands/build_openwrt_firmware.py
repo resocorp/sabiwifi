@@ -30,9 +30,11 @@ IMAGEBUILDER_URL = (
     'https://downloads.openwrt.org/releases/24.10.0/targets/ramips/mt7621/'
     'openwrt-imagebuilder-24.10.0-ramips-mt7621.Linux-x86_64.tar.zst'
 )
-# IMPORTANT: Xiaomi Mi Router AC2100 (black cylinder).
-# Device reports as xiaomi,mi-router-ac2100 in OpenWrt (verified by sysupgrade check).
-PROFILE = 'xiaomi_mi-router-ac2100'
+# IMPORTANT: Xiaomi Redmi Router AC2100 (RM2100, white flat box).
+# Device reports as xiaomi,redmi-router-ac2100 in OpenWrt.
+# Do NOT use xiaomi_mi-router-ac2100 — that's the black cylinder Mi Router AC2100,
+# a different device with a different flash layout.
+PROFILE = 'xiaomi_redmi-router-ac2100'
 OUTPUT_DIR = os.path.join(IMAGEBUILDER_DIR, 'bin')
 
 # Packages to include in the image
