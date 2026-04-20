@@ -59,13 +59,16 @@ PROVISION_TEMPLATE = """\
   /ip route add dst-address=10.99.0.0/16 gateway=wg0 comment="SabiWiFi WG"
 }}
 
-# --- 6. Download hotspot redirect HTML files ---
-:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/login.html" dst-path=hotspot/login.html mode=https check-certificate=no }} on-error={{}}
-:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/alogin.html" dst-path=hotspot/alogin.html mode=https check-certificate=no }} on-error={{}}
-:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/flogin.html" dst-path=hotspot/flogin.html mode=https check-certificate=no }} on-error={{}}
-:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/rlogin.html" dst-path=hotspot/rlogin.html mode=https check-certificate=no }} on-error={{}}
-
 # --- 7. Walled garden (allow access before hotspot auth) ---
+# Only specific hosts needed by the portal page. Do NOT add broad wildcards like
+# *.gstatic.com, *.googleapis.com, or www.google.com — those match Android/Chrome
+# captive-portal probes (connectivitycheck.gstatic.com/generate_204, www.google.com/
+# generate_204), so the probe succeeds and the OS suppresses the "Sign in to
+# network" prompt. Splash never appears. Allow only fonts/CDNs the portal loads.
+# Purge any pre-existing broad entries left by earlier provisions.
+:do {{ /ip hotspot walled-garden remove [find dst-host="*.gstatic.com"] }} on-error={{}}
+:do {{ /ip hotspot walled-garden remove [find dst-host="*.googleapis.com"] }} on-error={{}}
+:do {{ /ip hotspot walled-garden remove [find dst-host="www.google.com"] }} on-error={{}}
 :do {{ /ip hotspot walled-garden add dst-host={platform_domain} }} on-error={{}}
 :do {{ /ip hotspot walled-garden add dst-host="*.{platform_domain}" }} on-error={{}}
 :do {{ /ip hotspot walled-garden add dst-host=paystack.com }} on-error={{}}
@@ -73,16 +76,32 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip hotspot walled-garden add dst-host="*.paystack.co" }} on-error={{}}
 :do {{ /ip hotspot walled-garden add dst-host=standard.paystack.co }} on-error={{}}
 :do {{ /ip hotspot walled-garden add dst-host="*.cloudflare.com" }} on-error={{}}
+:do {{ /ip hotspot walled-garden add dst-host=fonts.googleapis.com }} on-error={{}}
+:do {{ /ip hotspot walled-garden add dst-host=fonts.gstatic.com }} on-error={{}}
+:do {{ /ip hotspot walled-garden add dst-host=cdn.tailwindcss.com }} on-error={{}}
 
 # --- 8. RADIUS (auth via WireGuard tunnel to server) ---
 :do {{ /radius remove [find comment="sabiwifi"] }} on-error={{}}
 /radius add service={radius_services} address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
 # --- 9. Hotspot server profile + server (RouterOS v7 syntax) ---
-/ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
+# login-by=http-chap: browser computes md5(chap-id || password || chap-challenge)
+# before submitting — password never crosses the captive-portal LAN in plaintext.
+# Our per-router login.html (served by Django) forwards chap-id/challenge to the
+# portal; the portal's chap.js hashes and submits. HTTP-PAP is intentionally NOT
+# enabled so a stale/malicious JS can't downgrade to plaintext.
+/ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-chap html-directory=hotspot dns-name=wifi.portal
 /ip/hotspot/user/profile/set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 /ip hotspot set sabiwifi disabled=no
+
+# --- 9b. Download hotspot redirect HTML (AFTER hotspot add so hotspot/ dir exists) ---
+# login.html is per-router: Django bakes the serial into the redirect URL so
+# we don't depend on any RouterOS template variable for the identifier.
+:do {{ /tool fetch url="https://{platform_domain}/api/routers/hotspot-html/{serial_number}/login.html" dst-path=hotspot/login.html mode=https check-certificate=no }} on-error={{}}
+:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/alogin.html" dst-path=hotspot/alogin.html mode=https check-certificate=no }} on-error={{}}
+:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/flogin.html" dst-path=hotspot/flogin.html mode=https check-certificate=no }} on-error={{}}
+:do {{ /tool fetch url="https://{platform_domain}/static/hotspot/rlogin.html" dst-path=hotspot/rlogin.html mode=https check-certificate=no }} on-error={{}}
 
 # --- 10. WiFi (RouterOS v7 /interface/wifi system) ---
 # 2.4GHz channel: WiFi 6 (ax), auto channel selection, 20/40MHz width
