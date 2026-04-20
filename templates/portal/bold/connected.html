@@ -84,7 +84,7 @@
             </div>
 
             <div class="countdown-bar-wrap"><div class="countdown-bar" id="countdown-bar"></div></div>
-            <p class="countdown-text">Redirecting in <strong id="countdown-num">15</strong>s &mdash; or</p>
+            <p class="countdown-text">Redirecting in <strong id="countdown-num">30</strong>s &mdash; or</p>
             <button class="btn btn-primary" onclick="goNow()">Start Browsing Now</button>
         </div>
     </div>
@@ -94,7 +94,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const dst = urlParams.get('dst') || '';
     const accountUrl = '/portal/account/?r=' + encodeURIComponent(serial);
-    const TOTAL = 15;
+    const TOTAL = 30;
     let remaining = TOTAL, timer = null;
 
     document.getElementById('account-link').href = accountUrl;

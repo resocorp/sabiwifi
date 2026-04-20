@@ -85,12 +85,15 @@ PROVISION_TEMPLATE = """\
 /radius add service={radius_services} address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
 # --- 9. Hotspot server profile + server (RouterOS v7 syntax) ---
-# login-by=http-chap: browser computes md5(chap-id || password || chap-challenge)
-# before submitting — password never crosses the captive-portal LAN in plaintext.
-# Our per-router login.html (served by Django) forwards chap-id/challenge to the
-# portal; the portal's chap.js hashes and submits. HTTP-PAP is intentionally NOT
-# enabled so a stale/malicious JS can't downgrade to plaintext.
-/ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-chap html-directory=hotspot dns-name=wifi.portal
+# login-by=http-pap: the portal runs on app.sabiwifi.com (different origin from
+# the MikroTik's 10.8.0.1), so any POST back to /login is cross-site. Modern
+# browsers default cookies to SameSite=Lax and drop them on cross-site POSTs,
+# which breaks http-chap (MikroTik stores chap-id/challenge keyed by the session
+# cookie — no cookie means "no chap for http-chap login method"). PAP is stateless
+# and self-contained in the POST. Security tradeoff is acceptable: the submitted
+# password is a rotatable per-subscriber auth_token, and the whole LAN between
+# device and router is already cleartext HTTP that anyone on the AP can sniff.
+/ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
 /ip/hotspot/user/profile/set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 /ip hotspot set sabiwifi disabled=no
