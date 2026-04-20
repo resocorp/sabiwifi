@@ -46,9 +46,11 @@ def overview(request):
     plans = ServicePlan.objects.filter(reseller=reseller)
     has_plans = plans.exists()
 
-    # Check if we should show Getting Started vs Overview
-    # Show getting started until all checklist items complete
-    checklist_complete = has_online_router and has_plans and reseller.payment_verified
+    # Getting Started is a one-time onboarding state. Once the reseller has
+    # added a router, a plan, and verified payment, they always see the full
+    # dashboard — offline/failed routers are surfaced as alert banners there,
+    # not by regressing into onboarding.
+    checklist_complete = has_router and has_plans and reseller.payment_verified
     show_getting_started = not checklist_complete
 
     # Stats
@@ -75,9 +77,14 @@ def overview(request):
         reseller=reseller,
     ).select_related('subscriber', 'plan').order_by('-created_at')[:10]
 
-    # Pending router (for Getting Started)
+    # Router states (for Getting Started) — mutually exclusive branches in template
     pending_router = routers.filter(status='pending_provision').first()
     online_router = routers.filter(status='online').first()
+    failed_router = routers.filter(status='failed').first()
+    offline_router = routers.filter(status__in=['offline', 'provisioned']).first()
+
+    # Offline routers (for Overview banner) — all of them, with duration info.
+    offline_routers = list(routers.filter(status__in=['offline', 'provisioned', 'failed']))
 
     context = {
         'reseller': reseller,
@@ -87,6 +94,9 @@ def overview(request):
         'has_plans': has_plans,
         'pending_router': pending_router,
         'online_router': online_router,
+        'failed_router': failed_router,
+        'offline_router': offline_router,
+        'offline_routers': offline_routers,
         'routers_online': routers_online,
         'routers_total': routers_total,
         'active_subs': active_subs,
@@ -277,6 +287,71 @@ def plan_edit(request, pk):
 
 
 @login_required
+def plan_disable(request, pk):
+    """Soft-disable a plan (stops new signups; existing subscribers keep access until expiry)."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    plan = get_object_or_404(ServicePlan, pk=pk, reseller=reseller)
+    if request.method == 'POST' and plan.is_active:
+        plan.is_active = False
+        plan.save()
+        messages.success(request, f'Plan "{plan.name}" disabled.')
+    return redirect('dashboard-plans')
+
+
+@login_required
+def plan_enable(request, pk):
+    """Re-enable a disabled plan."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    plan = get_object_or_404(ServicePlan, pk=pk, reseller=reseller)
+    if request.method == 'POST' and not plan.is_active:
+        plan.is_active = True
+        plan.save()
+        messages.success(request, f'Plan "{plan.name}" enabled.')
+    return redirect('dashboard-plans')
+
+
+@login_required
+def plan_delete(request, pk):
+    """Hard-delete a plan. Refuses if any subscription is active."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    plan = get_object_or_404(ServicePlan, pk=pk, reseller=reseller)
+
+    if request.method != 'POST':
+        return redirect('dashboard-plans')
+
+    active_count = plan.subscriptions.filter(status='active').count()
+    if active_count:
+        messages.error(
+            request,
+            f'Cannot delete "{plan.name}" — {active_count} active subscriber'
+            f'{"s" if active_count != 1 else ""} still on this plan. '
+            f'Disable it instead to stop new signups.'
+        )
+        return redirect('dashboard-plans')
+
+    # Clean up RADIUS group attributes before deleting the plan row.
+    from radius.models import Radgroupreply, Radgroupcheck, Radusergroup
+    group_name = plan.radius_group_name
+    Radgroupreply.objects.filter(groupname=group_name).delete()
+    Radgroupcheck.objects.filter(groupname=group_name).delete()
+    Radusergroup.objects.filter(groupname=group_name).delete()
+
+    plan_name = plan.name
+    plan.delete()
+    messages.success(request, f'Plan "{plan_name}" deleted.')
+    return redirect('dashboard-plans')
+
+
+@login_required
 def subscribers_list(request):
     """List reseller's subscribers."""
     reseller = _get_reseller(request)
@@ -434,6 +509,57 @@ def router_add(request):
         'reseller': reseller,
         'errors': errors,
     })
+
+
+@login_required
+def router_remove(request, pk):
+    """
+    Remove a router from the reseller's account.
+
+    Unassigns the device (does not delete it from the platform). Cleans up
+    WireGuard peer, FreeRADIUS NAS entry, and the per-reseller tunnel/secret
+    state so the device can be re-assigned by the platform operator.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    router = get_object_or_404(Router, pk=pk, reseller=reseller)
+
+    if request.method != 'POST':
+        return redirect('dashboard-routers')
+
+    from routers.wg_utils import remove_peer, WireGuardError
+    from radius.models import Nas
+    from radius.utils import _reload_freeradius
+
+    label = router.location_name or router.serial_number
+
+    if router.wg_public_key:
+        try:
+            remove_peer(router.wg_public_key)
+        except WireGuardError as e:
+            logger.error(f'Failed to remove WG peer for {router.serial_number}: {e}')
+
+    if router.wg_tunnel_ip:
+        Nas.objects.filter(nasname=str(router.wg_tunnel_ip)).delete()
+        _reload_freeradius()
+
+    router.reseller = None
+    router.status = 'available'
+    router.wg_public_key = ''
+    router.wg_private_key = ''
+    router.wg_tunnel_ip = None
+    router.nas_secret = ''
+    router.last_seen = None
+    router.offline_since = None
+    router.save()
+
+    messages.success(request, f'Router "{label}" removed from your account.')
+    return redirect('dashboard-routers')
 
 
 def _handle_mikrotik_add(request, reseller, errors, logger):

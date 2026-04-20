@@ -22,15 +22,22 @@
 
     <!-- Checklist -->
     <div class="space-y-2 mb-6">
+        {% if has_online_router %}
         <div class="flex items-center gap-2 text-sm">
-            {% if has_router %}
-                <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
-                <span class="text-on-surface-variant line-through">Add your router</span>
-            {% else %}
-                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
-                <span class="text-on-surface">Add your router</span>
-            {% endif %}
+            <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
+            <span class="text-on-surface-variant line-through">Add your router</span>
         </div>
+        {% elif has_router %}
+        <div class="flex items-center gap-2 text-sm">
+            <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
+            <span class="text-on-surface">Add your router <span class="text-on-surface-variant">· waiting for it to come online</span></span>
+        </div>
+        {% else %}
+        <a href="{% url 'dashboard-router-add' %}" class="flex items-center gap-2 text-sm hover:text-primary transition">
+            <span class="material-symbols-outlined text-on-surface-variant text-[18px]">radio_button_unchecked</span>
+            <span class="text-on-surface">Add your router →</span>
+        </a>
+        {% endif %}
         <div class="flex items-center gap-2 text-sm">
             {% if has_plans %}
                 <span class="material-symbols-outlined text-primary text-[18px]">check_circle</span>
@@ -51,31 +58,7 @@
         </div>
     </div>
 
-    {% if not has_router %}
-    <!-- No Router — Add Router Card -->
-    <div class="bg-surface-container-lowest rounded-xl shadow-ambient p-5 mb-4">
-        <h3 class="font-headline font-semibold text-base text-on-surface mb-3">Add Your Router</h3>
-        <form method="post" action="{% url 'dashboard-router-add' %}">
-            {% csrf_token %}
-            <p class="text-sm text-on-surface-variant mb-3">
-                Enter the serial number from the sticker on your MikroTik router.
-            </p>
-            <div class="mb-3">
-                <input type="text" name="serial_number" placeholder="e.g. HFG30A9B72C"
-                       class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
-            </div>
-            <button type="submit"
-                    class="w-full bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
-                Add Router
-            </button>
-            <p class="text-xs text-on-surface-variant mt-3">
-                Don't have a router yet?
-                <a href="{% url 'shop-home' %}" class="text-primary hover:underline font-medium">Get one from our Shop →</a>
-            </p>
-        </form>
-    </div>
-
-    {% elif pending_router %}
+    {% if pending_router %}
     <!-- Router Pending — Waiting -->
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient p-5 mb-4">
         <div class="flex items-center gap-2 mb-2">
@@ -96,6 +79,52 @@
         </div>
     </div>
     <script>setTimeout(function(){ location.reload(); }, 10000);</script>
+
+    {% elif failed_router %}
+    <!-- Router Provisioning Failed -->
+    <div class="bg-error/10 rounded-xl p-5 mb-4">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-error">error</span>
+            <h3 class="font-headline font-semibold text-base text-on-surface">Router setup failed</h3>
+        </div>
+        <p class="text-sm text-on-surface-variant mb-3">
+            Serial: <span class="font-mono">{{ failed_router.serial_number }}</span>
+        </p>
+        <div class="bg-surface-container-low rounded-lg p-3 text-sm text-on-surface-variant space-y-1">
+            <p>Something went wrong while connecting your router. Try:</p>
+            <p>1. Power-cycle the router (unplug 30 seconds, plug back in)</p>
+            <p>2. Confirm it's connected to your modem's ethernet Port 1</p>
+            <p>3. If this persists, contact support</p>
+        </div>
+        <a href="{% url 'dashboard-routers' %}" class="inline-block mt-3 text-sm text-primary font-medium hover:underline">
+            View router details →
+        </a>
+    </div>
+
+    {% elif offline_router %}
+    <!-- Router Offline / Not Reachable -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient p-5 mb-4">
+        <div class="flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-error">cloud_off</span>
+            <h3 class="font-headline font-semibold text-base text-on-surface">Router not reaching us</h3>
+        </div>
+        <p class="text-sm text-on-surface-variant mb-1">
+            Serial: <span class="font-mono">{{ offline_router.serial_number }}</span>
+        </p>
+        <p class="text-xs text-on-surface-variant mb-3">
+            {% if offline_router.last_seen %}Last seen {{ offline_router.last_seen|timesince }} ago{% else %}Hasn't come online yet{% endif %}
+        </p>
+        <div class="bg-surface-container-low rounded-lg p-3 text-sm text-on-surface-variant space-y-1">
+            <p>Check that your router is:</p>
+            <p>1. Plugged in and powered on (LEDs lit)</p>
+            <p>2. Connected to your modem via ethernet (Port 1)</p>
+            <p>3. Your internet at the site is working</p>
+        </div>
+        <div class="flex items-center gap-2 mt-3 text-sm text-on-surface-variant">
+            <span class="animate-pulse">●</span> Re-checking automatically
+        </div>
+    </div>
+    <script>setTimeout(function(){ location.reload(); }, 30000);</script>
 
     {% elif has_online_router %}
     <!-- Router Online! -->
@@ -127,11 +156,34 @@
         <a href="{% url 'dashboard-settings' %}" class="inline-flex items-center px-4 py-2 bg-surface-container-low rounded-lg text-sm font-medium text-on-surface hover:bg-surface-container transition">
             Set Up Branding →
         </a>
+        {% if not has_router %}
+        <a href="{% url 'shop-home' %}" class="inline-flex items-center px-4 py-2 bg-surface-container-low rounded-lg text-sm font-medium text-on-surface hover:bg-surface-container transition">
+            Get a Router from Shop →
+        </a>
+        {% endif %}
     </div>
 </div>
 
 {% else %}
 <!-- ===== OVERVIEW STATE ===== -->
+
+<!-- Offline router alerts -->
+{% for router in offline_routers %}
+<div class="bg-error/10 rounded-xl text-error px-4 py-3 text-sm mb-3 flex items-start gap-2">
+    <span class="material-symbols-outlined text-error text-[18px] mt-0.5">warning</span>
+    <span class="flex-1">
+        <strong>{{ router.location_name|default:router.serial_number }}</strong>
+        {% if router.status == 'failed' %}
+            failed to come online. Subscribers cannot connect.
+        {% elif router.offline_since %}
+            has been offline for <strong>{{ router.offline_duration_display }}</strong>. Subscribers cannot connect.
+        {% else %}
+            is offline. Subscribers cannot connect.
+        {% endif %}
+        <a href="{% url 'dashboard-routers' %}" class="underline font-medium ml-1">View →</a>
+    </span>
+</div>
+{% endfor %}
 
 <!-- Stats Cards -->
 <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">

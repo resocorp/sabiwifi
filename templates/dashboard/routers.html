@@ -166,6 +166,17 @@
                             class="mt-3 text-xs text-primary hover:underline">Retry</button>
                 </div>
             </div>
+
+            <!-- Footer actions -->
+            <div class="border-t border-surface-container px-4 py-3 flex justify-end">
+                <form method="post" action="{% url 'dashboard-router-remove' router.pk %}"
+                      onsubmit="return confirm('Remove &quot;{{ router.location_name|default:router.serial_number|escapejs }}&quot; from your account? Subscribers connected through it will lose WiFi. You can re-add this router later.');">
+                    {% csrf_token %}
+                    <button type="submit" class="text-sm text-on-surface-variant hover:text-error">
+                        Remove from my account
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
     {% empty %}
