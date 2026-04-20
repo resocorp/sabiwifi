@@ -28,6 +28,12 @@ def portal_login(request):
     link_orig = request.GET.get('link-orig', '')
     error = request.GET.get('error', '')
     reason = request.GET.get('reason', '')
+    # MikroTik HTTP-CHAP credentials (substituted by RouterOS hotspot engine
+    # into the redirect URL served by routers/views.py:hotspot_login_html).
+    # Both are hex strings; the browser MD5s them with the password to form
+    # the CHAP-Response submitted to link-login.
+    chap_id = request.GET.get('chap-id', '')
+    chap_challenge = request.GET.get('chap-challenge', '')
 
     # UAM/uspot params — nasid is the router MAC (same as serial_number)
     nasid = request.GET.get('nasid', '')
@@ -64,6 +70,8 @@ def portal_login(request):
         'link_orig': link_orig or userurl,
         'error': error,
         'reason': reason,
+        'chap_id': chap_id,
+        'chap_challenge': chap_challenge,
         # UAM-specific context
         'uam_mode': bool(uamip),
         'uamip': uamip,

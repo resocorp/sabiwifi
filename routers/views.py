@@ -449,6 +449,61 @@ def router_phonehome_setup(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+def hotspot_login_html(request, serial):
+    """
+    Per-router MikroTik hotspot login.html: redirects the subscriber's
+    browser to the SabiWiFi captive portal with the serial embedded in
+    the URL. Fetched by the router during provisioning (after /ip hotspot
+    add) and served from flash as the hotspot login template.
+
+    Using a server-rendered per-router file means the router does not
+    need to substitute any RouterOS template variable for the identifier
+    — eliminates the $(identity) fragility. The remaining $(mac) /
+    $(link-login-only) / $(link-orig-esc) variables ARE solidly supported
+    by the hotspot engine and are substituted at serve time.
+    """
+    platform_domain = settings.PLATFORM_DOMAIN
+    # We read MikroTik hotspot variables inside a JS string literal — the only
+    # substitution context where $(chap-id) / $(chap-challenge) reliably yield
+    # their values (as JS byte-escape sequences). Emitting them into a <meta
+    # refresh> URL drops the key=value pair entirely, because the raw bytes
+    # don't survive URL-attribute encoding. We hex-encode the bytes locally
+    # before forwarding to the portal, so the portal always receives a clean
+    # hex string regardless of which context MikroTik chose.
+    portal_url = f'https://{platform_domain}/portal/'
+    html = f"""<html><head>
+<script>
+(function () {{
+    var chapId = '$(chap-id)';
+    var chapChallenge = '$(chap-challenge)';
+    var mac = '$(mac)';
+    var linkLogin = '$(link-login-only)';
+    var linkOrig = '$(link-orig-esc)';
+    var err = '$(error)';
+    function toHex(s) {{
+        var h = '';
+        for (var i = 0; i < s.length; i++) {{
+            var c = s.charCodeAt(i) & 0xff;
+            h += (c < 16 ? '0' : '') + c.toString(16);
+        }}
+        return h;
+    }}
+    var url = '{portal_url}?r={serial.upper()}'
+        + '&mac=' + encodeURIComponent(mac)
+        + '&link-login=' + encodeURIComponent(linkLogin)
+        + '&link-orig=' + encodeURIComponent(linkOrig)
+        + '&chap-id=' + toHex(chapId)
+        + '&chap-challenge=' + toHex(chapChallenge)
+        + '&error=' + encodeURIComponent(err);
+    window.location.replace(url);
+}})();
+</script>
+</head><body>Connecting...</body></html>"""
+    return HttpResponse(html, content_type='text/html')
+
+
+@api_view(['GET'])
 def router_list(request):
     """List all routers for the authenticated reseller."""
     reseller = request.user.reseller

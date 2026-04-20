@@ -129,10 +129,14 @@
         <input type="hidden" name="dst" id="hs-dst">
     </form>
 
+    {% load static %}
+    <script src="{% static 'portal/chap.js' %}"></script>
     <script>
     const serial = '{{ serial|escapejs }}';
     const linkLogin = '{{ link_login|escapejs }}';
     const linkOrig = '{{ link_orig|escapejs }}';
+    const chapId = '{{ chap_id|escapejs }}';
+    const chapChallenge = '{{ chap_challenge|escapejs }}';
 
     // UAM mode context (uspot/CoovaChilli captive portal)
     const uamMode = {{ uam_mode|yesno:"true,false" }};
@@ -228,18 +232,19 @@
                         + '&password=' + encodeURIComponent(data.auth_token || '');
                     window.location.href = logonUrl;
                 } else if (linkLogin) {
-                    // Submit RADIUS credentials to MikroTik hotspot.
-                    // Route through our connected page so subscriber sees account info,
-                    // then auto-redirects to their original destination.
+                    // Submit RADIUS credentials to MikroTik hotspot (HTTP-CHAP).
+                    // The helper MD5s the auth_token with chap-id + chap-challenge
+                    // before submitting so the password never crosses the LAN in
+                    // the clear. Route through our connected page for account info.
                     const connectedUrl = window.location.protocol + '//' + window.location.host
                         + '/portal/connected/?r=' + encodeURIComponent(serial)
                         + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
                     const form = document.getElementById('hotspot-form');
-                    document.getElementById('hs-username').value = data.phone || phone;
-                    document.getElementById('hs-password').value = data.auth_token || '';
-                    document.getElementById('hs-dst').value = connectedUrl;
                     form.action = linkLogin;
-                    form.submit();
+                    sabiwifiChap.submitHotspotLogin(
+                        form, data.phone || phone, data.auth_token || '',
+                        connectedUrl, chapId, chapChallenge
+                    );
                 } else {
                     showMsg('Connected! You can now use the internet.', 'success');
                     btn.disabled = false;
@@ -302,11 +307,11 @@
                         + '/portal/connected/?r=' + encodeURIComponent(serial)
                         + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
                     const form = document.getElementById('hotspot-form');
-                    document.getElementById('hs-username').value = data.phone || pin;
-                    document.getElementById('hs-password').value = data.auth_token || '';
-                    document.getElementById('hs-dst').value = connectedUrl;
                     form.action = linkLogin;
-                    form.submit();
+                    sabiwifiChap.submitHotspotLogin(
+                        form, data.phone || pin, data.auth_token || '',
+                        connectedUrl, chapId, chapChallenge
+                    );
                 } else {
                     showMsg('Connected! You can now use the internet.', 'success');
                     btn.disabled = false; btn.textContent = 'Activate & Connect';

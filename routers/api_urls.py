@@ -6,6 +6,7 @@ urlpatterns = [
     path('provision/<str:serial>/', views.router_provision, name='api-router-provision'),
     path('heartbeat/<str:serial>/', views.router_heartbeat, name='api-router-heartbeat'),
     path('phonehome-setup/', views.router_phonehome_setup, name='api-router-phonehome-setup'),
+    path('hotspot-html/<str:serial>/login.html', views.hotspot_login_html, name='api-router-hotspot-login-html'),
     path('bootstrap/', views.router_bootstrap_generic, name='api-router-bootstrap-generic'),
     path('bootstrap/<str:serial>/', views.router_bootstrap, name='api-router-bootstrap'),
     # OpenWrt phone-home + provision (deprecated — openwisp-config replaces this)

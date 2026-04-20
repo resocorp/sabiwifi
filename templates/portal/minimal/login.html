@@ -101,10 +101,14 @@
         <input type="hidden" name="dst" id="hs-dst">
     </form>
 
+    {% load static %}
+    <script src="{% static 'portal/chap.js' %}"></script>
     <script>
     const serial = '{{ serial|escapejs }}';
     const linkLogin = '{{ link_login|escapejs }}';
     const linkOrig = '{{ link_orig|escapejs }}';
+    const chapId = '{{ chap_id|escapejs }}';
+    const chapChallenge = '{{ chap_challenge|escapejs }}';
     const rawError = '{{ error|escapejs }}';
 
     (function() {
@@ -156,11 +160,12 @@
                     const dst = window.location.protocol + '//' + window.location.host
                         + '/portal/connected/?r=' + encodeURIComponent(serial)
                         + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
-                    document.getElementById('hs-username').value = data.phone || phone;
-                    document.getElementById('hs-password').value = data.auth_token || '';
-                    document.getElementById('hs-dst').value = dst;
                     const form = document.getElementById('hotspot-form');
-                    form.action = linkLogin; form.submit();
+                    form.action = linkLogin;
+                    sabiwifiChap.submitHotspotLogin(
+                        form, data.phone || phone, data.auth_token || '',
+                        dst, chapId, chapChallenge
+                    );
                 } else {
                     showMsg('Connected!', 'success');
                     btn.disabled = false; btn.textContent = 'Connect Now';
@@ -204,11 +209,12 @@
                     const dst = window.location.protocol + '//' + window.location.host
                         + '/portal/connected/?r=' + encodeURIComponent(serial)
                         + (linkOrig ? '&dst=' + encodeURIComponent(linkOrig) : '');
-                    document.getElementById('hs-username').value = data.phone || pin;
-                    document.getElementById('hs-password').value = data.auth_token || '';
-                    document.getElementById('hs-dst').value = dst;
                     const form = document.getElementById('hotspot-form');
-                    form.action = linkLogin; form.submit();
+                    form.action = linkLogin;
+                    sabiwifiChap.submitHotspotLogin(
+                        form, data.phone || pin, data.auth_token || '',
+                        dst, chapId, chapChallenge
+                    );
                 } else {
                     showMsg('Connected!', 'success');
                     btn.disabled = false; btn.textContent = 'Activate & Connect';
