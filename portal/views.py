@@ -128,21 +128,26 @@ def _record_otp_sent(phone, ip):
 
 def _resolve_reseller(request):
     """Resolve reseller from serial (captive portal) or session (self-service)."""
-    serial = request.data.get('serial') or request.GET.get('r', '')
-    reseller_slug = request.data.get('reseller_slug') or request.GET.get('reseller', '')
+    serial = (request.data.get('serial') or request.GET.get('r', '') or '').strip()
+    reseller_slug = (request.data.get('reseller_slug') or request.GET.get('reseller', '') or '').strip()
 
     if serial:
         from routers.models import Router
         try:
             router = Router.objects.select_related('reseller').get(serial_number=serial.upper())
+            if router.reseller is None:
+                logger.warning("_resolve_reseller: router %r found but unassigned", serial)
             return router.reseller
         except Router.DoesNotExist:
+            logger.warning("_resolve_reseller: no Router with serial=%r", serial)
             return None
     elif reseller_slug:
         try:
             return Reseller.objects.get(slug=reseller_slug)
         except Reseller.DoesNotExist:
+            logger.warning("_resolve_reseller: no Reseller with slug=%r", reseller_slug)
             return None
+    logger.warning("_resolve_reseller: no serial or slug provided")
     return None
 
 
@@ -182,7 +187,7 @@ def portal_signup(request):
 
     reseller = _resolve_reseller(request)
     if not reseller:
-        return Response({'error': 'Could not determine WiFi network.'}, status=400)
+        return Response({'error': 'This link is missing network info. Please reconnect to the WiFi and tap the sign-in notification to reopen this page.'}, status=400)
 
     # Check if subscriber already exists for this reseller
     if Subscriber.objects.filter(reseller=reseller, phone=phone).exists():
@@ -393,18 +398,20 @@ def portal_set_pin(request):
     activates the chosen plan (free or already-paid).
 
     Body:
-        verify_token      — from /api/portal/verify/
-        pin               — 4-digit WiFi PIN
-        pin_confirm       — confirmation
-        plan_id           — chosen ServicePlan id (optional; defaults to trial)
-        paystack_reference — required for paid plans
+        verify_token       — from /api/portal/verify/
+        pin                — 4-digit WiFi PIN
+        pin_confirm        — confirmation
+        plan_id            — chosen ServicePlan id (optional; defaults to trial)
+        paystack_reference — shared reference returned by the one combined
+                             fee+plan Paystack charge (required when either
+                             the reseller charges a signup fee or the chosen
+                             plan is paid).
     """
     verify_token = request.data.get('verify_token', '')
     pin = request.data.get('pin', '')
     pin_confirm = request.data.get('pin_confirm', '')
     plan_id = request.data.get('plan_id')
     paystack_reference = request.data.get('paystack_reference', '').strip()
-    signup_fee_reference = request.data.get('signup_fee_reference', '').strip()
 
     if not verify_token:
         return Response({'error': 'Verification required.'}, status=400)
@@ -424,58 +431,49 @@ def portal_set_pin(request):
     except Reseller.DoesNotExist:
         return Response({'error': 'Network not found.'}, status=400)
 
-    # --- Verify signup fee payment if required ---
-    from decimal import Decimal
-    signup_fee_data = None
-    if reseller.signup_fee_enabled and reseller.signup_fee_amount > 0 and reseller.payment_verified:
-        if not signup_fee_reference:
-            return Response({'error': 'Account creation fee payment required.'}, status=400)
-
-        pending_fee = cache.get(f'pending_signup_fee_{verify_token}')
-        if not pending_fee or pending_fee.get('reference') != signup_fee_reference:
-            return Response({'error': 'Invalid signup fee payment reference.'}, status=400)
-
-        signup_fee_data, fee_error = _verify_paystack_payment(
-            signup_fee_reference, pending_fee['amount_kobo']
-        )
-        if not signup_fee_data:
-            return Response({'error': fee_error}, status=400)
-
     # --- Resolve plan ---
+    from decimal import Decimal
     from radius.utils import create_default_trial_plan
     from accounts.models import Country as CountryModel
 
     chosen_plan = None
-    paystack_data = None
-
     if plan_id:
         try:
             chosen_plan = ServicePlan.objects.get(id=plan_id, reseller=reseller, is_active=True)
         except ServicePlan.DoesNotExist:
             return Response({'error': 'Selected plan not found.'}, status=400)
 
-        if not chosen_plan.is_free:
-            # Require a verified Paystack payment
-            if not paystack_reference:
-                return Response({'error': 'Payment required for this plan.'}, status=400)
-
-            pending = cache.get(f'pending_payment_{verify_token}')
-            if not pending or pending.get('reference') != paystack_reference:
-                return Response({'error': 'Invalid payment reference.'}, status=400)
-
-            paystack_data, pmt_error = _verify_paystack_payment(
-                paystack_reference, pending['amount_kobo']
-            )
-            if not paystack_data:
-                return Response({'error': pmt_error}, status=400)
-
     if chosen_plan is None:
-        # Fall back to trial plan
         chosen_plan = ServicePlan.objects.filter(
             reseller=reseller, is_trial=True, is_active=True
         ).first()
         if not chosen_plan:
             chosen_plan = create_default_trial_plan(reseller)
+
+    # --- Determine whether a Paystack charge is required (combined fee+plan) ---
+    signup_fee_kobo = 0
+    if (reseller.signup_fee_enabled and reseller.signup_fee_amount > 0
+            and reseller.payment_verified):
+        signup_fee_kobo = int(reseller.signup_fee_amount * 100)
+    plan_fee_kobo = 0 if chosen_plan.is_free else int(chosen_plan.price_ngn * 100)
+    total_kobo = signup_fee_kobo + plan_fee_kobo
+
+    paystack_data = None
+    if total_kobo > 0:
+        if not paystack_reference:
+            return Response({'error': 'Payment required to create your account.'}, status=400)
+
+        pending = cache.get(f'pending_payment_{verify_token}')
+        if not pending or pending.get('reference') != paystack_reference:
+            return Response({'error': 'Invalid payment reference.'}, status=400)
+
+        paystack_data, pmt_error = _verify_paystack_payment(
+            paystack_reference, pending.get('total_kobo', total_kobo)
+        )
+        if not paystack_data:
+            return Response({'error': pmt_error}, status=400)
+
+    signup_fee_paid_via_paystack = paystack_data is not None and signup_fee_kobo > 0
 
     # --- Create subscriber ---
     country = None
@@ -496,26 +494,31 @@ def portal_set_pin(request):
 
     subscriber.set_pin(pin)
     subscriber.generate_auth_token()
-    if signup_fee_data:
+    if signup_fee_paid_via_paystack:
         subscriber.signup_fee_paid = True
     subscriber.save()
 
-    # Record signup fee payment
-    if signup_fee_data:
+    # Record the signup-fee Payment row. When the same Paystack charge also
+    # funds a paid plan (→ a plan Payment row sharing the real reference),
+    # the signup-fee row gets a ':fee' suffix to avoid the unique-constraint
+    # collision while staying discoverable by prefix.
+    if signup_fee_paid_via_paystack:
         commission_pct = reseller.get_commission_pct()
         fee_bearer = reseller.get_fee_bearer()
         amount_ngn = reseller.signup_fee_amount
         platform_share = (amount_ngn * commission_pct / Decimal('100')).quantize(Decimal('0.01'))
         reseller_share = amount_ngn - platform_share
+        real_ref = paystack_data.get('reference', '')
+        fee_ref = f'{real_ref}:fee' if plan_fee_kobo > 0 else real_ref
         Payment.objects.create(
             subscriber=subscriber,
             plan=None,
             reseller=reseller,
             payment_type='signup_fee',
             amount_ngn=amount_ngn,
-            paystack_reference=signup_fee_data.get('reference', ''),
+            paystack_reference=fee_ref,
             paystack_status='success',
-            payment_method=signup_fee_data.get('channel', 'card'),
+            payment_method=paystack_data.get('channel', 'card'),
             commission_pct_applied=commission_pct,
             fee_bearer_applied=fee_bearer,
             platform_amount_ngn=platform_share,
@@ -535,15 +538,13 @@ def portal_set_pin(request):
         except Exception as _exc:
             logger.warning(f'Signup fee notify failed: {_exc}')
 
-    # Activate chosen plan
-    if chosen_plan:
-        _create_subscription(subscriber, chosen_plan, reseller, paystack_data)
+    # Activate chosen plan. Pass paystack_data only when the plan itself
+    # was charged — free plans should still land in the free_ref branch.
+    plan_paystack_data = paystack_data if (paystack_data and not chosen_plan.is_free) else None
+    _create_subscription(subscriber, chosen_plan, reseller, plan_paystack_data)
 
     cache.delete(f'verified_{verify_token}')
-    if paystack_reference:
-        cache.delete(f'pending_payment_{verify_token}')
-    if signup_fee_data:
-        cache.delete(f'pending_signup_fee_{verify_token}')
+    cache.delete(f'pending_payment_{verify_token}')
 
     # Send welcome message to subscriber + new subscriber alert to reseller
     try:
@@ -574,17 +575,22 @@ def portal_set_pin(request):
 @permission_classes([AllowAny])
 def portal_initiate_payment(request):
     """
-    Initialize a Paystack transaction for plan purchase during signup.
+    Initialize a single Paystack transaction combining the account-creation fee
+    (if enabled for this reseller) and the chosen plan's price. Called during
+    signup after OTP verification.
 
     Body:
         verify_token  — from /api/portal/verify/
-        plan_id       — paid ServicePlan id
+        plan_id       — chosen ServicePlan id
 
-    Returns:
-        reference, access_code, public_key, amount_kobo, email
+    Returns (when total > 0):
+        requires_payment=True, reference, access_code, public_key,
+        amount_kobo (combined total), signup_fee_kobo, plan_fee_kobo, email
+
+    Returns (when total == 0, e.g. free plan + no fee):
+        requires_payment=False — frontend should jump to PIN step.
     """
     import uuid
-    from django.conf import settings
 
     verify_token = request.data.get('verify_token', '')
     plan_id = request.data.get('plan_id')
@@ -606,8 +612,24 @@ def portal_initiate_payment(request):
     except ServicePlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=404)
 
-    if plan.is_free:
-        return Response({'error': 'This plan is free — no payment needed.'}, status=400)
+    signup_fee_kobo = 0
+    if (reseller.signup_fee_enabled and reseller.signup_fee_amount > 0
+            and reseller.payment_verified):
+        signup_fee_kobo = int(reseller.signup_fee_amount * 100)
+
+    plan_fee_kobo = 0 if plan.is_free else int(plan.price_ngn * 100)
+    total_kobo = signup_fee_kobo + plan_fee_kobo
+
+    if total_kobo == 0:
+        # Nothing to charge — frontend skips Paystack entirely.
+        cache.delete(f'pending_payment_{verify_token}')
+        return Response({
+            'requires_payment': False,
+            'plan_id': int(plan_id),
+            'signup_fee_kobo': 0,
+            'plan_fee_kobo': 0,
+            'amount_kobo': 0,
+        })
 
     if not reseller.payment_verified or not reseller.paystack_subaccount_code:
         return Response({'error': 'This network does not accept online payments yet.'}, status=400)
@@ -618,25 +640,30 @@ def portal_initiate_payment(request):
         return Response({'error': 'Payment gateway not configured.'}, status=503)
 
     reference = f'sw_{uuid.uuid4().hex[:20]}'
-    amount_kobo = int(plan.price_ngn * 100)
     commission_pct = reseller.get_commission_pct()
     fee_bearer = reseller.get_fee_bearer()
-    platform_share_kobo = int(amount_kobo * commission_pct / 100)
+    platform_share_kobo = int(total_kobo * commission_pct / 100)
+
+    custom_fields = [
+        {'display_name': 'Phone', 'variable_name': 'phone', 'value': verified_data['phone']},
+        {'display_name': 'Plan', 'variable_name': 'plan', 'value': plan.name},
+        {'display_name': 'Network', 'variable_name': 'network', 'value': reseller.name},
+    ]
+    if signup_fee_kobo > 0:
+        custom_fields.append({
+            'display_name': 'Account Setup Fee',
+            'variable_name': 'account_setup_fee',
+            'value': f'NGN {signup_fee_kobo / 100:,.2f}',
+        })
 
     payload = {
         'email': verified_data['email'],
-        'amount': amount_kobo,
+        'amount': total_kobo,
         'reference': reference,
         'subaccount': reseller.paystack_subaccount_code,
         'bearer': fee_bearer,
         'transaction_charge': platform_share_kobo,
-        'metadata': {
-            'custom_fields': [
-                {'display_name': 'Phone', 'variable_name': 'phone', 'value': verified_data['phone']},
-                {'display_name': 'Plan', 'variable_name': 'plan', 'value': plan.name},
-                {'display_name': 'Network', 'variable_name': 'network', 'value': reseller.name},
-            ],
-        },
+        'metadata': {'custom_fields': custom_fields},
     }
 
     try:
@@ -655,112 +682,24 @@ def portal_initiate_payment(request):
         logger.error(f'Paystack init failed: {body}')
         return Response({'error': body.get('message', 'Could not initialize payment.')}, status=400)
 
-    # Cache pending payment so set-pin can verify it later
     cache.set(f'pending_payment_{verify_token}', {
         'reference': reference,
         'plan_id': int(plan_id),
-        'amount_kobo': amount_kobo,
+        'signup_fee_kobo': signup_fee_kobo,
+        'plan_fee_kobo': plan_fee_kobo,
+        'total_kobo': total_kobo,
     }, timeout=1800)
 
     return Response({
+        'requires_payment': True,
         'reference': reference,
         'access_code': body['data']['access_code'],
         'public_key': public_key,
-        'amount_kobo': amount_kobo,
+        'amount_kobo': total_kobo,
+        'signup_fee_kobo': signup_fee_kobo,
+        'plan_fee_kobo': plan_fee_kobo,
         'email': verified_data['email'],
         'plan_name': plan.name,
-    })
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def portal_initiate_signup_payment(request):
-    """
-    Initialize a Paystack transaction for the account creation fee during signup.
-
-    Body:
-        verify_token  — from /api/portal/verify/
-
-    Returns:
-        reference, access_code, public_key, amount_kobo, email
-    """
-    import uuid
-
-    verify_token = request.data.get('verify_token', '')
-    if not verify_token:
-        return Response({'error': 'verify_token is required.'}, status=400)
-
-    verified_data = cache.get(f'verified_{verify_token}')
-    if not verified_data:
-        return Response({'error': 'Session expired. Please start over.'}, status=400)
-
-    try:
-        reseller = Reseller.objects.get(id=verified_data['reseller_id'])
-    except Reseller.DoesNotExist:
-        return Response({'error': 'Network not found.'}, status=400)
-
-    if not reseller.signup_fee_enabled or reseller.signup_fee_amount <= 0:
-        return Response({'error': 'This network does not charge a signup fee.'}, status=400)
-
-    if not reseller.payment_verified or not reseller.paystack_subaccount_code:
-        return Response({'error': 'This network does not accept online payments yet.'}, status=400)
-
-    secret_key = _get_paystack_secret_key()
-    public_key = _get_paystack_public_key()
-    if not secret_key or not public_key:
-        return Response({'error': 'Payment gateway not configured.'}, status=503)
-
-    reference = f'swf_{uuid.uuid4().hex[:20]}'
-    amount_kobo = int(reseller.signup_fee_amount * 100)
-    commission_pct = reseller.get_commission_pct()
-    fee_bearer = reseller.get_fee_bearer()
-    platform_share_kobo = int(amount_kobo * commission_pct / 100)
-
-    payload = {
-        'email': verified_data['email'],
-        'amount': amount_kobo,
-        'reference': reference,
-        'subaccount': reseller.paystack_subaccount_code,
-        'bearer': fee_bearer,
-        'transaction_charge': platform_share_kobo,
-        'metadata': {
-            'custom_fields': [
-                {'display_name': 'Phone', 'variable_name': 'phone', 'value': verified_data['phone']},
-                {'display_name': 'Type', 'variable_name': 'type', 'value': 'Account Creation Fee'},
-                {'display_name': 'Network', 'variable_name': 'network', 'value': reseller.name},
-            ],
-        },
-    }
-
-    try:
-        resp = http_requests.post(
-            'https://api.paystack.co/transaction/initialize',
-            json=payload,
-            headers={'Authorization': f'Bearer {secret_key}'},
-            timeout=15,
-        )
-        body = resp.json()
-    except Exception as exc:
-        logger.error(f'Paystack signup fee init error: {exc}')
-        return Response({'error': 'Payment gateway unavailable. Please try again.'}, status=502)
-
-    if not body.get('status'):
-        logger.error(f'Paystack signup fee init failed: {body}')
-        return Response({'error': body.get('message', 'Could not initialize payment.')}, status=400)
-
-    # Cache pending fee so set-pin can verify it later
-    cache.set(f'pending_signup_fee_{verify_token}', {
-        'reference': reference,
-        'amount_kobo': amount_kobo,
-    }, timeout=1800)
-
-    return Response({
-        'reference': reference,
-        'access_code': body['data']['access_code'],
-        'public_key': public_key,
-        'amount_kobo': amount_kobo,
-        'email': verified_data['email'],
-        'fee_amount': float(reseller.signup_fee_amount),
     })
 
 
@@ -1159,6 +1098,31 @@ def portal_disconnect(request):
         'message': 'All devices disconnected.',
         'auth_token': subscriber.auth_token,  # updated token for continued account access
     })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def portal_delete_account(request):
+    """
+    Subscriber-initiated account deletion. Evicts all active sessions, strips
+    the user from FreeRADIUS, then deletes the Subscriber row. CASCADE wipes
+    Subscriptions, Payments, Wallet, DailyUsageSnapshot, and per-user notif
+    prefs. NotificationLog / Voucher / RefillCard keep SET_NULL so audit trail
+    survives without personal data.
+    """
+    auth_token = request.headers.get('X-Auth-Token', '')
+    if not auth_token:
+        return Response({'error': 'Authentication required.'}, status=401)
+    try:
+        subscriber = Subscriber.objects.get(auth_token=auth_token)
+    except Subscriber.DoesNotExist:
+        return Response({'error': 'Invalid session.'}, status=401)
+
+    # Kick every active session before RADIUS state is gone so the DM still matches.
+    disconnect_subscriber_sessions(subscriber)
+    remove_subscriber_from_radius(subscriber)
+    subscriber.delete()
+    return Response({'message': 'Account deleted.'})
 
 
 @api_view(['POST'])

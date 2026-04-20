@@ -45,6 +45,7 @@
         label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; color: var(--on-surface); }
         input { width: 100%; padding: 10px 12px; background: var(--surface-container-highest); border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; outline: none; color: var(--on-surface); }
         input:focus { box-shadow: 0 0 0 2px var(--primary)40; }
+        input[type="checkbox"] { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: var(--primary); flex-shrink: 0; cursor: pointer; }
         .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
         .error { background: var(--error); color: #fff; padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 12px; display: none; }
         .success { background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 12px; display: none; }
@@ -160,6 +161,7 @@
                 <button class="btn btn-outline mt-8" onclick="showSection('change-pin-section')">Change WiFi PIN</button>
                 <button class="btn btn-outline mt-8" onclick="loadPlans()">Change Plan</button>
                 <button class="btn btn-danger mt-8" id="disconnect-btn" onclick="doDisconnectAll()">Disconnect All Devices</button>
+                <button class="btn btn-danger mt-8" id="delete-account-btn" onclick="doDeleteAccount()">Delete My Account</button>
             </div>
 
             <!-- Notification Preferences -->
@@ -450,7 +452,7 @@
 
     // --- Disconnect all devices ---
     function doDisconnectAll() {
-        if (!confirm('This will disconnect all devices currently using your account from the WiFi. Continue?')) return;
+        if (!confirm('This will disconnect EVERY device using your account, including THIS one. You will have to sign in again to keep browsing. Continue?')) return;
         const btn = document.getElementById('disconnect-btn');
         btn.disabled = true;
         btn.textContent = 'Disconnecting…';
@@ -461,22 +463,54 @@
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
-            btn.disabled = false;
-            btn.textContent = 'Disconnect All Devices';
             if (ok) {
-                // Update stored token (rotated server-side)
-                if (data.auth_token) {
-                    authToken = data.auth_token;
-                    localStorage.setItem('sabiwifi_token', authToken);
-                }
-                showMsg('acct-msg', 'All devices have been disconnected from the WiFi.', 'success');
+                // This device's RADIUS session was evicted by the DM above.
+                // Drop any stored creds and bounce back to the login page so
+                // the captive-portal splash re-appears on next HTTP request.
+                localStorage.removeItem('sabiwifi_token');
+                showMsg('acct-msg', 'All devices disconnected. Redirecting to sign in…', 'success');
+                setTimeout(() => { window.location.href = '/portal/?r=' + encodeURIComponent(serial); }, 1200);
             } else {
+                btn.disabled = false;
+                btn.textContent = 'Disconnect All Devices';
                 showMsg('acct-msg', data.error || 'Could not disconnect devices.', 'error');
             }
         })
         .catch(() => {
             btn.disabled = false;
             btn.textContent = 'Disconnect All Devices';
+            showMsg('acct-msg', 'Network error. Please try again.', 'error');
+        });
+    }
+
+    // --- Delete account ---
+    function doDeleteAccount() {
+        if (!confirm('DELETE your account? This permanently removes your profile, subscription history, saved PIN, and all personal data. This cannot be undone.')) return;
+        const confirmText = prompt('Type DELETE (all caps) to confirm.');
+        if (confirmText !== 'DELETE') { showMsg('acct-msg', 'Deletion cancelled.', 'error'); return; }
+        const btn = document.getElementById('delete-account-btn');
+        btn.disabled = true;
+        btn.textContent = 'Deleting…';
+
+        fetch('/api/portal/delete-account/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Auth-Token': authToken},
+        })
+        .then(r => r.json().then(data => ({ok: r.ok, data})))
+        .then(({ok, data}) => {
+            if (ok) {
+                localStorage.removeItem('sabiwifi_token');
+                showMsg('acct-msg', 'Account deleted. Goodbye.', 'success');
+                setTimeout(() => { window.location.href = '/portal/?r=' + encodeURIComponent(serial); }, 1500);
+            } else {
+                btn.disabled = false;
+                btn.textContent = 'Delete My Account';
+                showMsg('acct-msg', data.error || 'Could not delete account.', 'error');
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.textContent = 'Delete My Account';
             showMsg('acct-msg', 'Network error. Please try again.', 'error');
         });
     }

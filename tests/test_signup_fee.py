@@ -1,9 +1,8 @@
 """
-Tests for Account Creation Fee feature.
-Covers: model fields, verify-otp fee response, initiate-signup-payment,
-set-pin fee gate, payment record creation, dashboard settings save.
+Tests for Account Creation Fee feature (consolidated single-charge flow).
+Covers: model fields, verify-otp fee response, combined initiate-payment,
+set-pin fee+plan gate, shared-reference Payment rows, dashboard settings save.
 """
-import json
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
@@ -17,7 +16,7 @@ from rest_framework.test import APIClient
 _no_ssl = override_settings(SECURE_SSL_REDIRECT=False)
 
 from accounts.models import Reseller, Subscriber
-from plans.models import ServicePlan, Subscription
+from plans.models import ServicePlan
 from billing.models import Payment
 from operator_panel.models import PlatformSettings
 
@@ -43,6 +42,14 @@ def _make_free_plan(reseller):
         reseller=reseller, name='Free Trial', slug='free-trial',
         download_mbps=2, upload_mbps=2, duration_hours=Decimal('1'),
         price_ngn=Decimal('0'), is_trial=True,
+    )
+
+
+def _make_paid_plan(reseller, price=Decimal('2000'), slug='paid'):
+    return ServicePlan.objects.create(
+        reseller=reseller, name='Daily', slug=slug,
+        download_mbps=10, upload_mbps=5, duration_hours=Decimal('24'),
+        price_ngn=price,
     )
 
 
@@ -100,7 +107,7 @@ class SignupFeeModelFieldsTest(TestCase):
 
 
 # ─────────────────────────────────────────────
-#  2. verify-otp: signup_fee_required flag
+#  2. verify-otp: signup_fee_required flag (unchanged)
 # ─────────────────────────────────────────────
 
 @_no_ssl
@@ -111,7 +118,7 @@ class VerifyOTPSignupFeeResponseTest(TestCase):
         self.client = APIClient()
 
     def _seed_otp(self, phone, reseller):
-        otp = '123456'  # must be 6 digits to pass view validation
+        otp = '123456'
         cache.set(f'otp_{phone}_{reseller.id}', {
             'otp': otp, 'phone': phone,
             'email': 'user@test.com', 'reseller_id': reseller.id,
@@ -149,7 +156,6 @@ class VerifyOTPSignupFeeResponseTest(TestCase):
         self.assertEqual(resp.data['signup_fee_amount'], 500.0)
 
     def test_fee_enabled_but_no_bank_returns_false(self):
-        """Fee is enabled but reseller has no verified bank — fee not required."""
         r = _make_reseller(verified=False)
         r.signup_fee_enabled = True
         r.signup_fee_amount = Decimal('500')
@@ -165,7 +171,6 @@ class VerifyOTPSignupFeeResponseTest(TestCase):
         self.assertFalse(resp.data['signup_fee_required'])
 
     def test_fee_enabled_zero_amount_returns_false(self):
-        """Toggle on but amount = 0 — treated as disabled."""
         r = _make_reseller(verified=True)
         r.signup_fee_enabled = True
         r.signup_fee_amount = Decimal('0')
@@ -182,82 +187,130 @@ class VerifyOTPSignupFeeResponseTest(TestCase):
 
 
 # ─────────────────────────────────────────────
-#  3. initiate-signup-payment endpoint
+#  3. initiate-payment: combined fee + plan charge
 # ─────────────────────────────────────────────
 
 @_no_ssl
-class InitiateSignupPaymentTest(TestCase):
+class InitiatePaymentCombinedTest(TestCase):
     def setUp(self):
         PlatformSettings.load()
         cache.clear()
         self.client = APIClient()
 
-    def test_returns_400_when_no_fee_configured(self):
+    def test_session_expired_returns_400(self):
         r = _make_reseller(verified=True)
-        token = _seed_cache_verified('08011111111', 'u@test.com', r.id)
+        plan = _make_paid_plan(r)
 
-        resp = self.client.post('/api/portal/initiate-signup-payment/', {
-            'verify_token': token,
-        }, format='json')
-
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn('does not charge', resp.data['error'])
-
-    def test_returns_400_when_no_bank_verified(self):
-        r = _make_reseller(verified=False)
-        r.signup_fee_enabled = True
-        r.signup_fee_amount = Decimal('500')
-        r.save()
-        token = _seed_cache_verified('08011111111', 'u@test.com', r.id)
-
-        resp = self.client.post('/api/portal/initiate-signup-payment/', {
-            'verify_token': token,
-        }, format='json')
-
-        self.assertEqual(resp.status_code, 400)
-
-    def test_returns_400_when_session_expired(self):
-        resp = self.client.post('/api/portal/initiate-signup-payment/', {
+        resp = self.client.post('/api/portal/initiate-payment/', {
             'verify_token': 'notavalidtoken',
+            'plan_id': plan.id,
         }, format='json')
 
         self.assertEqual(resp.status_code, 400)
         self.assertIn('expired', resp.data['error'])
 
+    def test_free_plan_no_fee_returns_requires_payment_false(self):
+        r = _make_reseller(verified=True)
+        plan = _make_free_plan(r)
+        token = _seed_cache_verified('08011111111', 'u@test.com', r.id)
+
+        resp = self.client.post('/api/portal/initiate-payment/', {
+            'verify_token': token,
+            'plan_id': plan.id,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['requires_payment'])
+        self.assertEqual(resp.data['amount_kobo'], 0)
+
     @patch('portal.views.http_requests.post')
-    def test_returns_paystack_data_when_fee_configured(self, mock_post):
+    def test_paid_plan_no_fee_returns_plan_total(self, mock_post):
         mock_post.return_value = MagicMock(
             json=lambda: {
                 'status': True,
-                'data': {'access_code': 'acc_abc', 'authorization_url': 'https://pay.link'},
+                'data': {'access_code': 'acc_a', 'authorization_url': 'https://pay.link'},
+            }
+        )
+        r = _make_reseller(verified=True)
+        plan = _make_paid_plan(r, price=Decimal('2000'))
+        token = _seed_cache_verified('08022222222', 'u@test.com', r.id)
+
+        resp = self.client.post('/api/portal/initiate-payment/', {
+            'verify_token': token,
+            'plan_id': plan.id,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['requires_payment'])
+        self.assertEqual(resp.data['amount_kobo'], 200000)
+        self.assertEqual(resp.data['plan_fee_kobo'], 200000)
+        self.assertEqual(resp.data['signup_fee_kobo'], 0)
+
+        pending = cache.get(f'pending_payment_{token}')
+        self.assertIsNotNone(pending)
+        self.assertEqual(pending['total_kobo'], 200000)
+        self.assertEqual(pending['signup_fee_kobo'], 0)
+
+    @patch('portal.views.http_requests.post')
+    def test_free_plan_with_fee_returns_fee_only(self, mock_post):
+        mock_post.return_value = MagicMock(
+            json=lambda: {
+                'status': True,
+                'data': {'access_code': 'acc_b', 'authorization_url': 'https://pay.link'},
             }
         )
         r = _make_reseller(verified=True)
         r.signup_fee_enabled = True
-        r.signup_fee_amount = Decimal('500')
+        r.signup_fee_amount = Decimal('1000')
         r.save()
+        plan = _make_free_plan(r)
+        token = _seed_cache_verified('08033333334', 'u@test.com', r.id)
 
-        token = _seed_cache_verified('08011111111', 'u@test.com', r.id)
-
-        resp = self.client.post('/api/portal/initiate-signup-payment/', {
+        resp = self.client.post('/api/portal/initiate-payment/', {
             'verify_token': token,
+            'plan_id': plan.id,
         }, format='json')
 
         self.assertEqual(resp.status_code, 200)
-        self.assertIn('reference', resp.data)
-        self.assertIn('access_code', resp.data)
-        self.assertEqual(resp.data['fee_amount'], 500.0)
-        self.assertIn('amount_kobo', resp.data)
-        self.assertEqual(resp.data['amount_kobo'], 50000)
+        self.assertTrue(resp.data['requires_payment'])
+        self.assertEqual(resp.data['amount_kobo'], 100000)
+        self.assertEqual(resp.data['signup_fee_kobo'], 100000)
+        self.assertEqual(resp.data['plan_fee_kobo'], 0)
 
-        # Verify cache was set for later verification in set-pin
-        pending = cache.get(f'pending_signup_fee_{token}')
-        self.assertIsNotNone(pending)
-        self.assertEqual(pending['amount_kobo'], 50000)
+    @patch('portal.views.http_requests.post')
+    def test_paid_plan_with_fee_returns_combined_total(self, mock_post):
+        mock_post.return_value = MagicMock(
+            json=lambda: {
+                'status': True,
+                'data': {'access_code': 'acc_c', 'authorization_url': 'https://pay.link'},
+            }
+        )
+        r = _make_reseller(verified=True)
+        r.signup_fee_enabled = True
+        r.signup_fee_amount = Decimal('1000')
+        r.save()
+        plan = _make_paid_plan(r, price=Decimal('2000'))
+        token = _seed_cache_verified('08044444445', 'u@test.com', r.id)
+
+        resp = self.client.post('/api/portal/initiate-payment/', {
+            'verify_token': token,
+            'plan_id': plan.id,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['requires_payment'])
+        self.assertEqual(resp.data['amount_kobo'], 300000)
+        self.assertEqual(resp.data['signup_fee_kobo'], 100000)
+        self.assertEqual(resp.data['plan_fee_kobo'], 200000)
+
+        pending = cache.get(f'pending_payment_{token}')
+        self.assertEqual(pending['total_kobo'], 300000)
+        self.assertEqual(pending['signup_fee_kobo'], 100000)
+        self.assertEqual(pending['plan_fee_kobo'], 200000)
 
 
 # ─────────────────────────────────────────────
-#  4. set-pin: fee gate
+#  4. set-pin: fee + plan gate
 # ─────────────────────────────────────────────
 
 @_no_ssl
@@ -270,102 +323,201 @@ class SetPinFeeGateTest(TestCase):
         self.reseller.signup_fee_enabled = True
         self.reseller.signup_fee_amount = Decimal('500')
         self.reseller.save()
-        _make_free_plan(self.reseller)
+        self.free_plan = _make_free_plan(self.reseller)
+        self.paid_plan = _make_paid_plan(self.reseller, price=Decimal('2000'))
 
-    def test_set_pin_rejected_when_fee_required_but_not_provided(self):
+    def test_set_pin_rejected_when_payment_required_but_missing(self):
         token = _seed_cache_verified('08077777777', 'u@test.com', self.reseller.id)
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
             'pin': '1234',
             'pin_confirm': '1234',
+            'plan_id': self.free_plan.id,
         }, format='json')
 
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Account creation fee', resp.data['error'])
+        self.assertIn('Payment required', resp.data['error'])
 
     def test_set_pin_rejected_with_wrong_reference(self):
         token = _seed_cache_verified('08077777778', 'u@test.com', self.reseller.id)
-        # Cache a pending fee with one reference
-        cache.set(f'pending_signup_fee_{token}', {
-            'reference': 'swf_correct_ref',
-            'amount_kobo': 50000,
+        cache.set(f'pending_payment_{token}', {
+            'reference': 'sw_correct_ref',
+            'plan_id': self.free_plan.id,
+            'signup_fee_kobo': 50000,
+            'plan_fee_kobo': 0,
+            'total_kobo': 50000,
         }, timeout=1800)
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
             'pin': '1234',
             'pin_confirm': '1234',
-            'signup_fee_reference': 'swf_wrong_ref',
+            'plan_id': self.free_plan.id,
+            'paystack_reference': 'sw_wrong_ref',
         }, format='json')
 
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Invalid signup fee', resp.data['error'])
+        self.assertIn('Invalid payment reference', resp.data['error'])
 
     @patch('portal.views._verify_paystack_payment')
     @patch('notifications.notify.notify_reseller')
     @patch('notifications.notify.notify_subscriber')
     @patch('notifications.notify.notify_admin_contacts')
-    def test_set_pin_succeeds_when_fee_paid(
+    def test_free_plan_with_fee_creates_one_signup_fee_payment(
         self, mock_contacts, mock_sub_notify, mock_res_notify, mock_verify
     ):
-        mock_verify.return_value = ({'reference': 'swf_ref_ok', 'channel': 'card'}, None)
+        mock_verify.return_value = (
+            {'reference': 'sw_shared_a', 'channel': 'card'}, None
+        )
 
         token = _seed_cache_verified('08077777779', 'u@test.com', self.reseller.id)
-        cache.set(f'pending_signup_fee_{token}', {
-            'reference': 'swf_ref_ok',
-            'amount_kobo': 50000,
+        cache.set(f'pending_payment_{token}', {
+            'reference': 'sw_shared_a',
+            'plan_id': self.free_plan.id,
+            'signup_fee_kobo': 50000,
+            'plan_fee_kobo': 0,
+            'total_kobo': 50000,
         }, timeout=1800)
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
             'pin': '1234',
             'pin_confirm': '1234',
-            'signup_fee_reference': 'swf_ref_ok',
+            'plan_id': self.free_plan.id,
+            'paystack_reference': 'sw_shared_a',
         }, format='json')
 
         self.assertEqual(resp.status_code, 201)
 
-        # Subscriber created with signup_fee_paid=True
         sub = Subscriber.objects.get(reseller=self.reseller, phone='08077777779')
         self.assertTrue(sub.signup_fee_paid)
 
-        # Payment record created with correct type
         fee_payment = Payment.objects.get(subscriber=sub, payment_type='signup_fee')
         self.assertEqual(fee_payment.amount_ngn, Decimal('500'))
-        self.assertEqual(fee_payment.paystack_status, 'success')
+        self.assertEqual(fee_payment.paystack_reference, 'sw_shared_a')
         self.assertIsNone(fee_payment.plan)
 
-        # Cache cleared
-        self.assertIsNone(cache.get(f'pending_signup_fee_{token}'))
+        # Free plan payment row uses its own free_ reference (was not charged)
+        plan_payments = Payment.objects.filter(
+            subscriber=sub, payment_type='plan'
+        )
+        self.assertEqual(plan_payments.count(), 1)
+        self.assertTrue(plan_payments.first().paystack_reference.startswith('free_'))
+
+        self.assertIsNone(cache.get(f'pending_payment_{token}'))
 
     @patch('portal.views._verify_paystack_payment')
     @patch('notifications.notify.notify_reseller')
     @patch('notifications.notify.notify_subscriber')
     @patch('notifications.notify.notify_admin_contacts')
-    def test_set_pin_no_fee_flow_unaffected(
+    def test_paid_plan_with_fee_creates_two_payments_sharing_reference(
         self, mock_contacts, mock_sub_notify, mock_res_notify, mock_verify
     ):
-        """When fee is disabled, set-pin should work without signup_fee_reference."""
-        self.reseller.signup_fee_enabled = False
-        self.reseller.save()
+        mock_verify.return_value = (
+            {'reference': 'sw_shared_b', 'channel': 'card'}, None
+        )
 
-        token = _seed_cache_verified('08088888880', 'u@test.com', self.reseller.id)
+        token = _seed_cache_verified('08088888888', 'u@test.com', self.reseller.id)
+        cache.set(f'pending_payment_{token}', {
+            'reference': 'sw_shared_b',
+            'plan_id': self.paid_plan.id,
+            'signup_fee_kobo': 50000,
+            'plan_fee_kobo': 200000,
+            'total_kobo': 250000,
+        }, timeout=1800)
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
             'pin': '1234',
             'pin_confirm': '1234',
+            'plan_id': self.paid_plan.id,
+            'paystack_reference': 'sw_shared_b',
         }, format='json')
 
         self.assertEqual(resp.status_code, 201)
-        sub = Subscriber.objects.get(reseller=self.reseller, phone='08088888880')
+
+        sub = Subscriber.objects.get(reseller=self.reseller, phone='08088888888')
+        self.assertTrue(sub.signup_fee_paid)
+
+        fee_row = Payment.objects.get(subscriber=sub, payment_type='signup_fee')
+        plan_row = Payment.objects.get(subscriber=sub, payment_type='plan')
+
+        # Plan row carries the real Paystack reference; signup_fee row uses
+        # a ':fee' suffix to stay unique but discoverable by prefix.
+        self.assertEqual(plan_row.paystack_reference, 'sw_shared_b')
+        self.assertEqual(fee_row.paystack_reference, 'sw_shared_b:fee')
+        self.assertTrue(fee_row.paystack_reference.startswith(plan_row.paystack_reference))
+        self.assertEqual(fee_row.amount_ngn, Decimal('500'))
+        self.assertEqual(plan_row.amount_ngn, Decimal('2000'))
+
+    @patch('portal.views._verify_paystack_payment')
+    @patch('notifications.notify.notify_reseller')
+    @patch('notifications.notify.notify_subscriber')
+    @patch('notifications.notify.notify_admin_contacts')
+    def test_paid_plan_no_fee_creates_plan_payment_only(
+        self, mock_contacts, mock_sub_notify, mock_res_notify, mock_verify
+    ):
+        self.reseller.signup_fee_enabled = False
+        self.reseller.save()
+        mock_verify.return_value = (
+            {'reference': 'sw_plan_only', 'channel': 'card'}, None
+        )
+
+        token = _seed_cache_verified('08099999999', 'u@test.com', self.reseller.id)
+        cache.set(f'pending_payment_{token}', {
+            'reference': 'sw_plan_only',
+            'plan_id': self.paid_plan.id,
+            'signup_fee_kobo': 0,
+            'plan_fee_kobo': 200000,
+            'total_kobo': 200000,
+        }, timeout=1800)
+
+        resp = self.client.post('/api/portal/set-pin/', {
+            'verify_token': token,
+            'pin': '1234',
+            'pin_confirm': '1234',
+            'plan_id': self.paid_plan.id,
+            'paystack_reference': 'sw_plan_only',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+
+        sub = Subscriber.objects.get(reseller=self.reseller, phone='08099999999')
+        self.assertFalse(sub.signup_fee_paid)
+
+        self.assertFalse(Payment.objects.filter(subscriber=sub, payment_type='signup_fee').exists())
+        plan_row = Payment.objects.get(subscriber=sub, payment_type='plan')
+        self.assertEqual(plan_row.paystack_reference, 'sw_plan_only')
+
+    @patch('portal.views._verify_paystack_payment')
+    @patch('notifications.notify.notify_reseller')
+    @patch('notifications.notify.notify_subscriber')
+    @patch('notifications.notify.notify_admin_contacts')
+    def test_free_plan_no_fee_skips_paystack(
+        self, mock_contacts, mock_sub_notify, mock_res_notify, mock_verify
+    ):
+        """Free plan + no fee: set-pin must not require payment or call verify."""
+        self.reseller.signup_fee_enabled = False
+        self.reseller.save()
+
+        token = _seed_cache_verified('08022222223', 'u@test.com', self.reseller.id)
+
+        resp = self.client.post('/api/portal/set-pin/', {
+            'verify_token': token,
+            'pin': '1234',
+            'pin_confirm': '1234',
+            'plan_id': self.free_plan.id,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+        sub = Subscriber.objects.get(reseller=self.reseller, phone='08022222223')
         self.assertFalse(sub.signup_fee_paid)
         self.assertFalse(mock_verify.called)
 
 
 # ─────────────────────────────────────────────
-#  5. Dashboard settings: signup_fee section
+#  5. Dashboard settings: signup_fee section (unchanged)
 # ─────────────────────────────────────────────
 
 @_no_ssl
@@ -396,7 +548,6 @@ class SignupFeeSettingsTest(TestCase):
         resp = self.client.post('/dashboard/settings/', {
             'section': 'signup_fee',
             'signup_fee_amount': '500',
-            # signup_fee_enabled not sent (checkbox unchecked)
         }, follow=True)
 
         self.assertEqual(resp.status_code, 200)

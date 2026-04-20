@@ -16,7 +16,14 @@ def upsert_nas_and_reload(nasname, shortname, secret, description=''):
     """
     Create or update a NAS entry in the FreeRADIUS nas table, then reload
     FreeRADIUS so it picks up the change (it reads SQL clients at startup only).
+
+    Also deletes any stale NAS rows for the same router (same shortname but
+    different nasname): a router that gets a new WireGuard tunnel IP on
+    re-provision would otherwise leave an orphan row, and FreeRADIUS would
+    cache both secrets on next startup — leading to silent packet drops
+    when the router reports on the new IP with the new secret.
     """
+    Nas.objects.filter(shortname=shortname).exclude(nasname=nasname).delete()
     Nas.objects.update_or_create(
         nasname=nasname,
         defaults={
@@ -34,15 +41,23 @@ def _reload_freeradius():
 
     FreeRADIUS 3 only loads SQL clients at startup — HUP/reload
     does not re-read the NAS table, so a full restart is required.
+    Django runs as www-data; sudoers grants NOPASSWD for this one
+    command via /etc/sudoers.d/sabiwifi-freeradius.
     """
     try:
-        subprocess.run(
-            ['systemctl', 'restart', 'freeradius'],
-            capture_output=True, timeout=10,
+        result = subprocess.run(
+            ['sudo', '-n', '/bin/systemctl', 'restart', 'freeradius'],
+            capture_output=True, timeout=15, text=True,
         )
-        logger.info('FreeRADIUS restarted after NAS change')
+        if result.returncode == 0:
+            logger.info('FreeRADIUS restarted after NAS change')
+        else:
+            logger.error(
+                f'FreeRADIUS restart failed (rc={result.returncode}): '
+                f'{result.stderr.strip() or result.stdout.strip()}'
+            )
     except Exception as e:
-        logger.warning(f'Failed to restart FreeRADIUS: {e}')
+        logger.error(f'FreeRADIUS restart exception: {e}')
 
 
 def sync_plan_to_radius(plan):
@@ -255,21 +270,32 @@ def disconnect_subscriber_sessions(subscriber):
                 secret=router.nas_secret,
             )
 
-    # 2. For OpenWrt routers: also try direct disconnect via SSH even without
-    #    a radacct entry, since uspot tracks sessions in memory, not always
-    #    reflected in radacct (e.g. accounting hasn't started yet).
-    if subscriber.reseller_id:
-        openwrt_routers = Router.objects.filter(
-            reseller_id=subscriber.reseller_id,
-            device_type='openwrt',
-            status='online',
-        ).exclude(wg_tunnel_ip__in=handled_ips)
-        for router in openwrt_routers:
-            if router.wg_tunnel_ip:
-                _openwrt_disconnect(
-                    username=subscriber.phone,
-                    nas_ip=str(router.wg_tunnel_ip),
-                )
+    # 2. Fan out a DM to EVERY online router on the platform that didn't show
+    #    up in radacct. We deliberately don't scope to subscriber.reseller_id
+    #    here — the goal is "kick this username wherever it's connected", and
+    #    the extra blast catches:
+    #      * the initiator's own session (accounting-start hasn't fired yet,
+    #        so radacct has no row for it),
+    #      * sessions on a router recently unassigned from this reseller,
+    #      * operator-created shared accounts seen across multiple deployments.
+    #    MikroTik accepts a DM with only User-Name and silently ignores it if
+    #    no session matches, so the fan-out is safe on unrelated routers.
+    platform_routers = Router.objects.filter(
+        status='online',
+    ).exclude(wg_tunnel_ip__in=handled_ips)
+    for router in platform_routers:
+        if not router.wg_tunnel_ip:
+            continue
+        nas_ip = str(router.wg_tunnel_ip)
+        if router.device_type == 'openwrt':
+            _openwrt_disconnect(username=subscriber.phone, nas_ip=nas_ip)
+        else:
+            _coa_disconnect(
+                username=subscriber.phone,
+                session_id='',
+                nas_ip=nas_ip,
+                secret=router.nas_secret,
+            )
 
 
 def _coa_disconnect(username, session_id, nas_ip, secret):

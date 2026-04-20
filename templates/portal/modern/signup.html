@@ -129,24 +129,16 @@
                 <button type="button" id="verify-btn" class="btn btn-primary" onclick="doVerify()">Verify Code</button>
             </div>
 
-            <!-- Step: Account Creation Fee (conditional) -->
-            <div id="step-fee" class="step">
-                <p class="subtitle">One-time account setup fee</p>
-                <div style="background:rgba(0,106,54,0.06);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
-                    <p style="font-size:13px;color:var(--on-surface-variant);margin-bottom:8px;">This network charges a one-time fee to create your account.</p>
-                    <p id="fee-amount-display" style="font-size:30px;font-weight:700;color:var(--on-surface);margin-bottom:4px;">&#8358;0</p>
-                    <p style="font-size:12px;color:var(--on-surface-variant);">One-time payment — not a recurring charge</p>
-                </div>
-                <button type="button" id="fee-btn" class="btn btn-primary" onclick="doPayFee()">Pay &amp; Continue</button>
-                <p class="payment-note" style="margin-top:8px;">Secured by Paystack</p>
-            </div>
-
             <!-- Step 3: Choose Plan -->
             <div id="step-3" class="step">
                 <p class="subtitle">Choose a plan to get started</p>
+                <div id="fee-banner" style="display:none;background:rgba(0,106,54,0.06);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--on-surface);">
+                    One-time account setup fee of <strong id="fee-banner-amount">&#8358;0</strong> will be added to your first plan purchase.
+                </div>
                 <div id="plans-container" class="plans-grid">
                     <div class="plans-loading">Loading available plans...</div>
                 </div>
+                <div id="plan-summary" style="display:none;background:var(--surface-container-low);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--on-surface);"></div>
                 <button type="button" id="plan-btn" class="btn btn-primary" onclick="doPlanNext()" disabled>Continue</button>
             </div>
 
@@ -176,7 +168,6 @@
     let paystackReference = '';
     let signupFeeRequired = false;
     let signupFeeAmount = 0;
-    let signupFeeReference = '';
     let cooldownTimer = null;
     let cooldownSecs = 0;
     let paystackLoaded = false;
@@ -197,20 +188,13 @@
     function hideMsg() { document.getElementById('msg').style.display = 'none'; }
 
     function goToStep(n) {
-        ['step-1','step-2','step-fee','step-3','step-4'].forEach(id => {
+        ['step-1','step-2','step-3','step-4'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.classList.remove('active');
         });
         for (let i = 1; i <= 4; i++) document.getElementById('dot-' + i).classList.remove('active');
-
-        if (n === 'fee') {
-            document.getElementById('step-fee').classList.add('active');
-            for (let i = 1; i <= 2; i++) document.getElementById('dot-' + i).classList.add('active');
-        } else {
-            document.getElementById('step-' + n).classList.add('active');
-            const dotFill = signupFeeRequired && n >= 3 ? n : n;
-            for (let i = 1; i <= dotFill; i++) document.getElementById('dot-' + i).classList.add('active');
-        }
+        document.getElementById('step-' + n).classList.add('active');
+        for (let i = 1; i <= n; i++) document.getElementById('dot-' + i).classList.add('active');
         hideMsg();
     }
 
@@ -335,58 +319,18 @@
                 signupFeeRequired = !!data.signup_fee_required;
                 signupFeeAmount = data.signup_fee_amount || 0;
                 if (cooldownTimer) clearInterval(cooldownTimer);
-                if (signupFeeRequired) {
-                    document.getElementById('fee-amount-display').textContent = '\u20A6' + Number(signupFeeAmount).toLocaleString();
-                    goToStep('fee');
-                } else {
-                    goToStep(3);
-                    loadPlans();
+                if (signupFeeRequired && signupFeeAmount > 0) {
+                    const banner = document.getElementById('fee-banner');
+                    document.getElementById('fee-banner-amount').textContent = '\u20A6' + Number(signupFeeAmount).toLocaleString();
+                    banner.style.display = 'block';
                 }
+                goToStep(3);
+                loadPlans();
             } else {
                 showMsg(data.error || 'Verification failed.', 'error');
             }
         })
         .catch(() => { btn.disabled = false; btn.textContent = 'Verify Code'; showMsg('Network error.', 'error'); });
-    }
-
-    // === Step: Account creation fee payment ===
-    function doPayFee() {
-        const btn = document.getElementById('fee-btn');
-        btn.disabled = true; btn.textContent = 'Preparing payment\u2026';
-        hideMsg();
-
-        fetch('/api/portal/initiate-signup-payment/', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({verify_token: verifyToken}),
-        })
-        .then(r => r.json().then(data => ({ok: r.ok, data})))
-        .then(({ok, data}) => {
-            btn.disabled = false; btn.textContent = 'Pay & Continue';
-            if (!ok) { showMsg(data.error || 'Could not initialize payment.', 'error'); return; }
-
-            loadPaystack(() => {
-                const handler = PaystackPop.setup({
-                    key: data.public_key,
-                    email: data.email,
-                    amount: data.amount_kobo,
-                    ref: data.reference,
-                    access_code: data.access_code,
-                    callback: function(response) {
-                        signupFeeReference = response.reference || data.reference;
-                        showMsg('Payment successful! Now choose a plan.', 'success');
-                        goToStep(3);
-                        loadPlans();
-                    },
-                    onClose: function() {
-                        showMsg('Payment was cancelled. Please try again.', 'error');
-                        btn.disabled = false; btn.textContent = 'Pay & Continue';
-                    },
-                });
-                handler.openIframe();
-            });
-        })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Pay & Continue'; showMsg('Network error.', 'error'); });
     }
 
     // === Step 3: Load & Select Plan ===
@@ -413,7 +357,7 @@
                     ? '<span class="plan-free-badge">FREE</span>'
                     : '<span class="plan-price">\u20A6' + Number(p.price_ngn).toLocaleString() + '</span>';
                 card.innerHTML = `
-                    <input type="radio" name="plan" id="plan-${p.id}" value="${p.id}" data-free="${p.is_free}" onchange="selectPlan(${p.id}, ${p.is_free})">
+                    <input type="radio" name="plan" id="plan-${p.id}" value="${p.id}" data-free="${p.is_free}" onchange="selectPlan(${p.id}, ${p.is_free}, ${Number(p.price_ngn)})">
                     <div class="plan-header">
                         <span class="plan-name">${p.name}</span>
                         ${priceHtml}
@@ -429,7 +373,7 @@
             // Auto-select first plan
             if (plans.length === 1) {
                 document.getElementById('plan-' + plans[0].id).checked = true;
-                selectPlan(plans[0].id, plans[0].is_free);
+                selectPlan(plans[0].id, plans[0].is_free, Number(plans[0].price_ngn));
             }
         })
         .catch(() => {
@@ -437,34 +381,51 @@
         });
     }
 
-    function selectPlan(planId, isFree) {
+    function selectPlan(planId, isFree, priceNgn) {
         selectedPlanId = planId;
         selectedPlanIsFree = isFree;
         document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
         const radio = document.getElementById('plan-' + planId);
         if (radio) radio.closest('.plan-card').classList.add('selected');
+
+        const planKobo = isFree ? 0 : Math.round(Number(priceNgn) * 100);
+        const feeKobo = signupFeeRequired ? Math.round(Number(signupFeeAmount) * 100) : 0;
+        const totalKobo = planKobo + feeKobo;
+
+        const summary = document.getElementById('plan-summary');
+        if (totalKobo > 0 && feeKobo > 0) {
+            const planLine = planKobo > 0
+                ? `Plan: \u20A6${(planKobo/100).toLocaleString()}`
+                : `Plan: Free`;
+            summary.innerHTML =
+                `<div style="display:flex;justify-content:space-between;">${planLine}</div>` +
+                `<div style="display:flex;justify-content:space-between;">Account setup: \u20A6${(feeKobo/100).toLocaleString()}</div>` +
+                `<div style="display:flex;justify-content:space-between;border-top:1px solid var(--surface-container);margin-top:6px;padding-top:6px;font-weight:700;">Total: \u20A6${(totalKobo/100).toLocaleString()}</div>`;
+            summary.style.display = 'block';
+        } else {
+            summary.style.display = 'none';
+            summary.innerHTML = '';
+        }
+
         const btn = document.getElementById('plan-btn');
         btn.disabled = false;
-        btn.textContent = isFree ? 'Continue' : 'Pay & Continue';
+        if (totalKobo > 0) {
+            btn.textContent = `Pay \u20A6${(totalKobo/100).toLocaleString()} & Continue`;
+        } else {
+            btn.textContent = 'Continue';
+        }
     }
 
     function doPlanNext() {
         if (!selectedPlanId) { showMsg('Please select a plan.', 'error'); return; }
-
-        if (selectedPlanIsFree) {
-            // No payment needed — go straight to PIN setup
-            paystackReference = '';
-            goToStep(4);
-        } else {
-            // Initiate Paystack payment
-            initiatePayment();
-        }
+        initiatePayment();
     }
 
-    // === Paystack payment (paid plans) ===
+    // === Initiate combined (fee + plan) Paystack charge ===
     function initiatePayment() {
         const btn = document.getElementById('plan-btn');
-        btn.disabled = true; btn.textContent = 'Preparing payment\u2026';
+        const priorLabel = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Preparing\u2026';
         hideMsg();
 
         fetch('/api/portal/initiate-payment/', {
@@ -474,9 +435,20 @@
         })
         .then(r => r.json().then(data => ({ok: r.ok, data})))
         .then(({ok, data}) => {
-            btn.disabled = false; btn.textContent = 'Pay & Continue';
-            if (!ok) { showMsg(data.error || 'Could not initialize payment.', 'error'); return; }
+            if (!ok) {
+                btn.disabled = false; btn.textContent = priorLabel;
+                showMsg(data.error || 'Could not prepare payment.', 'error');
+                return;
+            }
 
+            if (!data.requires_payment) {
+                // No charge at all — skip Paystack entirely.
+                paystackReference = '';
+                goToStep(4);
+                return;
+            }
+
+            btn.disabled = false; btn.textContent = priorLabel;
             loadPaystack(() => {
                 const handler = PaystackPop.setup({
                     key: data.public_key,
@@ -492,13 +464,13 @@
                     onClose: function() {
                         showMsg('Payment was cancelled. Please try again.', 'error');
                         btn.disabled = false;
-                        btn.textContent = 'Pay & Continue';
+                        btn.textContent = priorLabel;
                     },
                 });
                 handler.openIframe();
             });
         })
-        .catch(() => { btn.disabled = false; btn.textContent = 'Pay & Continue'; showMsg('Network error.', 'error'); });
+        .catch(() => { btn.disabled = false; btn.textContent = priorLabel; showMsg('Network error.', 'error'); });
     }
 
     // === Step 4: Set PIN ===
@@ -519,7 +491,6 @@
         };
         if (selectedPlanId) payload.plan_id = selectedPlanId;
         if (paystackReference) payload.paystack_reference = paystackReference;
-        if (signupFeeReference) payload.signup_fee_reference = signupFeeReference;
 
         fetch('/api/portal/set-pin/', {
             method: 'POST',
