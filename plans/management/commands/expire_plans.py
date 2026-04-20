@@ -9,14 +9,22 @@ Run via systemd timer every 5 minutes:
     python manage.py expire_plans
 """
 import logging
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 
 from plans.models import Subscription
+from radius.models import Radacct
 from radius.utils import disconnect_subscriber_sessions, remove_subscriber_from_radius
 
 logger = logging.getLogger(__name__)
+
+# A radacct row whose last interim-update is older than this is considered
+# stale (the device vanished without sending Acct-Stop). Interim updates are
+# configured at 5 min on the router, so 30 min gives ample slack.
+STALE_SESSION_AGE = timedelta(minutes=30)
 
 
 class Command(BaseCommand):
@@ -24,6 +32,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         now = timezone.now()
+        self._close_stale_radacct(now)
 
         expired = list(
             Subscription.objects.filter(
@@ -111,3 +120,26 @@ class Command(BaseCommand):
             msg += f' {errors} error(s) — check logs.'
         self.stdout.write(msg)
         logger.info(msg)
+
+    def _close_stale_radacct(self, now):
+        """
+        Mark radacct rows with no recent interim-update as stopped.
+
+        A device that loses connection without an Acct-Stop leaves a row
+        marked open forever. That poisons Simultaneous-Use checks and makes
+        "Disconnect all devices" send DMs at ghost sessions (NAKs in the log).
+        """
+        cutoff = now - STALE_SESSION_AGE
+        stale = Radacct.objects.filter(
+            acctstoptime__isnull=True,
+        ).filter(
+            Q(acctupdatetime__lt=cutoff) | (
+                Q(acctupdatetime__isnull=True) & Q(acctstarttime__lt=cutoff)
+            )
+        )
+        count = stale.update(
+            acctstoptime=now,
+            acctterminatecause='Session-Timeout',
+        )
+        if count:
+            logger.info(f'Closed {count} stale radacct session(s) older than {STALE_SESSION_AGE}.')

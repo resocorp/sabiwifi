@@ -84,6 +84,10 @@ PROVISION_TEMPLATE = """\
 :do {{ /radius remove [find comment="sabiwifi"] }} on-error={{}}
 /radius add service={radius_services} address=10.99.0.1 secret="{nas_secret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="sabiwifi"
 
+# Accept RADIUS Disconnect-Messages (RFC 5176) on port 3799 so the platform
+# can kick sessions via the "Disconnect all devices" button.
+/radius incoming set accept=yes port=3799
+
 # --- 9. Hotspot server profile + server (RouterOS v7 syntax) ---
 # login-by=http-pap: the portal runs on app.sabiwifi.com (different origin from
 # the MikroTik's 10.8.0.1), so any POST back to /login is cross-site. Modern

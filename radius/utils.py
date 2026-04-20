@@ -240,12 +240,15 @@ def disconnect_subscriber_sessions(subscriber):
 
     handled_ips = set()
 
-    # 1. Disconnect via radacct open sessions (works for both router types)
+    # 1. Disconnect via radacct open sessions (works for both router types).
+    #    MikroTik rejects DMs that can't pin down a specific session — it logs
+    #    "radius disconnect with no ip provided" if Framed-IP-Address is
+    #    missing. We pull framedipaddress from radacct and include it.
     open_sessions = list(
         Radacct.objects.filter(
             username=subscriber.phone,
             acctstoptime__isnull=True,
-        ).values('nasipaddress', 'acctsessionid')
+        ).values('nasipaddress', 'acctsessionid', 'framedipaddress')
     )
 
     for session in open_sessions:
@@ -263,23 +266,21 @@ def disconnect_subscriber_sessions(subscriber):
                 nas_ip=nas_ip,
             )
         else:
+            framed_ip = session.get('framedipaddress')
             _coa_disconnect(
                 username=subscriber.phone,
                 session_id=session.get('acctsessionid', ''),
                 nas_ip=nas_ip,
                 secret=router.nas_secret,
+                framed_ip=str(framed_ip) if framed_ip and str(framed_ip) != '0.0.0.0' else '',
             )
 
-    # 2. Fan out a DM to EVERY online router on the platform that didn't show
-    #    up in radacct. We deliberately don't scope to subscriber.reseller_id
-    #    here — the goal is "kick this username wherever it's connected", and
-    #    the extra blast catches:
-    #      * the initiator's own session (accounting-start hasn't fired yet,
-    #        so radacct has no row for it),
-    #      * sessions on a router recently unassigned from this reseller,
-    #      * operator-created shared accounts seen across multiple deployments.
-    #    MikroTik accepts a DM with only User-Name and silently ignores it if
-    #    no session matches, so the fan-out is safe on unrelated routers.
+    # 2. Fan-out DM to every online MikroTik that didn't appear in radacct.
+    #    Without a Framed-IP-Address, MikroTik rejects the DM outright, so
+    #    we can't blind-fan on MikroTik. For routers we already have RouterOS
+    #    API creds on, look up /ip/hotspot/active by user and send a targeted
+    #    DM per matching session. OpenWrt has no such constraint (ubus kicks
+    #    by username directly).
     platform_routers = Router.objects.filter(
         status='online',
     ).exclude(wg_tunnel_ip__in=handled_ips)
@@ -290,18 +291,66 @@ def disconnect_subscriber_sessions(subscriber):
         if router.device_type == 'openwrt':
             _openwrt_disconnect(username=subscriber.phone, nas_ip=nas_ip)
         else:
-            _coa_disconnect(
-                username=subscriber.phone,
-                session_id='',
-                nas_ip=nas_ip,
-                secret=router.nas_secret,
+            _mikrotik_kick_by_username(router, subscriber.phone)
+
+
+def _mikrotik_kick_by_username(router, username):
+    """
+    Kick every /ip/hotspot/active entry matching `username` via RouterOS REST.
+    Used when radacct has no open-session row for the subscriber (fresh login
+    before accounting-start, or stale accounting). REST remove is immediate
+    and doesn't need DM/Framed-IP, so it's more reliable than DM here.
+    Errors are swallowed — disconnect must never raise.
+    """
+    import requests
+    from requests.auth import HTTPBasicAuth
+
+    if not (router.api_username and router.api_password and router.wg_tunnel_ip):
+        return
+    auth = HTTPBasicAuth(router.api_username, router.api_password)
+    base = f'http://{router.wg_tunnel_ip}/rest'
+    try:
+        resp = requests.get(
+            f'{base}/ip/hotspot/active',
+            params={'user': username},
+            auth=auth,
+            timeout=5,
+        )
+        resp.raise_for_status()
+        active = resp.json() or []
+    except Exception as exc:
+        logger.warning(f'MikroTik REST lookup failed on {router.serial_number}: {exc}')
+        return
+
+    for entry in active:
+        entry_id = entry.get('.id')
+        if not entry_id:
+            continue
+        try:
+            requests.post(
+                f'{base}/ip/hotspot/active/remove',
+                json={'.id': entry_id},
+                auth=auth,
+                timeout=5,
+            )
+            logger.info(
+                f'MikroTik REST kick: {username} session {entry_id} removed '
+                f'from {router.serial_number}'
+            )
+        except Exception as exc:
+            logger.warning(
+                f'MikroTik REST kick failed for {username} on '
+                f'{router.serial_number}: {exc}'
             )
 
 
-def _coa_disconnect(username, session_id, nas_ip, secret):
+def _coa_disconnect(username, session_id, nas_ip, secret, framed_ip=''):
     """
     Build and send a raw RADIUS Disconnect-Message (code 40) over UDP.
     Uses only stdlib — no extra dependency beyond what is already installed.
+
+    MikroTik requires Framed-IP-Address to locate the hotspot session; without
+    it the router logs "radius disconnect with no ip provided" and NAKs.
     """
     import hashlib
     import socket
@@ -315,6 +364,11 @@ def _coa_disconnect(username, session_id, nas_ip, secret):
         return bytes([type_code, len(value_bytes) + 2]) + value_bytes
 
     attrs = _attr(1, username.encode('utf-8'))           # User-Name (type 1)
+    if framed_ip:
+        try:
+            attrs += _attr(8, socket.inet_aton(framed_ip))   # Framed-IP-Address (type 8)
+        except OSError:
+            pass
     if session_id:
         attrs += _attr(44, session_id.encode('utf-8'))   # Acct-Session-Id (type 44)
 
