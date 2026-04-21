@@ -187,6 +187,19 @@ class Subscriber(models.Model):
     )
     auto_renew_enabled = models.BooleanField(default=False)
 
+    SOURCE_PORTAL = 'portal'
+    SOURCE_RESELLER = 'reseller'
+    SOURCE_STAFF = 'staff'
+    SOURCE_CHOICES = [
+        (SOURCE_PORTAL, 'Self-signup (captive portal)'),
+        (SOURCE_RESELLER, 'Created by reseller'),
+        (SOURCE_STAFF, 'Created by platform staff'),
+    ]
+    source = models.CharField(
+        max_length=20, choices=SOURCE_CHOICES, default=SOURCE_PORTAL,
+        help_text='Where this account was created from.',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

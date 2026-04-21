@@ -3,10 +3,11 @@
 
 {% block body %}
 <div class="max-w-5xl mx-auto px-4 py-6">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-2">
         <h1 class="text-2xl font-headline font-bold">Platform Overview</h1>
         <a href="/admin/" class="text-sm text-primary hover:underline">Django Admin →</a>
     </div>
+    {% with active='overview' %}{% include 'operator/_tabs.html' %}{% endwith %}
 
     <!-- Top-Level Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
@@ -30,7 +31,56 @@
         <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
             <p class="font-mono font-bold text-2xl">₦{{ monthly_revenue|floatformat:0 }}</p>
             <p class="text-on-surface-variant text-xs mt-1">Revenue this month</p>
-            <p class="text-primary text-[10px]">₦{{ monthly_platform_revenue|floatformat:0 }} platform</p>
+            <p class="text-primary text-[10px]">
+                ₦{{ monthly_platform_revenue|floatformat:0 }} commission
+                {% if enhanced.mrr.pct_delta is not None %}
+                ·
+                {% if enhanced.mrr.pct_delta >= 0 %}
+                <span class="text-primary">▲ {{ enhanced.mrr.pct_delta }}%</span>
+                {% else %}
+                <span class="text-error">▼ {{ enhanced.mrr.pct_delta }}%</span>
+                {% endif %}
+                vs last month
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Revenue sparkline (30d) -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-6">
+        <div class="flex justify-between items-baseline mb-3">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider">Revenue — last 30 days</h2>
+            <span class="text-xs text-on-surface-variant">Peak: ₦{{ enhanced.sparkline.max|floatformat:0 }}</span>
+        </div>
+        <div class="flex items-end gap-0.5 h-24">
+            {% for d in enhanced.sparkline.series %}
+            <div class="flex-1 bg-primary rounded-sm hover:opacity-75 transition"
+                 title="{{ d.date }}: ₦{{ d.revenue|floatformat:0 }}"
+                 style="height: {% if enhanced.sparkline.max > 0 %}{% widthratio d.revenue enhanced.sparkline.max 100 %}%{% else %}2%{% endif %}; min-height: 2px;"></div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Live + Funnel row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Right now</h2>
+            <p class="font-mono font-bold text-2xl">{{ enhanced.live_sessions }}</p>
+            <p class="text-xs text-on-surface-variant">Active RADIUS sessions</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Commission MTD</h2>
+            <p class="font-mono font-bold text-2xl text-primary">₦{{ enhanced.commission.commission_mtd|floatformat:0 }}</p>
+            <p class="text-xs text-on-surface-variant">Payouts route directly to Paystack subaccounts.</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Signup funnel (7d)</h2>
+            <div class="space-y-1 text-sm">
+                <div class="flex justify-between"><span>New subscribers</span><span class="font-mono">{{ enhanced.funnel.otp_initiated }}</span></div>
+                <div class="flex justify-between"><span>Verified</span><span class="font-mono">{{ enhanced.funnel.verified }}</span></div>
+                <div class="flex justify-between"><span>PIN set</span><span class="font-mono">{{ enhanced.funnel.pin_set }}</span></div>
+                <div class="flex justify-between font-semibold"><span>First paid</span><span class="font-mono text-primary">{{ enhanced.funnel.first_paid }}</span></div>
+            </div>
         </div>
     </div>
 

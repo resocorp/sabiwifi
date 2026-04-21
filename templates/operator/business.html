@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Operator Business — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-headline font-bold mb-2">Business</h1>
+    <p class="text-sm text-on-surface-variant mb-4">Shop, vouchers, payments, subscriptions, messaging.</p>
+    {% with active='business' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <!-- Shop -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-6">
+        <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Shop</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div><p class="font-mono font-bold text-xl">₦{{ s.shop.gmv_today|floatformat:0 }}</p><p class="text-xs text-on-surface-variant">GMV today</p></div>
+            <div><p class="font-mono font-bold text-xl">₦{{ s.shop.gmv_week|floatformat:0 }}</p><p class="text-xs text-on-surface-variant">GMV 7d</p></div>
+            <div><p class="font-mono font-bold text-xl">₦{{ s.shop.gmv_month|floatformat:0 }}</p><p class="text-xs text-on-surface-variant">GMV month</p></div>
+            <div><p class="font-mono font-bold text-xl">{{ s.shop.pending_fulfillment }}</p><p class="text-xs text-on-surface-variant">Pending fulfillment</p></div>
+        </div>
+        <div class="text-xs text-on-surface-variant mb-2">Orders: {{ s.shop.orders_today }} today · {{ s.shop.orders_month }} this month</div>
+        {% if s.shop.top_products %}
+        <p class="text-xs font-semibold mt-3 mb-1">Top products this month</p>
+        <ul class="text-sm space-y-1">
+            {% for p in s.shop.top_products %}
+            <li class="flex justify-between">
+                <span>{{ p.product__name|default:'—' }}</span>
+                <span class="font-mono text-on-surface-variant">{{ p.units }} · ₦{{ p.revenue|floatformat:0 }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+
+    <!-- Vouchers -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-6">
+        <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Vouchers &amp; Refill Cards</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><p class="font-mono font-bold text-xl">{{ s.vouchers.redeemed }}/{{ s.vouchers.total }}</p><p class="text-xs text-on-surface-variant">Vouchers redeemed ({{ s.vouchers.redemption_rate }}%)</p></div>
+            <div><p class="font-mono font-bold text-xl">₦{{ s.vouchers.revenue|floatformat:0 }}</p><p class="text-xs text-on-surface-variant">Voucher revenue</p></div>
+            <div><p class="font-mono font-bold text-xl">{{ s.vouchers.refill_redeemed }}/{{ s.vouchers.refill_total }}</p><p class="text-xs text-on-surface-variant">Refill cards used</p></div>
+            <div><p class="font-mono font-bold text-xl">₦{{ s.vouchers.refill_revenue|floatformat:0 }}</p><p class="text-xs text-on-surface-variant">Refill revenue</p></div>
+        </div>
+    </div>
+
+    <!-- Subscriptions + Payments -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Subscriptions</h2>
+            <div class="space-y-1 text-sm">
+                <div class="flex justify-between"><span>New today</span><span class="font-mono">{{ s.subscriptions.new_today }}</span></div>
+                <div class="flex justify-between"><span>New this week</span><span class="font-mono">{{ s.subscriptions.new_week }}</span></div>
+                <div class="flex justify-between"><span>Expiring next 7d</span><span class="font-mono text-secondary">{{ s.subscriptions.expiring_7d }}</span></div>
+                <div class="flex justify-between"><span>Expired last 30d</span><span class="font-mono">{{ s.subscriptions.expired_30d }}</span></div>
+                <div class="flex justify-between"><span>Renewal rate</span>
+                    <span class="font-mono">
+                        {% if s.subscriptions.renewal_rate is not None %}{{ s.subscriptions.renewal_rate }}%{% else %}—{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Payments (30d)</h2>
+            <div class="space-y-1 text-sm">
+                <div class="flex justify-between"><span>Total</span><span class="font-mono">{{ s.payments.total_30d }}</span></div>
+                <div class="flex justify-between"><span>Success</span><span class="font-mono text-primary">{{ s.payments.success_30d }}</span></div>
+                <div class="flex justify-between"><span>Failed</span><span class="font-mono text-error">{{ s.payments.failed_30d }}</span></div>
+                <div class="flex justify-between"><span>Success rate</span>
+                    <span class="font-mono">
+                        {% if s.payments.success_rate is not None %}{{ s.payments.success_rate }}%{% else %}—{% endif %}
+                    </span>
+                </div>
+                <div class="flex justify-between"><span>Avg transaction</span><span class="font-mono">₦{{ s.payments.avg_value|floatformat:0 }}</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messaging -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Messaging usage (30d)</h2>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <p class="text-xs font-semibold">WhatsApp</p>
+                <p><span class="font-mono">{{ s.messaging.whatsapp.sent }}</span> sent · <span class="font-mono text-error">{{ s.messaging.whatsapp.failed }}</span> failed</p>
+            </div>
+            <div>
+                <p class="text-xs font-semibold">SMS (Termii)</p>
+                <p><span class="font-mono">{{ s.messaging.sms.sent }}</span> sent · <span class="font-mono text-error">{{ s.messaging.sms.failed }}</span> failed</p>
+                <p class="text-[11px] text-on-surface-variant">Termii bills per SMS sent.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

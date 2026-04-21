@@ -70,8 +70,10 @@ GENERIC_BOOTSTRAP_TEMPLATE = """\
 # single self-contained command.
 # ============================================
 
-# --- 1. Get internet via DHCP on ether1 ---
-:do {{ /ip/dhcp-client/add interface=ether1 disabled=no add-default-route=yes }} on-error={{}}
+# --- 1. Get internet via DHCP on EVERY ether port ---
+# Customer can plug WAN into any port — provision.rsc later identifies which
+# one got a lease, removes DHCP from the rest, and bridges them as LAN.
+:foreach i in=[/interface/ethernet/find] do={{ :do {{ /ip/dhcp-client/add interface=[/interface/ethernet/get $i name] disabled=no add-default-route=yes }} on-error={{}} }}
 
 # --- 2. DNS fallback ---
 /ip/dns/set servers=8.8.8.8,1.1.1.1 allow-remote-requests=yes

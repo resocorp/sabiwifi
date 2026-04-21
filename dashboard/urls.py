@@ -11,6 +11,7 @@ urlpatterns = [
     path('plans/<int:pk>/enable/', views.plan_enable, name='dashboard-plan-enable'),
     path('plans/<int:pk>/delete/', views.plan_delete, name='dashboard-plan-delete'),
     path('subscribers/', views.subscribers_list, name='dashboard-subscribers'),
+    path('subscribers/add/', views.subscriber_create, name='dashboard-subscriber-create'),
     path('subscribers/<int:pk>/', views.subscriber_detail, name='dashboard-subscriber-detail'),
     path('payments/', views.payments_list, name='dashboard-payments'),
     path('routers/', views.routers_list, name='dashboard-routers'),

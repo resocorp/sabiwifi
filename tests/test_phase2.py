@@ -221,21 +221,21 @@ class SetPINTest(TestCase):
     def test_set_pin_creates_subscriber(self):
         resp = self.client.post(reverse('api-portal-set-pin'), {
             'verify_token': self.verify_token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertIn('auth_token', resp.data)
         sub = Subscriber.objects.get(phone='08099999999', reseller=self.reseller)
         self.assertTrue(sub.verified)
-        self.assertTrue(sub.check_pin('1234'))
+        self.assertTrue(sub.check_pin('12345'))
         self.assertEqual(len(sub.auth_token), 64)
 
     def test_set_pin_rejects_mismatch(self):
         resp = self.client.post(reverse('api-portal-set-pin'), {
             'verify_token': self.verify_token,
-            'pin': '1234',
-            'pin_confirm': '5678',
+            'pin': '12345',
+            'pin_confirm': '56789',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
@@ -268,14 +268,14 @@ class SubscriberLoginTest(TestCase):
             reseller=self.reseller, phone='08099999999',
             email='sub@x.com', verified=True,
         )
-        self.sub.set_pin('1234')
+        self.sub.set_pin('12345')
         self.sub.generate_auth_token()
         self.sub.save()
 
     def test_login_with_reseller_slug(self):
         resp = self.client.post(reverse('api-portal-login'), {
             'phone': '+2348099999999',
-            'pin': '1234',
+            'pin': '12345',
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 200)
@@ -284,14 +284,14 @@ class SubscriberLoginTest(TestCase):
     def test_login_without_context_global_search(self):
         resp = self.client.post(reverse('api-portal-login'), {
             'phone': '+2348099999999',
-            'pin': '1234',
+            'pin': '12345',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
     def test_login_wrong_pin(self):
         resp = self.client.post(reverse('api-portal-login'), {
             'phone': '+2348099999999',
-            'pin': '9999',
+            'pin': '99999',
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -300,7 +300,7 @@ class SubscriberLoginTest(TestCase):
     def test_login_nonexistent_phone(self):
         resp = self.client.post(reverse('api-portal-login'), {
             'phone': '+2348000000000',
-            'pin': '1234',
+            'pin': '12345',
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -309,7 +309,7 @@ class SubscriberLoginTest(TestCase):
         old_token = self.sub.auth_token
         self.client.post(reverse('api-portal-login'), {
             'phone': '+2348099999999',
-            'pin': '1234',
+            'pin': '12345',
             'reseller_slug': self.reseller.slug,
         }, format='json')
         self.sub.refresh_from_db()
@@ -328,35 +328,35 @@ class ChangePINTest(TestCase):
             reseller=self.reseller, phone='+2348099999999',
             email='sub@x.com', verified=True,
         )
-        self.sub.set_pin('1234')
+        self.sub.set_pin('12345')
         self.sub.generate_auth_token()
         self.sub.save()
         self.token = self.sub.auth_token
 
     def test_change_pin_success(self):
         resp = self.client.post(reverse('api-portal-change-pin'), {
-            'current_pin': '1234',
-            'new_pin': '5678',
-            'new_pin_confirm': '5678',
+            'current_pin': '12345',
+            'new_pin': '56789',
+            'new_pin_confirm': '56789',
         }, format='json', HTTP_X_AUTH_TOKEN=self.token)
         self.assertEqual(resp.status_code, 200)
         self.sub.refresh_from_db()
-        self.assertTrue(self.sub.check_pin('5678'))
-        self.assertFalse(self.sub.check_pin('1234'))
+        self.assertTrue(self.sub.check_pin('56789'))
+        self.assertFalse(self.sub.check_pin('12345'))
 
     def test_change_pin_wrong_current(self):
         resp = self.client.post(reverse('api-portal-change-pin'), {
             'current_pin': '0000',
-            'new_pin': '5678',
-            'new_pin_confirm': '5678',
+            'new_pin': '56789',
+            'new_pin_confirm': '56789',
         }, format='json', HTTP_X_AUTH_TOKEN=self.token)
         self.assertEqual(resp.status_code, 400)
 
     def test_change_pin_updates_radius(self):
         self.client.post(reverse('api-portal-change-pin'), {
-            'current_pin': '1234',
-            'new_pin': '5678',
-            'new_pin_confirm': '5678',
+            'current_pin': '12345',
+            'new_pin': '56789',
+            'new_pin_confirm': '56789',
         }, format='json', HTTP_X_AUTH_TOKEN=self.token)
         self.sub.refresh_from_db()
         radcheck = Radcheck.objects.get(username=self.sub.phone, attribute='Cleartext-Password')
@@ -371,7 +371,7 @@ class ResetPINTest(TestCase):
             reseller=self.reseller, phone='08099999999',
             email='sub@x.com', verified=True,
         )
-        self.sub.set_pin('1234')
+        self.sub.set_pin('12345')
         self.sub.save()
         cache.clear()
 
@@ -387,13 +387,13 @@ class ResetPINTest(TestCase):
         resp = self.client.post(reverse('api-portal-reset-pin-confirm'), {
             'phone': '+2348099999999',
             'code': otp,
-            'new_pin': '9876',
-            'new_pin_confirm': '9876',
+            'new_pin': '98765',
+            'new_pin_confirm': '98765',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.sub.refresh_from_db()
-        self.assertTrue(self.sub.check_pin('9876'))
-        self.assertFalse(self.sub.check_pin('1234'))
+        self.assertTrue(self.sub.check_pin('98765'))
+        self.assertFalse(self.sub.check_pin('12345'))
 
 
 # ──────────────────────────────────────────────
@@ -409,7 +409,7 @@ class FreePlanActivationTest(TestCase):
             reseller=self.reseller, phone='+2348099999999',
             email='sub@x.com', verified=True,
         )
-        self.sub.set_pin('1234')
+        self.sub.set_pin('12345')
         self.sub.generate_auth_token()
         self.sub.save()
 
@@ -464,7 +464,7 @@ class FreePlanActivationTest(TestCase):
         sub = Subscriber.objects.create(
             reseller=reseller, phone='+2348088888888', email='s@x.com', verified=True,
         )
-        sub.set_pin('1234')
+        sub.set_pin('12345')
         sub.generate_auth_token()
         sub.save()
 
@@ -586,7 +586,7 @@ class SubscriberAccountTest(TestCase):
             reseller=self.reseller, phone='+2348099999999',
             email='sub@x.com', verified=True,
         )
-        self.sub.set_pin('1234')
+        self.sub.set_pin('12345')
         self.sub.generate_auth_token()
         self.sub.save()
 
@@ -768,8 +768,8 @@ class FullSubscriberLifecycleTest(TestCase):
         # 3. Set PIN
         resp = client.post(reverse('api-portal-set-pin'), {
             'verify_token': verify_token,
-            'pin': '4321',
-            'pin_confirm': '4321',
+            'pin': '43210',
+            'pin_confirm': '43210',
         }, format='json')
         self.assertEqual(resp.status_code, 201)
         auth_token = resp.data['auth_token']
@@ -804,7 +804,7 @@ class FullSubscriberLifecycleTest(TestCase):
         # 7. Subscriber logs in again (simulating return visit via /account)
         resp = client.post(reverse('api-portal-login'), {
             'phone': '+2348077777777',
-            'pin': '4321',
+            'pin': '43210',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data['has_active_plan'])
@@ -828,16 +828,16 @@ class FullSubscriberLifecycleTest(TestCase):
 
         # 10. Change PIN
         resp = client.post(reverse('api-portal-change-pin'), {
-            'current_pin': '4321',
-            'new_pin': '8888',
-            'new_pin_confirm': '8888',
+            'current_pin': '43210',
+            'new_pin': '88888',
+            'new_pin_confirm': '88888',
         }, format='json', HTTP_X_AUTH_TOKEN=new_token)
         self.assertEqual(resp.status_code, 200)
 
         # 11. Old PIN doesn't work, new PIN does
         sub.refresh_from_db()
-        self.assertFalse(sub.check_pin('4321'))
-        self.assertTrue(sub.check_pin('8888'))
+        self.assertFalse(sub.check_pin('43210'))
+        self.assertTrue(sub.check_pin('88888'))
 
         # 12. Simulate expiry
         active_sub = Subscription.objects.get(subscriber=sub, status='active')

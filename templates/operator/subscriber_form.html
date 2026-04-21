@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Create subscriber for {{ reseller.name }} — Operator{% endblock %}
+
+{% block body %}
+<div class="max-w-lg mx-auto px-4 py-6">
+    <a href="{% url 'operator-partners' %}" class="text-sm text-on-surface-variant hover:text-primary">← Partners</a>
+    <h1 class="text-2xl font-headline font-bold mt-2">Create subscriber for {{ reseller.name }}</h1>
+    <p class="text-sm text-on-surface-variant mt-1 mb-6">
+        Staff-created account. PIN works for both hotspot login and PPPoE dial-in.
+    </p>
+
+    <form method="post" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 space-y-4">
+        {% csrf_token %}
+
+        <div>
+            <label class="block text-sm font-medium mb-1">Country</label>
+            <select name="country"
+                    class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                {% for c in countries %}
+                <option value="{{ c.code }}" {% if c.code == 'NG' %}selected{% endif %}>{{ c.flag_emoji }} {{ c.name }} ({{ c.dial_code }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1">Phone Number</label>
+            <input type="tel" name="phone" value="{{ form_data.phone }}" required
+                   placeholder="e.g. 08031234567"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40">
+            {% if errors.phone %}<p class="text-xs text-error mt-1">{{ errors.phone.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1">Email (optional)</label>
+            <input type="email" name="email" value="{{ form_data.email }}"
+                   placeholder="customer@example.com"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1">PIN</label>
+            <input type="text" name="pin" value="{{ form_data.pin }}" required
+                   minlength="5" maxlength="8" pattern="\d{5,8}" inputmode="numeric"
+                   placeholder="5-8 digits"
+                   class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/40">
+            {% if errors.pin %}<p class="text-xs text-error mt-1">{{ errors.pin.0 }}</p>{% endif %}
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium mb-1">Plan (optional)</label>
+            <select name="plan_id"
+                    class="w-full px-3 py-2.5 bg-surface-container-highest rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
+                <option value="">— No plan yet —</option>
+                {% for p in plans %}
+                <option value="{{ p.pk }}" {% if form_data.plan_id|stringformat:"s" == p.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ p.name }} — {{ p.speed_display }} · {{ p.duration_display }} · ₦{{ p.price_ngn }}
+                </option>
+                {% endfor %}
+            </select>
+            {% if errors.plan_id %}<p class="text-xs text-error mt-1">{{ errors.plan_id.0 }}</p>{% endif %}
+        </div>
+
+        <div class="flex gap-2 pt-2">
+            <a href="{% url 'operator-partners' %}"
+               class="flex-1 text-center bg-surface-container-low text-on-surface-variant py-2.5 rounded-lg text-sm font-semibold hover:bg-surface-container transition">
+                Cancel
+            </a>
+            <button type="submit"
+                    class="flex-1 bg-primary text-on-primary py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+                Create
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

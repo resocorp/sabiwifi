@@ -331,8 +331,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.free_plan.id,
         }, format='json')
 
@@ -351,8 +351,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.free_plan.id,
             'paystack_reference': 'sw_wrong_ref',
         }, format='json')
@@ -382,8 +382,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.free_plan.id,
             'paystack_reference': 'sw_shared_a',
         }, format='json')
@@ -429,8 +429,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.paid_plan.id,
             'paystack_reference': 'sw_shared_b',
         }, format='json')
@@ -475,8 +475,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.paid_plan.id,
             'paystack_reference': 'sw_plan_only',
         }, format='json')
@@ -505,8 +505,8 @@ class SetPinFeeGateTest(TestCase):
 
         resp = self.client.post('/api/portal/set-pin/', {
             'verify_token': token,
-            'pin': '1234',
-            'pin_confirm': '1234',
+            'pin': '12345',
+            'pin_confirm': '12345',
             'plan_id': self.free_plan.id,
         }, format='json')
 

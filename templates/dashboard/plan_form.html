@@ -105,6 +105,25 @@
             </label>
             <span class="text-sm font-medium">Allow auto-renewal from wallet</span>
         </div>
+
+        {% if available_routers %}
+        <!-- Router restriction -->
+        <div class="mt-5 pt-5 border-t border-outline-variant/30">
+            <label class="block text-sm font-medium mb-1">Available on routers</label>
+            <p class="text-xs text-on-surface-variant mb-2">Leave all unchecked to offer this plan on every router.</p>
+            <div class="space-y-1.5">
+                {% for r in available_routers %}
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="routers" value="{{ r.pk }}"
+                           {% if r.pk in selected_router_ids %}checked{% endif %}
+                           class="w-4 h-4 rounded text-primary focus:ring-primary/40">
+                    <span class="text-sm">{{ r.location_name|default:r.serial_number }} <span class="text-on-surface-variant text-xs">({{ r.serial_number }})</span></span>
+                </label>
+                {% endfor %}
+            </div>
+            {% if errors.routers %}<p class="text-xs text-error mt-1">{{ errors.routers.0|default:errors.routers }}</p>{% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <!-- ===== SEPARATE DATA CAPS ===== -->

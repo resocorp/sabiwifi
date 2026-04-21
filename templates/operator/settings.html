@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Operator Settings — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <div class="mb-2">
+        <h1 class="text-2xl font-headline font-bold">Operator Settings</h1>
+        <p class="text-sm text-on-surface-variant mt-1">Platform WhatsApp, notification recipients, and event toggles.</p>
+    </div>
+    {% with active='settings' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <!-- Operator WhatsApp -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-6">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Operator WhatsApp</h2>
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <p class="font-medium text-sm">Platform-level session</p>
+                <p class="text-xs text-on-surface-variant mt-0.5" id="wa-status-text">Checking...</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="wa-connect-btn" onclick="waConnect()"
+                    class="px-3 py-1.5 bg-primary text-on-primary text-xs font-semibold rounded-lg hidden">
+                    Connect
+                </button>
+                <button id="wa-disconnect-btn" onclick="waDisconnect()"
+                    class="px-3 py-1.5 bg-error-container/20 text-error text-xs font-semibold rounded-lg hidden">
+                    Disconnect
+                </button>
+                <button id="wa-test-btn" onclick="waTest()"
+                    class="px-3 py-1.5 bg-surface-container-low text-on-surface-variant text-xs rounded-lg hover:bg-surface-container hidden">
+                    Send Test
+                </button>
+            </div>
+        </div>
+        <div id="wa-qr-wrap" class="hidden text-center py-4">
+            <p class="text-xs text-on-surface-variant mb-3">Scan this QR with WhatsApp on the operator's phone<br><span class="font-medium">Settings → Linked Devices → Link a Device</span></p>
+            <img id="wa-qr-img" src="" alt="QR Code" class="inline-block rounded-lg shadow-ambient-sm" style="max-width:220px">
+            <p class="text-xs text-on-surface-variant mt-2">QR refreshes automatically. Waiting for scan...</p>
+        </div>
+    </div>
+
+    <!-- Notification channel + recipients -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-6">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Recipients &amp; Channel</h2>
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-on-surface-variant mb-1">Notification channel</label>
+            <select id="channel-select" class="w-full bg-surface-container border-0 rounded-lg px-3 py-2 text-sm">
+                <option value="sms" {% if ps.operator_notification_channel == 'sms' %}selected{% endif %}>SMS only</option>
+                <option value="whatsapp" {% if ps.operator_notification_channel == 'whatsapp' %}selected{% endif %}>WhatsApp only</option>
+                <option value="both" {% if ps.operator_notification_channel == 'both' %}selected{% endif %}>WhatsApp + SMS</option>
+            </select>
+            <p class="text-[11px] text-on-surface-variant mt-1">"Both" sends WhatsApp and falls back to SMS on failure.</p>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1">Recipient phones (comma-separated, E.164 format)</label>
+            <input id="phones-input" type="text" class="w-full bg-surface-container border-0 rounded-lg px-3 py-2 text-sm font-mono"
+                   value="{% for p in ps.notification_phones %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+                   placeholder="+2348012345678, +2349087654321">
+        </div>
+    </div>
+
+    <!-- Event toggles -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 mb-6">
+        <h2 class="font-label font-bold text-xs uppercase tracking-widest text-on-surface-variant mb-4">Event Notifications</h2>
+        <div class="space-y-1">
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>New partner signup</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_new_reseller" {% if ps.notify_on_new_reseller %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Partner activated</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_reseller_activated" {% if ps.notify_on_reseller_activated %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>New shop order</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_new_order" {% if ps.notify_on_new_order %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Router offline</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_router_offline" {% if ps.notify_on_router_offline %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Router recovered</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_router_recovered" {% if ps.notify_on_router_recovered %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Single payment failure</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_payment_failure" {% if ps.notify_on_payment_failure %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Payment failure spike (≥5 in 10 min)</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_on_payment_failure_spike" {% if ps.notify_on_payment_failure_spike %}checked{% endif %}>
+            </label>
+            <label class="flex items-center justify-between text-sm py-1.5">
+                <span>Daily summary (23:00)</span>
+                <input type="checkbox" class="op-toggle" data-key="notify_daily_summary" {% if ps.notify_daily_summary %}checked{% endif %}>
+            </label>
+        </div>
+    </div>
+
+    <div class="flex justify-end">
+        <button onclick="saveSettings()" class="px-5 py-2 bg-primary text-on-primary text-sm font-semibold rounded-lg">Save Settings</button>
+        <span id="save-toast" class="ml-3 self-center text-xs text-on-surface-variant"></span>
+    </div>
+</div>
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+             document.cookie.split('csrftoken=')[1]?.split(';')[0] || '';
+let waPoller = null;
+
+function waUpdateUI(status, phone) {
+    const s = document.getElementById('wa-status-text');
+    const c = document.getElementById('wa-connect-btn');
+    const d = document.getElementById('wa-disconnect-btn');
+    const t = document.getElementById('wa-test-btn');
+    const qr = document.getElementById('wa-qr-wrap');
+
+    if (status === 'connected') {
+        s.innerHTML = '<span class="text-primary font-medium">● Connected</span> as ' + (phone || '—');
+        c.classList.add('hidden');
+        d.classList.remove('hidden');
+        t.classList.remove('hidden');
+        qr.classList.add('hidden');
+        stopPoller();
+    } else if (status === 'connecting') {
+        s.innerHTML = '<span class="text-secondary font-medium">● Connecting...</span> Scan QR below';
+        c.classList.add('hidden');
+        d.classList.add('hidden');
+        t.classList.add('hidden');
+        qr.classList.remove('hidden');
+    } else {
+        s.innerHTML = '<span class="text-on-surface-variant">● Not connected</span>';
+        c.classList.remove('hidden');
+        d.classList.add('hidden');
+        t.classList.add('hidden');
+        qr.classList.add('hidden');
+    }
+}
+
+function pollStatus() {
+    fetch('/operator/api/wa/status/', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            waUpdateUI(data.status, data.phone);
+            if (data.qr) {
+                document.getElementById('wa-qr-img').src = data.qr;
+                document.getElementById('wa-qr-wrap').classList.remove('hidden');
+            }
+        })
+        .catch(() => {});
+}
+
+function startPoller() {
+    if (waPoller) return;
+    waPoller = setInterval(pollStatus, 3000);
+}
+function stopPoller() {
+    if (waPoller) { clearInterval(waPoller); waPoller = null; }
+}
+
+function waConnect() {
+    fetch('/operator/api/wa/connect/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+    }).then(r => r.json()).then(() => { startPoller(); pollStatus(); });
+}
+
+function waDisconnect() {
+    if (!confirm('Disconnect operator WhatsApp? Notifications will fall back to SMS (if configured).')) return;
+    fetch('/operator/api/wa/disconnect/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+    }).then(r => r.json()).then(pollStatus);
+}
+
+function waTest() {
+    fetch('/operator/api/wa/test/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+    }).then(r => r.json()).then(data => {
+        alert(data.message || data.error || 'Done');
+    });
+}
+
+function saveSettings() {
+    const toggles = {};
+    document.querySelectorAll('.op-toggle').forEach(el => {
+        toggles[el.dataset.key] = el.checked;
+    });
+    const payload = {
+        ...toggles,
+        operator_notification_channel: document.getElementById('channel-select').value,
+        notification_phones: document.getElementById('phones-input').value,
+    };
+    fetch('/operator/api/settings/save/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }).then(r => r.json()).then(data => {
+        const toast = document.getElementById('save-toast');
+        toast.textContent = data.ok ? 'Saved ✓' : (data.error || 'Save failed');
+        setTimeout(() => { toast.textContent = ''; }, 2500);
+    });
+}
+
+pollStatus();
+startPoller();
+</script>
+{% csrf_token %}
+{% endblock %}

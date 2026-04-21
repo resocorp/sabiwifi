@@ -144,11 +144,11 @@
 
             <!-- Step 4: Set PIN -->
             <div id="step-4" class="step">
-                <p class="subtitle">Choose a 4-digit PIN for WiFi login</p>
+                <p class="subtitle">Choose a 5-8 digit PIN for WiFi login</p>
                 <label>WiFi PIN</label>
-                <input type="password" id="pin" class="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="----">
+                <input type="password" id="pin" class="pin-input" maxlength="8" pattern="[0-9]*" inputmode="numeric" placeholder="-----">
                 <label>Confirm PIN</label>
-                <input type="password" id="pin-confirm" class="pin-input" maxlength="4" pattern="[0-9]*" inputmode="numeric" placeholder="----">
+                <input type="password" id="pin-confirm" class="pin-input" maxlength="8" pattern="[0-9]*" inputmode="numeric" placeholder="-----">
                 <button type="button" id="pin-btn" class="btn btn-primary" onclick="doSetPin()">Create Account</button>
             </div>
 
@@ -479,7 +479,7 @@
         const pinConfirm = document.getElementById('pin-confirm').value.trim();
         const btn = document.getElementById('pin-btn');
 
-        if (!pin || pin.length !== 4) { showMsg('PIN must be 4 digits.', 'error'); return; }
+        if (!pin || pin.length < 5 || pin.length > 8 || !/^\d+$/.test(pin)) { showMsg('PIN must be 5-8 digits.', 'error'); return; }
         if (pin !== pinConfirm) { showMsg('PINs do not match.', 'error'); return; }
         hideMsg();
         btn.disabled = true; btn.textContent = 'Creating account...';

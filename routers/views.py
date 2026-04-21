@@ -740,6 +740,148 @@ def router_health_log(request, pk):
     return Response({'logs': data})
 
 
+def _format_since(delta_seconds):
+    s = int(delta_seconds)
+    if s < 60:
+        return 'just now'
+    if s < 3600:
+        return f'{s // 60} min'
+    if s < 86400:
+        h = s // 3600
+        m = (s % 3600) // 60
+        return f'{h}h {m}m' if m else f'{h}h'
+    d = s // 86400
+    h = (s % 86400) // 3600
+    return f'{d}d {h}h' if h else f'{d}d'
+
+
+def _format_duration(delta_seconds):
+    s = max(0, int(delta_seconds))
+    if s < 60:
+        return f'{s} sec'
+    if s < 3600:
+        return f'{s // 60} min'
+    h = s // 3600
+    m = (s % 3600) // 60
+    return f'{h}h {m}m' if m else f'{h}h'
+
+
+@api_view(['GET'])
+def router_outages(request, pk):
+    """
+    Return paired online/offline outages for a router over the last N
+    days (default 30), plus a summary line for the dashboard.
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from routers.models import RouterHealthLog
+    from operator_panel.stats.network import router_uptime_pct
+
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    now = timezone.now()
+    try:
+        days = max(1, min(90, int(request.GET.get('days', 30))))
+    except (TypeError, ValueError):
+        days = 30
+    since = now - timedelta(days=days)
+
+    # Walk chronologically. Only count notified (non-blip) offline rows
+    # so the UI matches what the reseller was notified about. Blips that
+    # were suppressed remain present but visually tagged "(brief)".
+    logs = list(
+        RouterHealthLog.objects.filter(router=router, created_at__gte=since)
+        .order_by('created_at')
+        .values_list('event', 'created_at')
+    )
+
+    outages = []
+    open_offline = None
+    BRIEF_THRESHOLD = 300
+    for event, ts in logs:
+        if event == 'offline' and open_offline is None:
+            open_offline = ts
+        elif event == 'online' and open_offline is not None:
+            duration = (ts - open_offline).total_seconds()
+            outages.append({
+                'started': open_offline.isoformat(),
+                'ended': ts.isoformat(),
+                'started_display': open_offline.strftime('%d %b %H:%M'),
+                'ended_display': ts.strftime('%H:%M'),
+                'duration_seconds': int(duration),
+                'duration_display': _format_duration(duration),
+                'brief': duration < BRIEF_THRESHOLD,
+                'ongoing': False,
+            })
+            open_offline = None
+
+    if open_offline is not None:
+        duration = (now - open_offline).total_seconds()
+        outages.append({
+            'started': open_offline.isoformat(),
+            'ended': None,
+            'started_display': open_offline.strftime('%d %b %H:%M'),
+            'ended_display': None,
+            'duration_seconds': int(duration),
+            'duration_display': _format_duration(duration),
+            'brief': False,
+            'ongoing': True,
+        })
+    elif router.status == 'offline' and router.offline_since and router.offline_since < since:
+        # Outage predates the window but router is still offline —
+        # surface it as ongoing so the summary can describe it.
+        duration = (now - router.offline_since).total_seconds()
+        outages.append({
+            'started': router.offline_since.isoformat(),
+            'ended': None,
+            'started_display': router.offline_since.strftime('%d %b %H:%M'),
+            'ended_display': None,
+            'duration_seconds': int(duration),
+            'duration_display': _format_duration(duration),
+            'brief': False,
+            'ongoing': True,
+        })
+
+    outages.reverse()  # most recent first
+
+    seven_days_ago = now - timedelta(days=7)
+    uptime_7d = router_uptime_pct(router, seven_days_ago, now)
+
+    if router.status == 'offline' and router.offline_since:
+        since_iso = router.offline_since.isoformat()
+        since_display = _format_since((now - router.offline_since).total_seconds())
+        summary_text = f'Offline for {since_display} · since {router.offline_since:%d %b %H:%M}'
+    else:
+        last_online_event = RouterHealthLog.objects.filter(
+            router=router, event='online',
+        ).order_by('-created_at').values_list('created_at', flat=True).first()
+        anchor = last_online_event or router.last_seen
+        if anchor:
+            since_iso = anchor.isoformat()
+            since_display = _format_since((now - anchor).total_seconds())
+            summary_text = f'Up for {since_display} · {uptime_7d}% uptime (7d)'
+        else:
+            since_iso = None
+            since_display = ''
+            summary_text = f'{uptime_7d}% uptime (7d)'
+
+    return Response({
+        'summary': {
+            'status': router.status,
+            'since': since_iso,
+            'since_display': since_display,
+            'uptime_pct_7d': uptime_7d,
+            'text': summary_text,
+        },
+        'outages': outages,
+        'window_days': days,
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def router_service_mode(request, pk):
@@ -755,8 +897,125 @@ def router_service_mode(request, pk):
         return Response({'error': 'Invalid service mode.'}, status=400)
 
     router.service_mode = mode
-    router.save(update_fields=['service_mode'])
-    return Response({'status': f'Service mode set to {router.get_service_mode_display()}.'})
+    router.needs_reprovision = True
+    router.save(update_fields=['service_mode', 'needs_reprovision'])
+    return Response({
+        'status': f'Service mode set to {router.get_service_mode_display()}. '
+                  'Applying within 2 minutes.',
+        'needs_reprovision': True,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def router_wifi_config(request, pk):
+    """
+    Persist desired WiFi settings to the Router. Applied at next reprovision
+    (≤2 min via heartbeat). Works whether the router is online or offline —
+    unlike /wifi/ which pushes live via RouterOS API.
+
+    Body: { "ssid": "...", "password": "...", "enabled": true|false }
+    """
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    if router.has_wifi is False:
+        return Response({'error': 'This device has no WiFi hardware.'}, status=400)
+
+    ssid = request.data.get('ssid', '').strip()
+    password = request.data.get('password', '')
+    enabled = request.data.get('enabled', True)
+
+    if ssid and len(ssid) > 32:
+        return Response({'error': 'SSID must be 1-32 characters.'}, status=400)
+    if password and (len(password) < 8 or len(password) > 63):
+        return Response({'error': 'WiFi password must be 8-63 characters.'}, status=400)
+
+    router.wifi_ssid = ssid
+    router.wifi_password = password
+    router.wifi_enabled = bool(enabled)
+    router.needs_reprovision = True
+    router.save(update_fields=[
+        'wifi_ssid', 'wifi_password', 'wifi_enabled', 'needs_reprovision',
+    ])
+    logger.info(f"WiFi config queued for {router.serial_number} by {request.user}")
+    return Response({
+        'status': 'WiFi settings saved. Applying within 2 minutes.',
+        'needs_reprovision': True,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def router_redeploy(request, pk):
+    """
+    Force re-delivery of the provision script on the next heartbeat.
+    Useful after WiFi/service_mode changes, or to recover a misconfigured device.
+    """
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    Router.objects.filter(pk=router.pk).update(needs_reprovision=True)
+    logger.info(f"Redeploy queued for router {router.serial_number} by {request.user}")
+    return Response({
+        'status': 'Redeploy queued. The router will pull the new config within 2 minutes.',
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@throttle_classes([ProvisionRateThrottle])
+def router_announce(request, serial):
+    """
+    One-shot capability announcement, called by the device at the end of
+    provisioning. Records board model, RouterOS version, WiFi presence, ether
+    port count, and which port is currently WAN.
+    """
+    serial = serial.strip().upper()
+    router = Router.objects.filter(serial_number=serial).first()
+    if not router:
+        return HttpResponse('# unknown', content_type='text/plain')
+
+    from django.utils import timezone
+    update_fields = []
+
+    def _set(field, value):
+        if getattr(router, field) != value:
+            setattr(router, field, value)
+            update_fields.append(field)
+
+    board = request.GET.get('board', '').strip()
+    if board:
+        _set('board_name', board[:64])
+    ros = request.GET.get('ros', '').strip()
+    if ros:
+        _set('ros_version', ros[:32])
+    if 'wifi' in request.GET:
+        _set('has_wifi', request.GET['wifi'] == 'yes')
+    if 'fg' in request.GET:
+        _set('has_5ghz', request.GET['fg'] == 'yes')
+    ether = request.GET.get('ether', '').strip()
+    if ether.isdigit():
+        _set('ether_port_count', int(ether))
+    wan = request.GET.get('wan', '').strip()
+    if wan:
+        _set('detected_wan', wan[:16])
+
+    router.last_reprovision_at = timezone.now()
+    update_fields.append('last_reprovision_at')
+
+    router.save(update_fields=update_fields)
+    logger.info(
+        f"Announce from {serial}: board={board} ros={ros} wifi={request.GET.get('wifi')} "
+        f"5g={request.GET.get('fg')} ether={ether} wan={wan}"
+    )
+    return HttpResponse('# ok', content_type='text/plain')
 
 
 # ── OpenWISP Webhook ────────────────────────────────────────────────────────

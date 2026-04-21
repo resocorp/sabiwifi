@@ -105,6 +105,12 @@ class ServicePlan(models.Model):
     )
 
     # Flags
+    # Restrict to specific routers. Empty = available on all the reseller's routers.
+    routers = models.ManyToManyField(
+        'routers.Router', blank=True, related_name='plans',
+        help_text='Restrict this plan to specific routers. Leave empty to make it available on all of your routers.',
+    )
+
     is_trial = models.BooleanField(default=False, help_text="Is this a trial/free plan?")
     is_system_created = models.BooleanField(
         default=False,
@@ -188,6 +194,15 @@ class ServicePlan(models.Model):
             )
 
         return f'{up_k}k/{down_k}k'
+
+    @classmethod
+    def available_for_router(cls, router):
+        """Plans the router's reseller offers AND that include this router (or have no router restriction)."""
+        return cls.objects.filter(
+            reseller=router.reseller, is_active=True,
+        ).filter(
+            models.Q(routers__isnull=True) | models.Q(routers=router)
+        ).distinct()
 
     @property
     def session_timeout_seconds(self):

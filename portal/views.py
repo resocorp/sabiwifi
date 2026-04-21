@@ -156,6 +156,25 @@ def _generate_otp():
     return f'{secrets.randbelow(1000000):06d}'
 
 
+def _plan_allowed_for_serial(plan, serial):
+    """
+    True if `plan` is offered on the router with this serial.
+    Empty serial = no router context = allow (caller is not router-bound).
+    """
+    if not serial:
+        return True
+    from routers.models import Router
+    try:
+        router = Router.objects.get(serial_number=serial.upper())
+    except Router.DoesNotExist:
+        return True
+    if router.reseller_id != plan.reseller_id:
+        return False
+    if not plan.routers.exists():
+        return True
+    return plan.routers.filter(pk=router.pk).exists()
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def portal_signup(request):
@@ -189,6 +208,8 @@ def portal_signup(request):
     if not reseller:
         return Response({'error': 'This link is missing network info. Please reconnect to the WiFi and tap the sign-in notification to reopen this page.'}, status=400)
 
+    serial = (request.data.get('serial') or request.GET.get('r', '') or '').strip().upper()
+
     # Check if subscriber already exists for this reseller
     if Subscriber.objects.filter(reseller=reseller, phone=phone).exists():
         return Response({'error': 'An account with this phone number already exists. Please log in.'}, status=400)
@@ -213,6 +234,7 @@ def portal_signup(request):
         'email': email,
         'reseller_id': reseller.id,
         'country_code': country.code,
+        'serial': serial,
         'attempts': 0,
     }, timeout=600)
 
@@ -268,6 +290,7 @@ def portal_verify_otp(request):
         'phone': phone,
         'email': otp_data['email'],
         'reseller_id': otp_data['reseller_id'],
+        'serial': otp_data.get('serial', ''),
     }, timeout=900)  # 15 minutes
 
     cache.delete(cache_key)
@@ -420,8 +443,8 @@ def portal_set_pin(request):
     if not verified_data:
         return Response({'error': 'Verification expired. Please start over.'}, status=400)
 
-    if not pin or len(pin) < 4 or len(pin) > 6 or not pin.isdigit():
-        return Response({'error': 'PIN must be 4-6 digits.'}, status=400)
+    if not pin or len(pin) < 5 or len(pin) > 8 or not pin.isdigit():
+        return Response({'error': 'PIN must be 5-8 digits.'}, status=400)
 
     if pin != pin_confirm:
         return Response({'error': 'PINs do not match.'}, status=400)
@@ -442,6 +465,8 @@ def portal_set_pin(request):
             chosen_plan = ServicePlan.objects.get(id=plan_id, reseller=reseller, is_active=True)
         except ServicePlan.DoesNotExist:
             return Response({'error': 'Selected plan not found.'}, status=400)
+        if not _plan_allowed_for_serial(chosen_plan, verified_data.get('serial', '')):
+            return Response({'error': 'This plan is not available on this network.'}, status=403)
 
     if chosen_plan is None:
         chosen_plan = ServicePlan.objects.filter(
@@ -611,6 +636,9 @@ def portal_initiate_payment(request):
         plan = ServicePlan.objects.get(id=plan_id, reseller=reseller, is_active=True)
     except ServicePlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=404)
+
+    if not _plan_allowed_for_serial(plan, verified_data.get('serial', '')):
+        return Response({'error': 'This plan is not available on this network.'}, status=403)
 
     signup_fee_kobo = 0
     if (reseller.signup_fee_enabled and reseller.signup_fee_amount > 0
@@ -789,6 +817,7 @@ def portal_plans(request):
     serial = request.GET.get('r', '')
 
     reseller = None
+    router = None
     if reseller_slug:
         try:
             reseller = Reseller.objects.get(slug=reseller_slug)
@@ -805,7 +834,12 @@ def portal_plans(request):
     if not reseller:
         return Response({'error': 'Reseller slug or serial required.'}, status=400)
 
-    plans = ServicePlan.objects.filter(reseller=reseller, is_active=True)
+    # When a router is identified, scope to plans that include this router (or
+    # have no router restriction). Slug-only requests still see all plans.
+    if router is not None:
+        plans = ServicePlan.available_for_router(router)
+    else:
+        plans = ServicePlan.objects.filter(reseller=reseller, is_active=True)
 
     # If reseller has no bank, only show free plans
     if not reseller.payment_verified:
@@ -906,8 +940,8 @@ def portal_change_pin(request):
     if not subscriber.check_pin(current_pin):
         return Response({'error': 'Current PIN is incorrect.'}, status=400)
 
-    if not new_pin or len(new_pin) < 4 or len(new_pin) > 6 or not new_pin.isdigit():
-        return Response({'error': 'New PIN must be 4-6 digits.'}, status=400)
+    if not new_pin or len(new_pin) < 5 or len(new_pin) > 8 or not new_pin.isdigit():
+        return Response({'error': 'New PIN must be 5-8 digits.'}, status=400)
 
     if new_pin != new_pin_confirm:
         return Response({'error': 'PINs do not match.'}, status=400)
@@ -992,8 +1026,8 @@ def portal_reset_pin_confirm(request):
         cache.set(cache_key, reset_data, timeout=600)
         return Response({'error': 'Invalid code.'}, status=400)
 
-    if not new_pin or len(new_pin) < 4 or len(new_pin) > 6 or not new_pin.isdigit():
-        return Response({'error': 'PIN must be 4-6 digits.'}, status=400)
+    if not new_pin or len(new_pin) < 5 or len(new_pin) > 8 or not new_pin.isdigit():
+        return Response({'error': 'PIN must be 5-8 digits.'}, status=400)
 
     if new_pin != new_pin_confirm:
         return Response({'error': 'PINs do not match.'}, status=400)
@@ -1031,6 +1065,10 @@ def portal_change_plan(request):
         )
     except ServicePlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=404)
+
+    serial = (request.data.get('serial') or '').strip()
+    if not _plan_allowed_for_serial(plan, serial):
+        return Response({'error': 'This plan is not available on this network.'}, status=403)
 
     if plan.is_free:
         # Free plan — activate immediately
@@ -1225,6 +1263,10 @@ def portal_purchase_from_wallet(request):
         plan = ServicePlan.objects.get(pk=plan_id, reseller=subscriber.reseller, is_active=True)
     except ServicePlan.DoesNotExist:
         return Response({'error': 'Plan not found.'}, status=400)
+
+    serial = (request.data.get('serial') or '').strip()
+    if not _plan_allowed_for_serial(plan, serial):
+        return Response({'error': 'This plan is not available on this network.'}, status=403)
 
     from billing.wallet import purchase_plan_from_wallet, InsufficientBalance
 

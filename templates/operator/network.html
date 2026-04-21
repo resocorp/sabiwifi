@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Operator Network — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-headline font-bold mb-2">Network</h1>
+    <p class="text-sm text-on-surface-variant mb-4">Live RADIUS accounting — cached 60s.</p>
+    {% with active='network' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <p class="font-mono font-bold text-2xl">{{ s.active_sessions }}</p>
+            <p class="text-on-surface-variant text-xs mt-1">Active sessions</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <p class="font-mono font-bold text-2xl">{{ s.peak_concurrent_24h }}</p>
+            <p class="text-on-surface-variant text-xs mt-1">Peak concurrent (24h)</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <p class="font-mono font-bold text-2xl">
+                {% widthratio s.data_today_bytes 1073741824 1 %} GB
+            </p>
+            <p class="text-on-surface-variant text-xs mt-1">Data transferred today</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <p class="font-mono font-bold text-2xl">
+                {% if s.auth.success_rate is not None %}{{ s.auth.success_rate }}%{% else %}—{% endif %}
+            </p>
+            <p class="text-on-surface-variant text-xs mt-1">Auth success (24h)</p>
+            <p class="text-[10px] text-on-surface-variant">{{ s.auth.accept }} ok / {{ s.auth.reject }} fail</p>
+        </div>
+    </div>
+
+    <!-- Per-partner breakdown -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 mb-6">
+        <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">
+            Per-partner traffic (today)
+        </h2>
+        {% if s.per_partner %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-on-surface-variant text-xs uppercase border-b border-surface-container">
+                        <th class="py-2">Partner</th>
+                        <th>Router</th>
+                        <th>NAS IP</th>
+                        <th class="text-right">Sessions</th>
+                        <th class="text-right">Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in s.per_partner %}
+                    <tr class="border-b border-surface-container/50">
+                        <td class="py-2 font-medium">{{ row.partner }}</td>
+                        <td class="font-mono text-xs">{{ row.serial }}</td>
+                        <td class="font-mono text-xs">{{ row.nasipaddress }}</td>
+                        <td class="text-right font-mono">{{ row.sessions_today }}</td>
+                        <td class="text-right font-mono">
+                            {% widthratio row.bytes_today 1048576 1 %} MB
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-on-surface-variant">No traffic recorded today.</p>
+        {% endif %}
+    </div>
+
+    <!-- Router uptime -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+        <h2 class="text-sm font-headline font-semibold text-on-surface-variant uppercase tracking-wider mb-3">
+            Router uptime (7d)
+        </h2>
+        {% if s.uptime_7d %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-on-surface-variant text-xs uppercase border-b border-surface-container">
+                        <th class="py-2">Router</th>
+                        <th>Partner</th>
+                        <th>Status</th>
+                        <th class="text-right">Uptime %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in s.uptime_7d %}
+                    <tr class="border-b border-surface-container/50">
+                        <td class="py-2 font-mono text-xs">{{ row.serial }}</td>
+                        <td>{{ row.partner }}</td>
+                        <td>
+                            {% if row.status == 'online' %}<span class="text-primary">● online</span>
+                            {% else %}<span class="text-error">● {{ row.status }}</span>{% endif %}
+                        </td>
+                        <td class="text-right font-mono">
+                            {% if row.uptime_pct >= 99 %}<span class="text-primary">{{ row.uptime_pct }}%</span>
+                            {% elif row.uptime_pct >= 90 %}<span class="text-secondary">{{ row.uptime_pct }}%</span>
+                            {% else %}<span class="text-error">{{ row.uptime_pct }}%</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-on-surface-variant">No routers configured.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

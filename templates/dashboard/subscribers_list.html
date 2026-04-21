@@ -6,6 +6,10 @@
 
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-xl font-headline font-bold">Subscribers ({{ total_count }})</h1>
+    <a href="{% url 'dashboard-subscriber-create' %}"
+       class="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+        + Add subscriber
+    </a>
 </div>
 
 <!-- Search & Filter -->

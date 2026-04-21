@@ -23,7 +23,7 @@ class ServicePlanSerializer(serializers.ModelSerializer):
             'fallback_plan', 'daily_fallback_plan',
             'daily_download_mb', 'daily_upload_mb', 'daily_total_mb', 'daily_time_minutes',
             'max_devices', 'price_ngn', 'is_trial', 'is_active', 'is_system_created',
-            'allow_auto_renew',
+            'allow_auto_renew', 'routers',
             'speed_display', 'duration_display', 'data_cap_display',
             'active_subscribers', 'created_at', 'updated_at',
         ]
@@ -51,6 +51,14 @@ class ServicePlanSerializer(serializers.ModelSerializer):
                         'Subscribers can\'t pay until you have a verified account.'
                     )
                 })
+            # Routers must belong to this reseller
+            routers = data.get('routers')
+            if routers:
+                stray = [r for r in routers if r.reseller_id != reseller.id]
+                if stray:
+                    raise serializers.ValidationError({
+                        'routers': "Selected router doesn't belong to your account."
+                    })
         return data
 
     def create(self, validated_data):

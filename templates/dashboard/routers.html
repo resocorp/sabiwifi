@@ -58,10 +58,34 @@
                 {% if router.device_type == 'openwrt' %}MAC{% else %}Serial{% endif %}:
                 {{ router.serial_number }}
             </p>
+            {% if router.board_name or router.ether_port_count or router.has_wifi is not None %}
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+                {% if router.board_name %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">{{ router.board_name }}</span>
+                {% endif %}
+                {% if router.ether_port_count %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">{{ router.ether_port_count }} ether</span>
+                {% endif %}
+                {% if router.has_wifi %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">WiFi{% if router.has_5ghz %} 2.4/5G{% else %} 2.4G{% endif %}</span>
+                {% elif router.has_wifi is False %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">no WiFi</span>
+                {% endif %}
+                {% if router.detected_wan %}
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">WAN: {{ router.detected_wan }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
             {% if router.status == 'offline' and router.offline_since %}
-            <p class="text-sm text-error font-medium">Offline for {{ router.offline_duration_display }}</p>
+            <p class="text-sm text-error font-medium mt-1">Offline for {{ router.offline_duration_display }}</p>
             {% elif router.last_seen %}
-            <p class="text-sm text-on-surface-variant">Last seen: {{ router.last_seen|timesince }} ago</p>
+            <p class="text-sm text-on-surface-variant mt-1">Last seen: {{ router.last_seen|timesince }} ago</p>
+            {% endif %}
+            {% if router.needs_reprovision %}
+            <p class="text-xs text-secondary mt-1 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">sync</span>
+                Config update queued — applying on next heartbeat
+            </p>
             {% endif %}
         </div>
 
@@ -144,10 +168,46 @@
                 </div>
                 {% endif %}
 
-                <!-- Health Log -->
+                <!-- WiFi Config (MikroTik with WiFi hardware only) -->
+                {% if router.device_type != 'openwrt' and router.has_wifi is not False %}
+                <div class="px-4 pb-3">
+                    <div class="bg-surface-container-low rounded-lg p-3">
+                        <p class="text-xs text-on-surface-variant font-medium mb-2">WiFi Settings</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                            <input type="text" id="wifi-ssid-{{ router.pk }}"
+                                   placeholder="SSID (e.g. Cafe-WiFi)" maxlength="32"
+                                   value="{{ router.wifi_ssid }}"
+                                   class="px-2 py-1.5 text-sm bg-surface-container-highest rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40">
+                            <input type="text" id="wifi-pwd-{{ router.pk }}"
+                                   placeholder="Password (8-63 chars; blank = open)" maxlength="63"
+                                   value="{{ router.wifi_password }}"
+                                   class="px-2 py-1.5 text-sm font-mono bg-surface-container-highest rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                                <input type="checkbox" id="wifi-en-{{ router.pk }}"
+                                       {% if router.wifi_enabled %}checked{% endif %}
+                                       class="rounded">
+                                Radios enabled
+                            </label>
+                            <button onclick="saveWifiConfig({{ router.pk }})"
+                                    class="px-3 py-1.5 bg-primary text-on-primary text-xs rounded-lg hover:bg-primary-dim transition">
+                                Save WiFi
+                            </button>
+                        </div>
+                        <p id="wifi-msg-{{ router.pk }}" class="text-xs mt-1 hidden"></p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Status + Outages -->
                 <div class="px-4 pb-4">
-                    <p class="text-xs text-on-surface-variant font-medium mb-2">Recent Status Events</p>
-                    <div id="health-log-{{ router.pk }}" class="text-xs text-on-surface-variant italic">Loading...</div>
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <p class="text-xs text-on-surface-variant font-medium">Router status</p>
+                        <span class="text-xs text-on-surface-variant text-right" id="status-summary-{{ router.pk }}"></span>
+                    </div>
+                    <p class="text-[11px] uppercase tracking-wide text-on-surface-variant/70 mb-1">Recent outages</p>
+                    <div id="outage-list-{{ router.pk }}" class="text-xs text-on-surface-variant italic">Loading…</div>
                 </div>
             </div>
 
@@ -160,15 +220,27 @@
                         Offline for <strong>{{ router.offline_duration_display }}</strong> since {{ router.offline_since|date:"d M Y H:i" }}
                     </div>
                     {% endif %}
-                    <p class="text-xs text-on-surface-variant mb-2 font-medium">Recent Status Events</p>
-                    <div id="health-log-err-{{ router.pk }}" class="text-xs text-on-surface-variant italic">Loading...</div>
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <p class="text-xs text-on-surface-variant font-medium">Router status</p>
+                        <span class="text-xs text-on-surface-variant text-right" id="status-summary-err-{{ router.pk }}"></span>
+                    </div>
+                    <p class="text-[11px] uppercase tracking-wide text-on-surface-variant/70 mb-1">Recent outages</p>
+                    <div id="outage-list-err-{{ router.pk }}" class="text-xs text-on-surface-variant italic">Loading…</div>
                     <button onclick="fetchStats({{ router.pk }})"
                             class="mt-3 text-xs text-primary hover:underline">Retry</button>
                 </div>
             </div>
 
             <!-- Footer actions -->
-            <div class="border-t border-surface-container px-4 py-3 flex justify-end">
+            <div class="border-t border-surface-container px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="redeployRouter({{ router.pk }})"
+                            id="redeploy-btn-{{ router.pk }}"
+                            class="text-sm text-primary hover:underline font-medium">
+                        Redeploy Config
+                    </button>
+                    <span id="redeploy-msg-{{ router.pk }}" class="text-xs hidden"></span>
+                </div>
                 <form method="post" action="{% url 'dashboard-router-remove' router.pk %}"
                       onsubmit="return confirm('Remove &quot;{{ router.location_name|default:router.serial_number|escapejs }}&quot; from your account? Subscribers connected through it will lose WiFi. You can re-add this router later.');">
                     {% csrf_token %}
@@ -234,38 +306,58 @@ function fetchStats(pk) {
         loading.classList.add('hidden');
         stats.classList.remove('hidden');
         renderStats(pk, data);
-        fetchHealthLog(pk, 'health-log-' + pk);
+        fetchOutages(pk, 'status-summary-' + pk, 'outage-list-' + pk);
     })
     .catch(err => {
         loading.classList.add('hidden');
         error.classList.remove('hidden');
         document.getElementById('error-msg-' + pk).textContent =
             'Could not reach router: ' + err.message;
-        fetchHealthLog(pk, 'health-log-err-' + pk);
+        fetchOutages(pk, 'status-summary-err-' + pk, 'outage-list-err-' + pk);
     });
 }
 
-function fetchHealthLog(pk, containerId) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    fetch('/api/routers/' + pk + '/health-log/', {
+function fetchOutages(pk, summaryId, listId) {
+    const summaryEl = document.getElementById(summaryId);
+    const listEl = document.getElementById(listId);
+    if (!summaryEl && !listEl) return;
+    fetch('/api/routers/' + pk + '/outages/?days=30', {
         headers: {'X-CSRFToken': CSRF},
         credentials: 'same-origin',
     })
     .then(r => r.json())
     .then(data => {
-        if (!data.logs || !data.logs.length) {
-            el.innerHTML = '<span class="text-on-surface-variant">No events recorded yet.</span>';
+        if (summaryEl && data.summary) {
+            summaryEl.textContent = data.summary.text || '';
+            summaryEl.classList.toggle('text-error',
+                data.summary.status === 'offline');
+        }
+        if (!listEl) return;
+        const outages = data.outages || [];
+        if (!outages.length) {
+            listEl.innerHTML = '<span class="text-on-surface-variant">No outages in the last ' + (data.window_days || 30) + ' days.</span>';
             return;
         }
-        el.innerHTML = data.logs.map(log => {
-            const dot = log.event === 'online'
-                ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-primary mr-1"></span>'
-                : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-error mr-1"></span>';
-            return `<div class="flex items-center gap-1 py-0.5">${dot}<span class="${log.event === 'online' ? 'text-primary' : 'text-error'} font-medium">${log.label}</span><span class="text-on-surface-variant ml-auto">${log.timestamp}</span></div>`;
+        listEl.innerHTML = outages.map(o => {
+            const brief = o.brief
+                ? ' <span class="text-on-surface-variant/70">(brief)</span>'
+                : '';
+            const ongoing = o.ongoing
+                ? `<span class="text-error font-medium">Offline since ${o.started_display}</span>`
+                + `<span class="text-on-surface-variant ml-auto">${o.duration_display} so far</span>`
+                : `<span class="font-medium">${o.started_display} → ${o.ended_display}</span>`
+                + `<span class="text-on-surface-variant ml-auto">${o.duration_display}${brief}</span>`;
+            const dot = o.ongoing
+                ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-error mr-1"></span>'
+                : (o.brief
+                    ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-outline-variant mr-1"></span>'
+                    : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-error/60 mr-1"></span>');
+            return `<div class="flex items-center gap-1 py-0.5">${dot}${ongoing}</div>`;
         }).join('');
     })
-    .catch(() => { if (el) el.innerHTML = ''; });
+    .catch(() => {
+        if (listEl) listEl.innerHTML = '<span class="text-on-surface-variant">Status unavailable.</span>';
+    });
 }
 
 function renderStats(pk, data) {
@@ -450,6 +542,63 @@ function saveServiceMode(pk) {
         btn.disabled = false;
         btn.textContent = 'Save';
     });
+}
+
+function saveWifiConfig(pk) {
+    const ssidEl = document.getElementById('wifi-ssid-' + pk);
+    const pwdEl = document.getElementById('wifi-pwd-' + pk);
+    const enEl = document.getElementById('wifi-en-' + pk);
+    const msg = document.getElementById('wifi-msg-' + pk);
+
+    const ssid = ssidEl.value.trim();
+    const password = pwdEl.value;
+    const enabled = enEl.checked;
+
+    if (password && (password.length < 8 || password.length > 63)) {
+        showMsg(msg, 'Password must be 8-63 characters (or blank for open).', 'text-error');
+        return;
+    }
+
+    fetch('/api/routers/' + pk + '/wifi-config/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        credentials: 'same-origin',
+        body: JSON.stringify({ssid: ssid, password: password, enabled: enabled}),
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (ok) {
+            showMsg(msg, data.status || 'Saved — applying within 2 minutes.', 'text-primary');
+        } else {
+            showMsg(msg, data.error || 'Save failed.', 'text-error');
+        }
+    })
+    .catch(err => showMsg(msg, 'Network error: ' + err.message, 'text-error'));
+}
+
+function redeployRouter(pk) {
+    if (!confirm('Push the current configuration to this router? It will apply within ~2 minutes on the next heartbeat.')) return;
+    const btn = document.getElementById('redeploy-btn-' + pk);
+    const msg = document.getElementById('redeploy-msg-' + pk);
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Queueing...';
+
+    fetch('/api/routers/' + pk + '/redeploy/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        credentials: 'same-origin',
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (ok) {
+            showMsg(msg, data.status || 'Queued — applying within 2 min.', 'text-primary');
+        } else {
+            showMsg(msg, data.error || 'Failed to queue.', 'text-error');
+        }
+    })
+    .catch(err => showMsg(msg, 'Network error: ' + err.message, 'text-error'))
+    .finally(() => { btn.disabled = false; btn.textContent = orig; });
 }
 
 function showMsg(el, text, cls) {

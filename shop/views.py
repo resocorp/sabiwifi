@@ -322,4 +322,17 @@ def api_shop_webhook(request):
             ).update(stock=models.F('stock') - item.quantity)
 
     logger.info(f'Shop order {reference} paid.')
+
+    # Notify operator
+    try:
+        from operator_panel.services.notify_operator import notify as notify_operator
+        notify_operator('new_order', {
+            'reference': order.reference,
+            'amount': f'{order.total_ngn:,.0f}',
+            'customer': order.customer_name,
+            'phone': order.customer_phone,
+        })
+    except Exception as exc:
+        logger.warning(f'notify_operator new_order failed: {exc}')
+
     return Response({'status': 'ok'})

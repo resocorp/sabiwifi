@@ -182,6 +182,9 @@ def _extract_plan_form_data(POST):
     else:
         data['daily_fallback_plan'] = None
 
+    router_ids = POST.getlist('routers') if hasattr(POST, 'getlist') else []
+    data['routers'] = [_int(r) for r in router_ids if r]
+
     return data
 
 
@@ -212,6 +215,7 @@ def plan_create(request):
             errors = serializer.errors
 
     fallback_plans = ServicePlan.objects.filter(reseller=reseller).order_by('name')
+    available_routers = Router.objects.filter(reseller=reseller).order_by('location_name', 'serial_number')
 
     return render(request, 'dashboard/plan_form.html', {
         'reseller': reseller,
@@ -219,6 +223,8 @@ def plan_create(request):
         'form_data': form_data,
         'is_edit': False,
         'fallback_plans': fallback_plans,
+        'available_routers': available_routers,
+        'selected_router_ids': set(form_data.get('routers') or []),
     })
 
 
@@ -249,11 +255,15 @@ def plan_edit(request, pk):
             errors = serializer.errors
 
     fallback_plans = ServicePlan.objects.filter(reseller=reseller).exclude(pk=plan.pk).order_by('name')
+    available_routers = Router.objects.filter(reseller=reseller).order_by('location_name', 'serial_number')
+    selected_router_ids = set(plan.routers.values_list('pk', flat=True))
 
     return render(request, 'dashboard/plan_form.html', {
         'reseller': reseller,
         'plan': plan,
         'errors': errors,
+        'available_routers': available_routers,
+        'selected_router_ids': selected_router_ids,
         'form_data': {
             'name': plan.name,
             'download_mbps': plan.download_mbps,
@@ -401,6 +411,94 @@ def subscribers_list(request):
         'search': search,
         'status_filter': status_filter,
         'total_count': paginator.count,
+    })
+
+
+@login_required
+def subscriber_create(request):
+    """Manually create a subscriber (reseller-initiated). Optional plan activation."""
+    reseller = _get_reseller(request)
+    if not reseller:
+        return redirect('login')
+
+    plans = ServicePlan.objects.filter(reseller=reseller, is_active=True).order_by('name')
+    errors = {}
+    form_data = {
+        'phone': '',
+        'email': '',
+        'pin': '',
+        'plan_id': '',
+    }
+
+    if request.method == 'POST':
+        from accounts.models import Country, Subscriber as SubscriberModel
+        from radius.utils import set_subscriber_radius_password
+        from plans.services import activate_subscription
+
+        form_data['phone'] = request.POST.get('phone', '').strip()
+        form_data['email'] = request.POST.get('email', '').strip().lower()
+        form_data['pin'] = request.POST.get('pin', '').strip()
+        form_data['plan_id'] = request.POST.get('plan_id', '').strip()
+        country_code = request.POST.get('country', 'NG').upper()
+
+        country = Country.objects.filter(code=country_code, is_active=True).first()
+        if not country:
+            errors['country'] = ['Country not supported.']
+        else:
+            normalized = country.normalize_to_local(form_data['phone'])
+            if not normalized:
+                errors['phone'] = [f'Invalid phone number for {country.name}.']
+            else:
+                form_data['phone'] = normalized
+
+        pin = form_data['pin']
+        if not pin or len(pin) < 5 or len(pin) > 8 or not pin.isdigit():
+            errors['pin'] = ['PIN must be 5-8 digits.']
+
+        chosen_plan = None
+        if form_data['plan_id']:
+            chosen_plan = plans.filter(pk=form_data['plan_id']).first()
+            if not chosen_plan:
+                errors['plan_id'] = ['Selected plan not found.']
+
+        if not errors and SubscriberModel.objects.filter(
+            reseller=reseller, phone=form_data['phone']
+        ).exists():
+            errors['phone'] = ['A subscriber with this phone already exists.']
+
+        if not errors:
+            subscriber = SubscriberModel.objects.create(
+                reseller=reseller,
+                country=country,
+                phone=form_data['phone'],
+                email=form_data['email'],
+                verified=True,
+                source=SubscriberModel.SOURCE_RESELLER,
+            )
+            subscriber.set_pin(pin)
+            subscriber.generate_auth_token()
+            subscriber.save()
+            set_subscriber_radius_password(subscriber, pin)
+
+            if chosen_plan:
+                activate_subscription(subscriber, chosen_plan)
+                messages.success(
+                    request,
+                    f'Subscriber {subscriber.phone} created and assigned to {chosen_plan.name}.'
+                )
+            else:
+                messages.success(request, f'Subscriber {subscriber.phone} created.')
+            return redirect('dashboard-subscriber-detail', pk=subscriber.pk)
+
+    from accounts.models import Country
+    countries = Country.objects.filter(is_active=True).order_by('sort_order', 'name')
+
+    return render(request, 'dashboard/subscriber_form.html', {
+        'reseller': reseller,
+        'errors': errors,
+        'form_data': form_data,
+        'plans': plans,
+        'countries': countries,
     })
 
 

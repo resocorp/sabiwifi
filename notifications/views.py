@@ -64,35 +64,53 @@ def wa_webhook(request):
     event = request.data.get('event')
     slug = request.data.get('slug', '')
 
+    # Operator session is routed to PlatformSettings, not a Reseller
+    from operator_panel.services.operator_wa import OPERATOR_SESSION_KEY
+    is_operator = slug == OPERATOR_SESSION_KEY
+
     if event == 'connected':
         phone = request.data.get('phone', '')
-        try:
-            from accounts.models import Reseller
-            reseller = Reseller.objects.get(slug=slug)
-            sess, _ = WhatsappSession.objects.get_or_create(reseller=reseller)
-            sess.status = 'connected'
-            sess.wa_phone = phone
-            sess.connected_at = timezone.now()
-            sess.disconnected_at = None
-            sess.save()
-            # Seed default templates on first connect
-            seed_default_templates(reseller)
-            logger.info(f'WA connected: {slug} as {phone}')
-        except Exception as exc:
-            logger.error(f'wa_webhook connected error: {exc}')
+        if is_operator:
+            try:
+                from operator_panel.services import operator_wa
+                operator_wa.handle_webhook_connected(phone)
+            except Exception as exc:
+                logger.error(f'wa_webhook operator connected error: {exc}')
+        else:
+            try:
+                from accounts.models import Reseller
+                reseller = Reseller.objects.get(slug=slug)
+                sess, _ = WhatsappSession.objects.get_or_create(reseller=reseller)
+                sess.status = 'connected'
+                sess.wa_phone = phone
+                sess.connected_at = timezone.now()
+                sess.disconnected_at = None
+                sess.save()
+                # Seed default templates on first connect
+                seed_default_templates(reseller)
+                logger.info(f'WA connected: {slug} as {phone}')
+            except Exception as exc:
+                logger.error(f'wa_webhook connected error: {exc}')
 
     elif event == 'disconnected':
-        try:
-            from accounts.models import Reseller
-            reseller = Reseller.objects.get(slug=slug)
-            sess, _ = WhatsappSession.objects.get_or_create(reseller=reseller)
-            sess.status = 'disconnected'
-            sess.wa_phone = ''
-            sess.disconnected_at = timezone.now()
-            sess.save()
-            logger.info(f'WA disconnected: {slug}')
-        except Exception as exc:
-            logger.error(f'wa_webhook disconnected error: {exc}')
+        if is_operator:
+            try:
+                from operator_panel.services import operator_wa
+                operator_wa.handle_webhook_disconnected()
+            except Exception as exc:
+                logger.error(f'wa_webhook operator disconnected error: {exc}')
+        else:
+            try:
+                from accounts.models import Reseller
+                reseller = Reseller.objects.get(slug=slug)
+                sess, _ = WhatsappSession.objects.get_or_create(reseller=reseller)
+                sess.status = 'disconnected'
+                sess.wa_phone = ''
+                sess.disconnected_at = timezone.now()
+                sess.save()
+                logger.info(f'WA disconnected: {slug}')
+            except Exception as exc:
+                logger.error(f'wa_webhook disconnected error: {exc}')
 
     elif event in ('sent', 'failed'):
         log_id = request.data.get('log_id')

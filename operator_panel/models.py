@@ -61,10 +61,23 @@ class PlatformSettings(models.Model):
         default=list, blank=True,
         help_text='JSON list of phone numbers, e.g. ["+2348012345678"]'
     )
+    operator_notification_channel = models.CharField(
+        max_length=10, default='whatsapp',
+        choices=[('sms', 'SMS'), ('whatsapp', 'WhatsApp'), ('both', 'Both')],
+        help_text='Channel used to reach operator recipients'
+    )
     notify_on_new_reseller = models.BooleanField(default=True)
+    notify_on_reseller_activated = models.BooleanField(default=True)
+    notify_on_new_order = models.BooleanField(default=True)
     notify_on_router_offline = models.BooleanField(default=True)
+    notify_on_router_recovered = models.BooleanField(default=True)
     notify_on_payment_failure = models.BooleanField(default=True)
+    notify_on_payment_failure_spike = models.BooleanField(default=True)
     notify_daily_summary = models.BooleanField(default=True)
+
+    # Operator WhatsApp session (Baileys sidecar, session key='operator')
+    operator_wa_connected = models.BooleanField(default=False)
+    operator_wa_phone = models.CharField(max_length=20, blank=True, default='')
 
     history = HistoricalRecords()
 

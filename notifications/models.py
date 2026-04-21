@@ -210,7 +210,8 @@ class NotificationLog(models.Model):
         ('failed', 'Failed'),
     ]
     reseller = models.ForeignKey(
-        'accounts.Reseller', on_delete=models.CASCADE, related_name='notification_logs'
+        'accounts.Reseller', on_delete=models.CASCADE, related_name='notification_logs',
+        null=True, blank=True,
     )
     subscriber = models.ForeignKey(
         'accounts.Subscriber', on_delete=models.SET_NULL,

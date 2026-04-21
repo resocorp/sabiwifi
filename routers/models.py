@@ -60,6 +60,28 @@ class Router(models.Model):
         help_text="Encrypted at rest"
     )
 
+    # WiFi GUI state (applied at next reprovision)
+    wifi_enabled = models.BooleanField(default=True,
+        help_text="If False, WiFi radios are disabled at provisioning.")
+    wifi_ssid = models.CharField(max_length=32, blank=True, default='',
+        help_text="Custom SSID. Empty = use reseller branding fallback.")
+    wifi_password = models.CharField(max_length=63, blank=True, default='',
+        help_text="WPA2/WPA3 password. Empty = open network.")
+
+    # Capabilities reported by heartbeat (None = not yet detected)
+    board_name = models.CharField(max_length=64, blank=True, default='',
+        help_text="RouterBOARD model name from /system resource (e.g. 'hAP ac²').")
+    has_wifi = models.BooleanField(null=True, blank=True,
+        help_text="True if /interface wifi exists on this device.")
+    has_5ghz = models.BooleanField(null=True, blank=True,
+        help_text="True if device has a 5GHz radio.")
+    ether_port_count = models.PositiveSmallIntegerField(null=True, blank=True,
+        help_text="Number of ethernet ports detected.")
+    ros_version = models.CharField(max_length=32, blank=True, default='',
+        help_text="RouterOS version reported by /system resource.")
+    detected_wan = models.CharField(max_length=16, blank=True, default='',
+        help_text="Which ether port currently holds the WAN DHCP lease.")
+
     # Health
     last_seen = models.DateTimeField(null=True, blank=True,
         help_text="Last heartbeat received (internet-alive signal).")
@@ -69,7 +91,12 @@ class Router(models.Model):
         help_text="When this router last went offline. Cleared when it comes back online.")
     needs_reprovision = models.BooleanField(default=False,
         help_text="When True, the next MikroTik heartbeat returns the provision script.")
+    last_reprovision_at = models.DateTimeField(null=True, blank=True,
+        help_text="Timestamp of last successful provision delivery.")
     provision_count = models.PositiveIntegerField(default=0)
+    offline_strikes = models.PositiveSmallIntegerField(default=0,
+        help_text="Consecutive unhealthy observations. Router only flips to 'offline' "
+                  "after this reaches the strike threshold (hysteresis).")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -130,11 +157,15 @@ class RouterHealthLog(models.Model):
     )
     event = models.CharField(max_length=10, choices=EVENT_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True,
+        help_text="When this event was dispatched via SMS/WA (or suppressed as a blip). "
+                  "NULL means pending evaluation by the next check_routers run.")
 
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['router', '-created_at']),
+            models.Index(fields=['notified_at']),
         ]
 
     def __str__(self):

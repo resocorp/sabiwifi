@@ -178,6 +178,13 @@ def sync_plan_to_radius(plan):
     logger.info(f"RADIUS attributes synced for plan {group_name}")
 
 
+def _is_manually_created(subscriber):
+    """Manually-created subscribers (reseller/staff) keep their raw PIN in
+    radcheck so PPPoE MS-CHAPv2 dialing works. Self-signup portal subscribers
+    keep their auth_token there so HTTP-CHAP captive-portal login works."""
+    return getattr(subscriber, 'source', 'portal') != 'portal'
+
+
 def assign_subscriber_to_plan(subscriber, plan):
     """
     Assign a subscriber to a RADIUS group (plan).
@@ -196,22 +203,29 @@ def assign_subscriber_to_plan(subscriber, plan):
         priority=1,
     )
 
-    # Ensure radcheck has the auth token for this user
-    Radcheck.objects.filter(username=username, attribute='Cleartext-Password').delete()
-    if subscriber.auth_token:
-        Radcheck.objects.create(
-            username=username,
-            attribute='Cleartext-Password',
-            op=':=',
-            value=subscriber.auth_token,
-        )
+    # Refresh radcheck — but ONLY for portal-origin subscribers. Manually-
+    # created subscribers had their raw PIN written by set_subscriber_radius_password
+    # at create time; overwriting it with the auth_token would break PPPoE auth.
+    if not _is_manually_created(subscriber):
+        Radcheck.objects.filter(username=username, attribute='Cleartext-Password').delete()
+        if subscriber.auth_token:
+            Radcheck.objects.create(
+                username=username,
+                attribute='Cleartext-Password',
+                op=':=',
+                value=subscriber.auth_token,
+            )
 
     logger.info(f"Subscriber {username} assigned to RADIUS group {group_name}")
 
 
 def update_radcheck_password(subscriber):
-    """Write/update only the Cleartext-Password in radcheck (no group change)."""
+    """Write/update only the Cleartext-Password in radcheck (no group change).
+    Skips manually-created subscribers — their PIN is the radcheck value, not
+    the auth_token, and is rotated through set_subscriber_radius_password."""
     username = subscriber.phone
+    if _is_manually_created(subscriber):
+        return
     Radcheck.objects.filter(username=username, attribute='Cleartext-Password').delete()
     if subscriber.auth_token:
         Radcheck.objects.create(
@@ -221,6 +235,22 @@ def update_radcheck_password(subscriber):
             value=subscriber.auth_token,
         )
     logger.info(f"Updated radcheck password for {username}")
+
+
+def set_subscriber_radius_password(subscriber, raw_pin):
+    """Write the subscriber's raw PIN into radcheck.Cleartext-Password so
+    PPPoE MS-CHAPv2 dialing works. Used at account-create time and on PIN
+    change/reset for manually-created (reseller/staff-source) subscribers."""
+    username = subscriber.phone
+    Radcheck.objects.filter(username=username, attribute='Cleartext-Password').delete()
+    if raw_pin:
+        Radcheck.objects.create(
+            username=username,
+            attribute='Cleartext-Password',
+            op=':=',
+            value=raw_pin,
+        )
+    logger.info(f"Set RADIUS PPPoE password for {username}")
 
 
 def disconnect_subscriber_sessions(subscriber):

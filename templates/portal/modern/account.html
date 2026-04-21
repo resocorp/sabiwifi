@@ -88,7 +88,7 @@
                     <label>Phone Number</label>
                     <input type="tel" id="login-phone" placeholder="08066..." inputmode="numeric">
                     <label>WiFi PIN</label>
-                    <input type="password" id="login-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                    <input type="password" id="login-pin" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                     <button class="btn btn-primary mt-16" id="login-btn" onclick="doLogin()">Log In</button>
                     <p class="text-center text-muted mt-8">
                         <a href="#" onclick="showSection('reset-section'); return false;" style="color: var(--primary); text-decoration: none;">Forgot PIN?</a>
@@ -118,9 +118,9 @@
                     <label>Verification Code</label>
                     <input type="text" id="reset-code" maxlength="6" inputmode="numeric" style="text-align:center; letter-spacing:8px;" placeholder="------">
                     <label>New PIN</label>
-                    <input type="password" id="reset-new-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                    <input type="password" id="reset-new-pin" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                     <label>Confirm New PIN</label>
-                    <input type="password" id="reset-confirm-pin" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                    <input type="password" id="reset-confirm-pin" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                     <button class="btn btn-primary mt-16" onclick="doResetConfirm()">Reset PIN</button>
                 </div>
                 <button class="btn btn-outline mt-8" onclick="showSection('login-section')">Back to Login</button>
@@ -200,11 +200,11 @@
                 <h2>Change WiFi PIN</h2>
                 <div id="pin-msg"></div>
                 <label>Current PIN</label>
-                <input type="password" id="cp-current" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                <input type="password" id="cp-current" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                 <label>New PIN</label>
-                <input type="password" id="cp-new" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                <input type="password" id="cp-new" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                 <label>Confirm New PIN</label>
-                <input type="password" id="cp-confirm" class="pin-input" maxlength="6" inputmode="numeric" placeholder="----">
+                <input type="password" id="cp-confirm" class="pin-input" maxlength="8" inputmode="numeric" placeholder="-----">
                 <button class="btn btn-primary mt-16" onclick="doChangePin()">Update PIN</button>
                 <button class="btn btn-outline mt-8" onclick="showSection('account-section')">Cancel</button>
             </div>

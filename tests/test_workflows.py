@@ -62,7 +62,7 @@ def _make_plan(reseller, name='Free Trial', price=0, days=0, hours=0.5,
     )
 
 
-def _make_subscriber(reseller, phone='08099999999', pin='1234'):
+def _make_subscriber(reseller, phone='08099999999', pin='12345'):
     sub = Subscriber.objects.create(
         reseller=reseller, phone=phone, email='sub@x.com', verified=True,
     )
@@ -93,7 +93,7 @@ def _signup_subscriber_via_api(client, reseller, phone='+2348077777777'):
 
     # Step 3: Set PIN
     resp = client.post(reverse('api-portal-set-pin'), {
-        'verify_token': verify_token, 'pin': '1234', 'pin_confirm': '1234',
+        'verify_token': verify_token, 'pin': '12345', 'pin_confirm': '12345',
     }, format='json')
     assert resp.status_code == 201, resp.data
     return resp.data['auth_token']
@@ -392,7 +392,7 @@ class WF17_SubscriberSignupTest(TestCase):
         self.assertEqual(len(token), 64)
         sub = Subscriber.objects.get(phone='08077777777', reseller=self.reseller)
         self.assertTrue(sub.verified)
-        self.assertTrue(sub.check_pin('1234'))
+        self.assertTrue(sub.check_pin('12345'))
 
 
 class WF18_SubscriberLoginCaptiveTest(TestCase):
@@ -407,7 +407,7 @@ class WF18_SubscriberLoginCaptiveTest(TestCase):
 
     def test_login_with_serial(self):
         resp = self.c.post(reverse('api-portal-login'), {
-            'phone': '+2348099999999', 'pin': '1234', 'serial': 'LOGIN01',
+            'phone': '+2348099999999', 'pin': '12345', 'serial': 'LOGIN01',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('auth_token', resp.data)
@@ -421,7 +421,7 @@ class WF19_SubscriberLoginSelfServiceTest(TestCase):
 
     def test_login_without_serial(self):
         resp = self.c.post(reverse('api-portal-login'), {
-            'phone': '+2348099999999', 'pin': '1234',
+            'phone': '+2348099999999', 'pin': '12345',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
 
@@ -525,23 +525,23 @@ class WF23to24_ChangePlanTest(TestCase):
 class WF25_ChangePINTest(TestCase):
     def setUp(self):
         self.reseller = _make_reseller()
-        self.sub = _make_subscriber(self.reseller, pin='1234')
+        self.sub = _make_subscriber(self.reseller, pin='12345')
         self.c = APIClient()
 
     def test_change_pin(self):
         resp = self.c.post(reverse('api-portal-change-pin'), {
-            'current_pin': '1234', 'new_pin': '5678', 'new_pin_confirm': '5678',
+            'current_pin': '12345', 'new_pin': '56789', 'new_pin_confirm': '56789',
         }, format='json', HTTP_X_AUTH_TOKEN=self.sub.auth_token)
         self.assertEqual(resp.status_code, 200)
         self.sub.refresh_from_db()
-        self.assertTrue(self.sub.check_pin('5678'))
+        self.assertTrue(self.sub.check_pin('56789'))
 
 
 class WF26_ResetPINTest(TestCase):
     def setUp(self):
         cache.clear()
         self.reseller = _make_reseller()
-        self.sub = _make_subscriber(self.reseller, pin='1234')
+        self.sub = _make_subscriber(self.reseller, pin='12345')
         self.c = APIClient()
 
     def test_reset_pin_flow(self):
@@ -554,11 +554,11 @@ class WF26_ResetPINTest(TestCase):
         # Confirm with new PIN
         resp = self.c.post(reverse('api-portal-reset-pin-confirm'), {
             'phone': '+2348099999999', 'code': otp,
-            'new_pin': '9999', 'new_pin_confirm': '9999',
+            'new_pin': '99999', 'new_pin_confirm': '99999',
         }, format='json')
         self.assertEqual(resp.status_code, 200)
         self.sub.refresh_from_db()
-        self.assertTrue(self.sub.check_pin('9999'))
+        self.assertTrue(self.sub.check_pin('99999'))
 
 
 class WF27_DisconnectSessionTest(TestCase):
@@ -730,7 +730,10 @@ class WF35_RouterHealthTest(TestCase):
             serial_number='HEALTH01', reseller=reseller, status='online',
             wg_tunnel_ip='10.99.99.99', last_seen=timezone.now(),
         )
+        # Hysteresis: status flips to offline only after 2 consecutive
+        # unhealthy checks. Fresh heartbeat + missing WG handshake = unhealthy.
         out = StringIO()
+        call_command('check_routers', stdout=out)
         call_command('check_routers', stdout=out)
         router.refresh_from_db()
         self.assertEqual(router.status, 'offline')

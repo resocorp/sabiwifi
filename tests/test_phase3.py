@@ -550,10 +550,17 @@ class CheckRoutersTest(TestCase):
             wg_tunnel_ip='10.99.99.99', last_seen=timezone.now() - timedelta(hours=1),
         )
         from django.core.management import call_command
+        # Hysteresis: first unhealthy check bumps the strike counter but
+        # does NOT flip status. Second consecutive hit does.
         out = StringIO()
         call_command('check_routers', stdout=out)
         router.refresh_from_db()
-        # Since 10.99.99.99 isn't reachable, should be marked offline
+        self.assertEqual(router.status, 'online')
+        self.assertEqual(router.offline_strikes, 1)
+
+        out = StringIO()
+        call_command('check_routers', stdout=out)
+        router.refresh_from_db()
         self.assertEqual(router.status, 'offline')
         self.assertIn('1 status change', out.getvalue())
 

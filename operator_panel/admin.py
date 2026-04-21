@@ -46,11 +46,19 @@ class PlatformSettingsAdmin(SimpleHistoryAdmin):
             'fields': ('server_ip', 'server_wg_public_key'),
             'classes': ('collapse',),
         }),
+        ('Operator WhatsApp', {
+            'fields': ('operator_wa_connected', 'operator_wa_phone'),
+            'classes': ('collapse',),
+        }),
         ('Notifications', {
             'fields': (
                 'notification_phones',
-                'notify_on_new_reseller', 'notify_on_router_offline',
-                'notify_on_payment_failure', 'notify_daily_summary',
+                'operator_notification_channel',
+                'notify_on_new_reseller', 'notify_on_reseller_activated',
+                'notify_on_new_order',
+                'notify_on_router_offline', 'notify_on_router_recovered',
+                'notify_on_payment_failure', 'notify_on_payment_failure_spike',
+                'notify_daily_summary',
             ),
         }),
     )
