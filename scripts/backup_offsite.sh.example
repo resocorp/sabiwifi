@@ -1,0 +1,15 @@
+#!/bin/bash
+# Offsite backup hook — called by backup_db.sh after a successful pg_dump.
+# Copy to a bucket / remote host here. Rename to backup_offsite.sh and
+# chmod +x to enable. Path of the dump file is passed as $1.
+#
+# Example (DigitalOcean Spaces via rclone):
+#   rclone copy "$1" spaces:sabiwifi-backups/$(date +%Y/%m)/
+#
+# Example (S3 via aws-cli):
+#   aws s3 cp "$1" s3://sabiwifi-backups/$(date +%Y/%m)/
+
+set -euo pipefail
+DUMP_FILE="$1"
+echo "offsite hook not configured — $DUMP_FILE stays local"
+exit 0

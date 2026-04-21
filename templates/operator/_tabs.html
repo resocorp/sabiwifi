@@ -11,6 +11,14 @@ overview / network / business / partners / settings.
        class="px-4 py-2 text-sm font-medium {% if active == 'business' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">Business</a>
     <a href="{% url 'operator-partners' %}"
        class="px-4 py-2 text-sm font-medium {% if active == 'partners' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">Partners</a>
+    <a href="{% url 'operator-tickets' %}"
+       class="px-4 py-2 text-sm font-medium {% if active == 'tickets' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">Tickets</a>
+    <a href="{% url 'operator-conversations' %}"
+       class="px-4 py-2 text-sm font-medium {% if active == 'conversations' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">Inbox</a>
+    <a href="{% url 'operator-kpis' %}"
+       class="px-4 py-2 text-sm font-medium {% if active == 'kpis' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">KPIs</a>
+    <a href="{% url 'operator-ai-overview' %}"
+       class="px-4 py-2 text-sm font-medium {% if active == 'ai' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">AI</a>
     <a href="{% url 'operator-settings' %}"
        class="px-4 py-2 text-sm font-medium {% if active == 'settings' %}border-b-2 border-primary text-primary{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">Settings</a>
 </nav>

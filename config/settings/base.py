@@ -37,6 +37,12 @@ INSTALLED_APPS = [
     'shop',
     'integrations',
     'vouchers',
+    'conversations',
+    'staff',
+    'leads',
+    'tickets',
+    'ai',
+    'django_rq',
 ]
 
 MIDDLEWARE = [
@@ -154,6 +160,18 @@ SERVER_WG_PUBLIC_KEY = config('SERVER_WG_PUBLIC_KEY', default='')
 # Platform
 PLATFORM_DOMAIN = config('PLATFORM_DOMAIN', default='app.sabiwifi.com')
 
+# Email — SMTP (Mailgun / Resend / any SMTP provider). Credentials come from
+# .env so local dev can point at the console backend.
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@sabiwifi.com')
+
 # OpenWrt firmware image path (built by manage.py build_openwrt_firmware)
 OPENWRT_FIRMWARE_PATH = '/opt/openwrt-imagebuilder/bin/firmware-latest.bin'
 
@@ -191,3 +209,30 @@ CACHES = {
 # Store sessions in Redis too (survives worker restarts)
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
+
+# ---------------------------------------------------------------------------
+# Durable job queue (RQ over Redis)
+# ---------------------------------------------------------------------------
+# Uses a separate DB index from the cache so `FLUSHDB` on the cache never
+# wipes enqueued work. Three queues:
+#   - 'default'      — generic background work (outbound WA/SMS/email sends)
+#   - 'ai'           — per-conversation AI agent runs (phase 2+)
+#   - 'low'          — non-urgent / catch-up (reports, exports)
+RQ_REDIS_URL = config('RQ_REDIS_URL', default='redis://127.0.0.1:6379/2')
+RQ_QUEUES = {
+    'default': {'URL': RQ_REDIS_URL, 'DEFAULT_TIMEOUT': 300},
+    'ai':      {'URL': RQ_REDIS_URL, 'DEFAULT_TIMEOUT': 120},
+    'low':     {'URL': RQ_REDIS_URL, 'DEFAULT_TIMEOUT': 900},
+}
+
+# AI supervisors (Phase 2) ----------------------------------------------------
+# Symmetric key for encrypting reseller-provided AI provider API keys at rest.
+# Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# and set in .env as AI_FERNET_KEY. Empty in dev is fine — ai.crypto refuses
+# to encrypt/decrypt until the key is set.
+AI_FERNET_KEY = config('AI_FERNET_KEY', default='')
+
+# Approximate conversion for operator-facing cost roll-up. Provider rate cards
+# are quoted in USD/MToken; multiply by this to show NGN spend per reseller.
+# Not used for billing — purely an operator dashboard estimate.
+AI_USD_TO_NGN_RATE = config('AI_USD_TO_NGN_RATE', default='1500')

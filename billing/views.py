@@ -182,7 +182,9 @@ def payment_webhook(request):
 
 
 def _activate_payment(payment, paystack_data=None):
-    """Activate a payment: create subscription, assign RADIUS group."""
+    """Activate a payment: create subscription, assign RADIUS group. For
+    lead-install payments, convert the lead → subscriber, create the
+    InstallationOrder, and raise a dispatcher ticket."""
     payment.paystack_status = 'success'
 
     # Extract payment method from Paystack data
@@ -202,6 +204,11 @@ def _activate_payment(payment, paystack_data=None):
 
     payment.save()
 
+    # Lead-install: convert, then attach the subscriber back onto the payment.
+    if payment.lead_id and not payment.subscriber_id:
+        _activate_lead_payment(payment)
+        return
+
     plan = payment.plan
     subscriber = payment.subscriber
 
@@ -212,6 +219,46 @@ def _activate_payment(payment, paystack_data=None):
     activate_subscription(subscriber, plan, reseller=payment.reseller)
 
     logger.info(f"Plan {plan.name} activated for {subscriber.phone} (ref: {payment.paystack_reference})")
+
+
+def _activate_lead_payment(payment):
+    """Convert lead → subscriber, create install order + dispatcher ticket."""
+    from leads.services import convert_lead_to_subscriber
+    from leads.models import InstallationOrder
+    from tickets.services import create_ticket
+    from tickets.models import Ticket
+
+    lead = payment.lead
+    service_mode = InstallationOrder.SERVICE_MODE_PPPOE
+    subscriber, order = convert_lead_to_subscriber(
+        lead, payment=payment, service_mode=service_mode,
+    )
+
+    # Backfill the subscriber + installation onto the payment for audit.
+    payment.subscriber = subscriber
+    payment.installation_order = order
+    payment.save(update_fields=['subscriber', 'installation_order', 'updated_at'])
+
+    # Raise an install ticket so the dispatcher knows to schedule a tech.
+    create_ticket(
+        reseller=payment.reseller,
+        type=Ticket.TYPE_INSTALL,
+        subject=f'Install for {lead.name or lead.phone}',
+        body=(
+            f'Paid lead needs installation at {lead.address or "address TBC"}. '
+            f'Payment ref: {payment.paystack_reference}'
+        ),
+        lead=lead,
+        subscriber=subscriber,
+        installation_order=order,
+        priority=Ticket.PRIORITY_HIGH,
+        actor='system',
+    )
+
+    logger.info(
+        f'Lead {lead.pk} converted → subscriber {subscriber.pk}, install {order.pk} '
+        f'(ref: {payment.paystack_reference})'
+    )
 
 
 @api_view(['GET'])
@@ -245,6 +292,7 @@ def payment_callback(request):
     return Response({
         'status': payment.paystack_status,
         'plan_name': payment.plan.name if payment.plan else '',
+        'payment_type': payment.payment_type,
         'amount': str(payment.amount_ngn),
         'reference': reference,
     })

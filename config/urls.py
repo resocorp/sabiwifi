@@ -46,6 +46,15 @@ urlpatterns = [
     # Shop (public storefront)
     path('shop/', include('shop.urls')),
     path('api/shop/', include('shop.api_urls')),
+
+    # CRM — Conversations, Leads, Tickets, Staff
+    path('api/conversations/', include('conversations.urls')),
+    path('api/leads/', include('leads.urls')),
+    path('api/tickets/', include('tickets.urls')),
+    path('api/staff/', include('staff.urls')),
+
+    # Queue admin (RQ dashboard) — staff-only via django-rq's own decorator.
+    path('django-rq/', include('django_rq.urls')),
 ]
 
 if settings.DEBUG:

@@ -12,6 +12,7 @@ class Payment(models.Model):
         ('signup_fee', 'Account Creation Fee'),
         ('wallet_topup', 'Wallet Top-up'),
         ('auto_renewal', 'Auto Renewal'),
+        ('lead_install', 'Lead install payment'),
     ]
 
     PAYMENT_METHOD_CHOICES = [
@@ -29,14 +30,27 @@ class Payment(models.Model):
         ('failed', 'Failed'),
     ]
 
+    # Nullable — a lead-install payment is created before a Subscriber exists;
+    # the webhook handler converts the lead and fills this in at activation.
     subscriber = models.ForeignKey(
-        'accounts.Subscriber', on_delete=models.CASCADE, related_name='payments'
+        'accounts.Subscriber', null=True, blank=True,
+        on_delete=models.CASCADE, related_name='payments',
     )
     plan = models.ForeignKey(
         'plans.ServicePlan', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments'
     )
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.CASCADE, related_name='payments'
+    )
+    # Set when this payment is an installation / first-month charge for a Lead
+    # that has not yet been converted to a Subscriber.
+    lead = models.ForeignKey(
+        'leads.Lead', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='payments',
+    )
+    installation_order = models.ForeignKey(
+        'leads.InstallationOrder', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='payments',
     )
 
     payment_type = models.CharField(
@@ -79,7 +93,9 @@ class Payment(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'₦{self.amount_ngn} - {self.subscriber.phone} ({self.paystack_status})'
+        who = (self.subscriber and self.subscriber.phone) \
+            or (self.lead and self.lead.phone) or '—'
+        return f'₦{self.amount_ngn} - {who} ({self.paystack_status})'
 
 
 class Wallet(models.Model):

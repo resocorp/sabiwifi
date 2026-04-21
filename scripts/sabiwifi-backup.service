@@ -1,0 +1,12 @@
+[Unit]
+Description=SabiWiFi nightly Postgres backup
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+ExecStart=/opt/sabiwifi/scripts/backup_db.sh
+StandardOutput=journal
+StandardError=journal

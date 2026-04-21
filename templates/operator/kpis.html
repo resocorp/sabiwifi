@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Operator KPIs — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-2xl font-headline font-bold">KPI dashboard</h1>
+    </div>
+    {% with active='kpis' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <div class="flex flex-wrap gap-2 mb-4 items-end">
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Partner</span>
+            <select id="reseller-select" class="rounded border px-2 py-1">
+                <option value="">All</option>
+                {% for r in resellers %}
+                    <option value="{{ r.slug }}">{{ r.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Window (days)</span>
+            <input id="window-days" type="number" value="30" min="1" max="365"
+                   class="rounded border px-2 py-1 w-24" />
+        </label>
+        <button id="refresh" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Refresh</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="font-semibold mb-2">Report → Resolution time</h2>
+            <p class="text-xs text-on-surface-variant">Time from ticket created to resolved.</p>
+            <div class="mt-3" id="resolution-card">Loading…</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="font-semibold mb-2">Payment → Service time</h2>
+            <p class="text-xs text-on-surface-variant">Time from Paystack payment to install completed.</p>
+            <div class="mt-3" id="service-card">Loading…</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="font-semibold mb-2">SLA breaches (open)</h2>
+            <p id="breach-count" class="text-3xl font-mono font-bold mt-2">—</p>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
+            <h2 class="font-semibold mb-2">Lead funnel</h2>
+            <ul id="funnel" class="text-sm mt-2 space-y-1 font-mono"></ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function fmtSeconds(v) {
+    if (v == null) return '—';
+    if (v < 60) return v + 's';
+    if (v < 3600) return (v / 60).toFixed(1) + 'm';
+    if (v < 86400) return (v / 3600).toFixed(1) + 'h';
+    return (v / 86400).toFixed(1) + 'd';
+}
+
+async function loadKPIs() {
+    const slug = document.getElementById('reseller-select').value;
+    const days = document.getElementById('window-days').value || 30;
+    const params = new URLSearchParams({ days });
+    if (slug) params.set('reseller', slug);
+    const resp = await fetch('/operator/api/kpis/?' + params.toString());
+    const data = await resp.json();
+
+    const r = data.report_to_resolution || {};
+    document.getElementById('resolution-card').innerHTML =
+        '<div class="font-mono">median ' + fmtSeconds(r.median_seconds) +
+        ' · p90 ' + fmtSeconds(r.p90_seconds) +
+        ' · n=' + (r.n || 0) + '</div>';
+
+    const s = data.payment_to_service || {};
+    document.getElementById('service-card').innerHTML =
+        '<div class="font-mono">median ' + fmtSeconds(s.median_seconds) +
+        ' · p90 ' + fmtSeconds(s.p90_seconds) +
+        ' · n=' + (s.n || 0) + '</div>';
+
+    document.getElementById('breach-count').textContent = data.breached_open_tickets;
+
+    const funnel = data.lead_funnel || {};
+    const ul = document.getElementById('funnel');
+    ul.innerHTML = '';
+    for (const k of ['new', 'qualified', 'quoted', 'paid', 'installed', 'lost']) {
+        const li = document.createElement('li');
+        li.textContent = k + ': ' + (funnel[k] || 0);
+        ul.appendChild(li);
+    }
+}
+
+document.getElementById('refresh').addEventListener('click', loadKPIs);
+loadKPIs();
+</script>
+{% endblock %}

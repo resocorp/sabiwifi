@@ -80,6 +80,11 @@ class ResellerAdminContact(models.Model):
 
 
 class NotificationTemplate(models.Model):
+    CHANNEL_CHOICES = [
+        ('sms', 'SMS'),
+        ('whatsapp', 'WhatsApp'),
+        ('email', 'Email'),
+    ]
     EVENT_CHOICES = [
         ('plan_expiry_3d', 'Plan expiring in 3 days'),
         ('plan_expiry_1d', 'Plan expiring tomorrow'),
@@ -123,15 +128,22 @@ class NotificationTemplate(models.Model):
         'accounts.Reseller', on_delete=models.CASCADE, related_name='notification_templates'
     )
     event_type = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    # Channel this template applies to. A reseller may have per-channel copies
+    # of the same event (short SMS body, longer WA body, HTML email body).
+    channel = models.CharField(
+        max_length=10, choices=CHANNEL_CHOICES, default='sms',
+    )
+    # Only used by the email channel — SMS and WA ignore it.
+    subject = models.CharField(max_length=200, blank=True, default='')
     body = models.TextField()
     is_enabled = models.BooleanField(default=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['reseller', 'event_type']
+        unique_together = ['reseller', 'event_type', 'channel']
 
     def __str__(self):
-        return f'{self.reseller.slug} — {self.event_type}'
+        return f'{self.reseller.slug} — {self.event_type} ({self.channel})'
 
 
 class SubscriberNotificationPrefs(models.Model):
@@ -202,6 +214,7 @@ class NotificationLog(models.Model):
     CHANNEL_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('sms', 'SMS'),
+        ('email', 'Email'),
     ]
     STATUS_CHOICES = [
         ('queued', 'Queued'),
@@ -217,7 +230,8 @@ class NotificationLog(models.Model):
         'accounts.Subscriber', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='notification_logs'
     )
-    recipient_phone = models.CharField(max_length=20)
+    # Stores phone for SMS/WA and email address for email — widened so both fit.
+    recipient_phone = models.CharField(max_length=254)
     channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
     event_type = models.CharField(max_length=30)
     broadcast = models.ForeignKey(

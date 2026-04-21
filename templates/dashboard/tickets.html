@@ -1,0 +1,87 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Tickets — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-headline font-bold">Tickets</h1>
+</div>
+
+<div class="flex gap-2 mb-4 text-sm">
+    <select id="status-filter" class="rounded border px-2 py-1">
+        <option value="">All statuses</option>
+        <option value="open">Open</option>
+        <option value="assigned">Assigned</option>
+        <option value="in_progress">In progress</option>
+        <option value="awaiting_customer">Awaiting customer</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+    </select>
+    <select id="type-filter" class="rounded border px-2 py-1">
+        <option value="">All types</option>
+        <option value="sales_followup">Sales follow-up</option>
+        <option value="install">Install</option>
+        <option value="support">Support</option>
+        <option value="billing">Billing</option>
+        <option value="other">Other</option>
+    </select>
+    <label class="flex items-center gap-1 text-xs">
+        <input type="checkbox" id="breached-only"> SLA breached only
+    </label>
+</div>
+
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+            <tr>
+                <th class="px-3 py-2">#</th>
+                <th class="px-3 py-2">Type</th>
+                <th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2">Priority</th>
+                <th class="px-3 py-2">Subject</th>
+                <th class="px-3 py-2">Assignee</th>
+                <th class="px-3 py-2">SLA</th>
+                <th class="px-3 py-2">Created</th>
+            </tr>
+        </thead>
+        <tbody id="tickets-body"></tbody>
+    </table>
+</div>
+
+<script>
+async function loadTickets() {
+    const status = document.getElementById('status-filter').value;
+    const type = document.getElementById('type-filter').value;
+    const breached = document.getElementById('breached-only').checked;
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (type) params.set('type', type);
+    if (breached) params.set('breached', '1');
+    const resp = await fetch('/api/tickets/?' + params.toString());
+    const data = await resp.json();
+    const tbody = document.getElementById('tickets-body');
+    tbody.innerHTML = '';
+    for (const t of data) {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-surface-container';
+        const slaCell = t.sla_breached
+            ? '<span class="text-error font-semibold">BREACHED</span>'
+            : (t.sla_due_at ? new Date(t.sla_due_at).toLocaleString() : '—');
+        tr.innerHTML =
+            '<td class="px-3 py-2 font-mono">#' + t.id + '</td>' +
+            '<td class="px-3 py-2">' + t.type + '</td>' +
+            '<td class="px-3 py-2">' + t.status + '</td>' +
+            '<td class="px-3 py-2">' + t.priority + '</td>' +
+            '<td class="px-3 py-2 truncate max-w-xs">' + (t.subject || '') + '</td>' +
+            '<td class="px-3 py-2">' + (t.assigned_staff_name || '—') + '</td>' +
+            '<td class="px-3 py-2">' + slaCell + '</td>' +
+            '<td class="px-3 py-2 text-on-surface-variant">' + new Date(t.created_at).toLocaleString() + '</td>';
+        tbody.appendChild(tr);
+    }
+}
+
+document.getElementById('status-filter').addEventListener('change', loadTickets);
+document.getElementById('type-filter').addEventListener('change', loadTickets);
+document.getElementById('breached-only').addEventListener('change', loadTickets);
+loadTickets();
+</script>
+{% endblock %}

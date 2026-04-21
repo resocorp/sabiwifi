@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Operator AI — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-2xl font-headline font-bold">AI oversight</h1>
+        <form method="get" class="flex items-center gap-2 text-sm">
+            <label>Window:
+                <select name="days" class="rounded border px-2 py-1" onchange="this.form.submit()">
+                    <option value="1" {% if window_days == 1 %}selected{% endif %}>1d</option>
+                    <option value="7" {% if window_days == 7 %}selected{% endif %}>7d</option>
+                    <option value="30" {% if window_days == 30 %}selected{% endif %}>30d</option>
+                    <option value="90" {% if window_days == 90 %}selected{% endif %}>90d</option>
+                </select>
+            </label>
+        </form>
+    </div>
+    {% with active='ai' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-surface-container-lowest rounded-xl p-4 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Total runs</div>
+            <div class="text-2xl font-semibold">{{ total_runs }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-4 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Failed</div>
+            <div class="text-2xl font-semibold">{{ total_failed }} <span class="text-sm text-on-surface-variant">({{ total_error_pct }}%)</span></div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-4 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Spend (NGN)</div>
+            <div class="text-2xl font-semibold">₦{{ total_cost_ngn|floatformat:2 }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-4 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Window</div>
+            <div class="text-2xl font-semibold">{{ window_days }}d</div>
+        </div>
+    </div>
+
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+                <tr>
+                    <th class="px-3 py-2">Partner</th>
+                    <th class="px-3 py-2">Provider</th>
+                    <th class="px-3 py-2">Model</th>
+                    <th class="px-3 py-2">Runs</th>
+                    <th class="px-3 py-2">Errors</th>
+                    <th class="px-3 py-2">Avg latency</th>
+                    <th class="px-3 py-2">Spend (NGN)</th>
+                    <th class="px-3 py-2">State</th>
+                    <th class="px-3 py-2"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr class="border-t border-surface-container">
+                    <td class="px-3 py-2">{{ row.reseller.name }} <span class="text-on-surface-variant">({{ row.reseller.slug }})</span></td>
+                    <td class="px-3 py-2">{{ row.config.get_text_provider_display }}</td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ row.config.text_model|default:'—' }}</td>
+                    <td class="px-3 py-2">{{ row.total_runs }}</td>
+                    <td class="px-3 py-2">
+                        {% if row.failed_runs %}<span class="text-error font-semibold">{{ row.failed_runs }}</span> ({{ row.error_pct }}%)
+                        {% else %}<span class="text-on-surface-variant">0</span>{% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ row.avg_latency_ms }}ms</td>
+                    <td class="px-3 py-2">₦{{ row.cost_ngn|floatformat:2 }}</td>
+                    <td class="px-3 py-2">
+                        {% if row.paused %}
+                            <span class="text-error font-semibold">Paused</span>
+                            <div class="text-xs text-on-surface-variant truncate max-w-[18ch]" title="{{ row.pause_reason }}">{{ row.pause_reason }}</div>
+                        {% else %}
+                            <span class="text-green-600 font-semibold">Active</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-3 py-2">
+                        {% if row.paused %}
+                            <button data-resume="{{ row.reseller.pk }}" class="px-2 py-1 rounded bg-primary text-on-primary text-xs">Resume</button>
+                        {% else %}
+                            <button data-pause="{{ row.reseller.pk }}" class="px-2 py-1 rounded bg-error text-on-error text-xs">Pause</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="px-3 py-6 text-center text-on-surface-variant">No AI configs yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="text-xs text-on-surface-variant mt-3">
+        <a href="{% url 'operator-ai-runs' %}" class="underline">Browse run audit log →</a>
+    </p>
+</div>
+
+<script>
+(function() {
+    const csrf = document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1];
+    async function toggle(url) {
+        const resp = await fetch(url, {method: 'POST', headers: {'X-CSRFToken': csrf}});
+        if (resp.ok) location.reload();
+        else alert('Request failed');
+    }
+    document.querySelectorAll('[data-pause]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (confirm('Pause AI for this partner?')) {
+                toggle(`/operator/ai/${btn.dataset.pause}/pause/`);
+            }
+        });
+    });
+    document.querySelectorAll('[data-resume]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            toggle(`/operator/ai/${btn.dataset.resume}/resume/`);
+        });
+    });
+})();
+</script>
+{% endblock %}

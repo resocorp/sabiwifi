@@ -35,6 +35,22 @@
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'online_users' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">wifi_tethering</span> Online Users
             </a>
+            <a href="{% url 'dashboard-inbox' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'inbox' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">forum</span> Inbox
+            </a>
+            <a href="{% url 'dashboard-leads' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'leads' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">person_add</span> Leads
+            </a>
+            <a href="{% url 'dashboard-tickets' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'tickets' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">support_agent</span> Tickets
+            </a>
+            <a href="{% url 'dashboard-staff' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'staff' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">badge</span> Team
+            </a>
             <a href="{% url 'dashboard-voucher-batches' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'vouchers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">confirmation_number</span> Vouchers
@@ -51,6 +67,10 @@
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-surface-container"
                target="_blank">
                 <span class="material-symbols-outlined text-[20px]">shopping_cart</span> Shop
+            </a>
+            <a href="{% url 'dashboard-ai-config' %}"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'ai' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">smart_toy</span> AI
             </a>
             <a href="{% url 'dashboard-settings' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'settings' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">

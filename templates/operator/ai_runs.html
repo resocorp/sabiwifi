@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}AI run audit — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-headline font-bold mb-2">AI run audit</h1>
+    {% with active='ai' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <form method="get" class="flex flex-wrap gap-2 mb-4 items-end">
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Partner</span>
+            <select name="reseller" class="rounded border px-2 py-1">
+                <option value="">All</option>
+                {% for r in resellers %}
+                    <option value="{{ r.slug }}" {% if r.slug == filters.reseller %}selected{% endif %}>{{ r.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Role</span>
+            <select name="role" class="rounded border px-2 py-1">
+                <option value="">Any</option>
+                <option value="sales" {% if filters.role == 'sales' %}selected{% endif %}>Sales</option>
+                <option value="support" {% if filters.role == 'support' %}selected{% endif %}>Support</option>
+                <option value="field" {% if filters.role == 'field' %}selected{% endif %}>Field</option>
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Status</span>
+            <select name="status" class="rounded border px-2 py-1">
+                <option value="">Any</option>
+                <option value="success" {% if filters.status == 'success' %}selected{% endif %}>Success</option>
+                <option value="failed" {% if filters.status == 'failed' %}selected{% endif %}>Failed</option>
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Window</span>
+            <select name="days" class="rounded border px-2 py-1">
+                <option value="1" {% if window_days == 1 %}selected{% endif %}>1d</option>
+                <option value="7" {% if window_days == 7 %}selected{% endif %}>7d</option>
+                <option value="30" {% if window_days == 30 %}selected{% endif %}>30d</option>
+            </select>
+        </label>
+        <button class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Filter</button>
+    </form>
+
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+                <tr>
+                    <th class="px-3 py-2">#</th>
+                    <th class="px-3 py-2">Partner</th>
+                    <th class="px-3 py-2">Role</th>
+                    <th class="px-3 py-2">Provider / Model</th>
+                    <th class="px-3 py-2">Tokens</th>
+                    <th class="px-3 py-2">Cost</th>
+                    <th class="px-3 py-2">Latency</th>
+                    <th class="px-3 py-2">Status</th>
+                    <th class="px-3 py-2">Started</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in runs %}
+                <tr class="border-t border-surface-container">
+                    <td class="px-3 py-2 font-mono"><a href="{% url 'operator-ai-run-detail' r.pk %}" class="underline">{{ r.pk }}</a></td>
+                    <td class="px-3 py-2">{{ r.reseller.slug }}</td>
+                    <td class="px-3 py-2">{{ r.get_agent_role_display }}</td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ r.provider }} / {{ r.model|default:'—' }}</td>
+                    <td class="px-3 py-2">{{ r.prompt_tokens }}+{{ r.completion_tokens }}</td>
+                    <td class="px-3 py-2">₦{{ r.cost_ngn|floatformat:4 }}</td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ r.latency_ms|default:0 }}ms</td>
+                    <td class="px-3 py-2">
+                        {% if r.status == 'failed' %}<span class="text-error font-semibold">Failed</span>
+                        {% else %}{{ r.get_status_display }}{% endif %}
+                    </td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ r.started_at|date:'Y-m-d H:i' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="px-3 py-6 text-center text-on-surface-variant">No runs match the filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

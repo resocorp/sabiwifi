@@ -1,0 +1,158 @@
+{% extends "dashboard/base.html" %}
+{% block title %}AI — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-2xl font-headline font-bold">AI assistants</h1>
+            <p class="text-sm text-on-surface-variant">Configure your own LLM keys and decide what each AI can do on your behalf.</p>
+        </div>
+        {% if config.ai_paused_at %}
+            <form method="post" action="{% url 'dashboard-ai-resume' %}">
+                {% csrf_token %}
+                <button class="px-3 py-2 rounded bg-primary text-on-primary text-sm">Resume AI</button>
+            </form>
+        {% else %}
+            <form method="post" action="{% url 'dashboard-ai-pause' %}">
+                {% csrf_token %}
+                <button class="px-3 py-2 rounded bg-error text-on-error text-sm">Pause AI</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if config.ai_paused_at %}
+    <div class="bg-error-container/20 text-on-error-container rounded-xl p-3 mb-4 text-sm">
+        AI is paused for your account.
+        <span class="text-on-surface-variant">Reason: {{ config.ai_pause_reason|default:'(none)' }}</span>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'dashboard-ai-config-save' %}" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6">
+        {% csrf_token %}
+        <h2 class="font-semibold mb-3">Provider &amp; model</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="text-sm">
+                <span class="block text-on-surface-variant text-xs mb-1">Provider</span>
+                <select name="text_provider" class="w-full rounded border px-2 py-2">
+                    {% for val, label in provider_choices %}
+                        <option value="{{ val }}" {% if config.text_provider == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="text-sm">
+                <span class="block text-on-surface-variant text-xs mb-1">Model slug</span>
+                <input name="text_model" value="{{ config.text_model }}"
+                       placeholder="claude-sonnet-4-6 / gpt-4o / gemini-2.0-flash"
+                       class="w-full rounded border px-2 py-2">
+            </label>
+            <label class="text-sm md:col-span-2">
+                <span class="block text-on-surface-variant text-xs mb-1">API key</span>
+                <input type="password" name="text_api_key"
+                       value="{% if config.text_api_key_encrypted %}********{% endif %}"
+                       placeholder="Paste your provider's API key"
+                       class="w-full rounded border px-2 py-2 font-mono">
+                <span class="block text-xs text-on-surface-variant mt-1">Encrypted at rest. Leave as ******** to keep the existing key.</span>
+            </label>
+            <label class="text-sm md:col-span-2">
+                <span class="block text-on-surface-variant text-xs mb-1">Custom endpoint URL <span class="text-on-surface-variant">(OpenAI-compatible only)</span></span>
+                <input name="text_endpoint_url" value="{{ config.text_endpoint_url }}"
+                       placeholder="https://api.groq.com/openai/v1  —  https://your-host/v1"
+                       class="w-full rounded border px-2 py-2">
+            </label>
+        </div>
+
+        <h2 class="font-semibold mt-6 mb-3">Capabilities</h2>
+        <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="cap_ai_enabled" {% if caps.ai_enabled %}checked{% endif %}>
+                <span><b>Master switch</b> — turn all AI on</span>
+            </label>
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="cap_sales_enabled" {% if caps.sales_enabled %}checked{% endif %}>
+                <span>Sales agent replies to new leads</span>
+            </label>
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="cap_support_enabled" {% if caps.support_enabled %}checked{% endif %}>
+                <span>Support agent answers existing subscribers</span>
+            </label>
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="cap_field_enabled" {% if caps.field_enabled %}checked{% endif %}>
+                <span>Field supervisor dispatches new tickets to techs</span>
+            </label>
+            <label class="flex items-center gap-2 pt-2 border-t border-surface-container">
+                <input type="checkbox" name="cap_auto_send_replies" {% if caps.auto_send_replies %}checked{% endif %}>
+                <span><b>Auto-send replies</b> — without this, AI only drafts; you hit Send</span>
+            </label>
+        </div>
+
+        <h2 class="font-semibold mt-6 mb-3">Safety caps</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <label>
+                <span class="block text-on-surface-variant text-xs mb-1">Auto-quote below (NGN)</span>
+                <input name="cap_auto_quote_below_ngn" value="{{ caps.auto_quote_below_ngn|default:0 }}"
+                       class="w-full rounded border px-2 py-2">
+                <span class="block text-xs text-on-surface-variant mt-1">Quotes above this always need human approval.</span>
+            </label>
+            <label>
+                <span class="block text-on-surface-variant text-xs mb-1">Max AI messages per customer / day</span>
+                <input name="cap_max_outbound_per_customer_per_day" value="{{ caps.max_outbound_per_customer_per_day|default:0 }}"
+                       class="w-full rounded border px-2 py-2">
+            </label>
+            <label>
+                <span class="block text-on-surface-variant text-xs mb-1">Max auto-disconnects / hour</span>
+                <input name="cap_max_auto_disconnects_per_hour" value="{{ caps.max_auto_disconnects_per_hour|default:0 }}"
+                       class="w-full rounded border px-2 py-2">
+            </label>
+        </div>
+
+        <div class="mt-6">
+            <button class="px-4 py-2 rounded bg-primary text-on-primary">Save configuration</button>
+        </div>
+    </form>
+
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6">
+        <h2 class="font-semibold mb-3">Prompt overrides</h2>
+        <p class="text-xs text-on-surface-variant mb-4">Add your tone, FAQ, or guardrails per agent. Every save is versioned — your previous prompts are kept.</p>
+
+        <form method="post" action="{% url 'dashboard-ai-prompt-save' %}" class="mb-4">
+            {% csrf_token %}
+            <input type="hidden" name="agent_role" value="sales">
+            <label class="block text-sm font-semibold mb-1">Sales prompt override</label>
+            <textarea name="body" rows="5"
+                      class="w-full rounded border px-2 py-2 text-sm font-mono"
+                      placeholder="e.g. 'Always greet in Pidgin. Never quote above ₦80,000 without escalating.'">{{ prompts.sales }}</textarea>
+            <div class="flex items-center justify-between gap-2 mt-2">
+                <input name="note" placeholder="Change note (optional)" class="flex-1 rounded border px-2 py-1 text-sm">
+                <button class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Save sales prompt</button>
+            </div>
+        </form>
+
+        <form method="post" action="{% url 'dashboard-ai-prompt-save' %}" class="mb-4">
+            {% csrf_token %}
+            <input type="hidden" name="agent_role" value="support">
+            <label class="block text-sm font-semibold mb-1">Support prompt override</label>
+            <textarea name="body" rows="5"
+                      class="w-full rounded border px-2 py-2 text-sm font-mono"
+                      placeholder="e.g. 'For PPPoE customers, walk them through rebooting their ONU first.'">{{ prompts.support }}</textarea>
+            <div class="flex items-center justify-between gap-2 mt-2">
+                <input name="note" placeholder="Change note (optional)" class="flex-1 rounded border px-2 py-1 text-sm">
+                <button class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Save support prompt</button>
+            </div>
+        </form>
+
+        <form method="post" action="{% url 'dashboard-ai-prompt-save' %}" class="mb-4">
+            {% csrf_token %}
+            <input type="hidden" name="agent_role" value="field">
+            <label class="block text-sm font-semibold mb-1">Field supervisor prompt override</label>
+            <textarea name="body" rows="5"
+                      class="w-full rounded border px-2 py-2 text-sm font-mono"
+                      placeholder="e.g. 'Dispatch techs by area only. Always confirm with customer after tech marks resolved.'">{{ prompts.field }}</textarea>
+            <div class="flex items-center justify-between gap-2 mt-2">
+                <input name="note" placeholder="Change note (optional)" class="flex-1 rounded border px-2 py-1 text-sm">
+                <button class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Save field prompt</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

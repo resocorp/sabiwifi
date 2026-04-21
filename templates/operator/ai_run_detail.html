@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}AI run #{{ run.pk }} — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <a href="{% url 'operator-ai-runs' %}" class="text-xs text-on-surface-variant underline">← back to audit log</a>
+    <h1 class="text-2xl font-headline font-bold mt-2 mb-4">AI run #{{ run.pk }}</h1>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Partner</div>
+            <div class="font-semibold">{{ run.reseller.name }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Role</div>
+            <div class="font-semibold">{{ run.get_agent_role_display }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Status</div>
+            <div class="font-semibold {% if run.status == 'failed' %}text-error{% endif %}">{{ run.get_status_display }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Cost</div>
+            <div class="font-semibold">₦{{ run.cost_ngn|floatformat:4 }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Provider / Model</div>
+            <div class="font-semibold">{{ run.provider }} / {{ run.model|default:'—' }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Tokens (in/out)</div>
+            <div class="font-semibold">{{ run.prompt_tokens }} / {{ run.completion_tokens }}</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Latency</div>
+            <div class="font-semibold">{{ run.latency_ms|default:0 }}ms</div>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-ambient-sm">
+            <div class="text-xs text-on-surface-variant">Started</div>
+            <div class="font-semibold">{{ run.started_at|date:'Y-m-d H:i:s' }}</div>
+        </div>
+    </div>
+
+    {% if run.error_message %}
+    <div class="bg-error-container text-on-error-container rounded-xl p-3 mb-4 text-sm">
+        <div class="font-semibold">Error</div>
+        <pre class="whitespace-pre-wrap text-xs mt-1">{{ run.error_message }}</pre>
+    </div>
+    {% endif %}
+
+    <section class="mb-4">
+        <h2 class="font-semibold mb-2">Inputs</h2>
+        <pre class="bg-surface-container-lowest rounded-xl p-3 text-xs overflow-auto max-h-80">{{ run.inputs|pprint }}</pre>
+    </section>
+
+    <section class="mb-4">
+        <h2 class="font-semibold mb-2">Outputs</h2>
+        <pre class="bg-surface-container-lowest rounded-xl p-3 text-xs overflow-auto max-h-80">{{ run.outputs|pprint }}</pre>
+    </section>
+
+    <section class="mb-4">
+        <h2 class="font-semibold mb-2">Tool calls</h2>
+        <pre class="bg-surface-container-lowest rounded-xl p-3 text-xs overflow-auto max-h-80">{{ run.tool_calls|pprint }}</pre>
+    </section>
+</div>
+{% endblock %}

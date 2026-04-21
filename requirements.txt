@@ -29,3 +29,10 @@ django-cors-headers==4.6.0
 
 # Cache (shared across Gunicorn workers)
 django-redis==5.4.0
+
+# Durable job queue (Redis-backed RQ)
+rq==2.8.0
+django-rq==4.1.0
+
+# Fernet encryption for at-rest API keys (ai/ app)
+cryptography==46.0.7

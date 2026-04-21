@@ -1,0 +1,92 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Team — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-headline font-bold">Team</h1>
+    <button onclick="openNew()" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">+ Add member</button>
+</div>
+
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+            <tr>
+                <th class="px-3 py-2">Name</th>
+                <th class="px-3 py-2">Role</th>
+                <th class="px-3 py-2">Phone</th>
+                <th class="px-3 py-2">Email</th>
+                <th class="px-3 py-2">Active</th>
+                <th class="px-3 py-2">Load</th>
+            </tr>
+        </thead>
+        <tbody id="staff-body"></tbody>
+    </table>
+</div>
+
+<div id="new-modal" class="hidden fixed inset-0 bg-black/40 z-40 flex items-center justify-center">
+    <div class="bg-surface-container-lowest rounded-xl p-4 w-full max-w-md">
+        <h2 class="font-semibold mb-3">Add team member</h2>
+        <label class="block text-sm mb-2">Name <input id="n-name" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Phone <input id="n-phone" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">WhatsApp <input id="n-wa" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Email <input id="n-email" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Role
+            <select id="n-role" class="mt-1 w-full border rounded px-2 py-1">
+                <option value="field_tech">Field tech</option>
+                <option value="office_care">Office care</option>
+                <option value="dispatcher">Dispatcher</option>
+                <option value="manager">Manager</option>
+            </select>
+        </label>
+        <div class="flex justify-end gap-2 mt-3">
+            <button onclick="closeNew()" class="px-3 py-1 text-sm">Cancel</button>
+            <button onclick="createStaff()" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+}
+async function loadStaff() {
+    const resp = await fetch('/api/staff/');
+    const data = await resp.json();
+    const tbody = document.getElementById('staff-body');
+    tbody.innerHTML = '';
+    for (const s of data) {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-surface-container';
+        tr.innerHTML =
+            '<td class="px-3 py-2">' + (s.name || '') + '</td>' +
+            '<td class="px-3 py-2">' + s.role + '</td>' +
+            '<td class="px-3 py-2 font-mono">' + (s.phone || '') + '</td>' +
+            '<td class="px-3 py-2">' + (s.email || '') + '</td>' +
+            '<td class="px-3 py-2">' + (s.active ? 'yes' : 'no') + '</td>' +
+            '<td class="px-3 py-2">' + (s.current_load || 0) + '</td>';
+        tbody.appendChild(tr);
+    }
+}
+function openNew() { document.getElementById('new-modal').classList.remove('hidden'); }
+function closeNew() { document.getElementById('new-modal').classList.add('hidden'); }
+async function createStaff() {
+    const body = {
+        name: document.getElementById('n-name').value.trim(),
+        phone: document.getElementById('n-phone').value.trim(),
+        whatsapp: document.getElementById('n-wa').value.trim(),
+        email: document.getElementById('n-email').value.trim(),
+        role: document.getElementById('n-role').value,
+    };
+    if (!body.name || !body.phone) { alert('Name and phone required'); return; }
+    const resp = await fetch('/api/staff/create/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify(body),
+    });
+    if (resp.ok) { closeNew(); loadStaff(); }
+    else alert('Create failed');
+}
+loadStaff();
+</script>
+{% endblock %}

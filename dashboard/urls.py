@@ -1,8 +1,23 @@
 """Reseller dashboard server-rendered pages."""
 from django.urls import path
 from dashboard import views
+from dashboard import crm_views
+from dashboard import ai_views
 
 urlpatterns = [
+    # CRM shells (data via /api/* endpoints)
+    path('inbox/', crm_views.inbox, name='dashboard-inbox'),
+    path('leads/', crm_views.leads, name='dashboard-leads'),
+    path('tickets/', crm_views.tickets, name='dashboard-tickets'),
+    path('staff/', crm_views.staff, name='dashboard-staff'),
+
+    # AI configuration (Phase 2)
+    path('ai/', ai_views.ai_config, name='dashboard-ai-config'),
+    path('ai/save/', ai_views.ai_config_save, name='dashboard-ai-config-save'),
+    path('ai/prompts/', ai_views.ai_prompt_save, name='dashboard-ai-prompt-save'),
+    path('ai/pause/', ai_views.ai_pause, name='dashboard-ai-pause'),
+    path('ai/resume/', ai_views.ai_resume, name='dashboard-ai-resume'),
+
     path('', views.overview, name='dashboard-overview'),
     path('plans/', views.plans_list, name='dashboard-plans'),
     path('plans/create/', views.plan_create, name='dashboard-plan-create'),

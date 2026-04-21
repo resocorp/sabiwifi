@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Operator Inbox — SabiWiFi{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-2">
+        <h1 class="text-2xl font-headline font-bold">Inbox (all partners)</h1>
+    </div>
+    {% with active='conversations' %}{% include 'operator/_tabs.html' %}{% endwith %}
+
+    <form method="get" class="flex flex-wrap gap-2 mb-4 items-end">
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">Partner</span>
+            <select name="reseller" class="rounded border px-2 py-1">
+                <option value="">All</option>
+                {% for r in resellers %}
+                    <option value="{{ r.slug }}" {% if r.slug == filters.reseller %}selected{% endif %}>{{ r.name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="block text-on-surface-variant text-xs mb-1">State</span>
+            <select name="state" class="rounded border px-2 py-1">
+                <option value="">Any</option>
+                <option value="open" {% if filters.state == 'open' %}selected{% endif %}>Open</option>
+                <option value="pending_human" {% if filters.state == 'pending_human' %}selected{% endif %}>Pending human</option>
+                <option value="ai_drafted" {% if filters.state == 'ai_drafted' %}selected{% endif %}>AI drafted</option>
+                <option value="resolved" {% if filters.state == 'resolved' %}selected{% endif %}>Resolved</option>
+            </select>
+        </label>
+        <button class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Filter</button>
+    </form>
+
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+                <tr>
+                    <th class="px-3 py-2">#</th>
+                    <th class="px-3 py-2">Partner</th>
+                    <th class="px-3 py-2">Channel</th>
+                    <th class="px-3 py-2">State</th>
+                    <th class="px-3 py-2">Thread</th>
+                    <th class="px-3 py-2">Last message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in conversations %}
+                <tr class="border-t border-surface-container">
+                    <td class="px-3 py-2 font-mono">{{ c.pk }}</td>
+                    <td class="px-3 py-2">{{ c.reseller.slug }}</td>
+                    <td class="px-3 py-2">{{ c.get_channel_display }}</td>
+                    <td class="px-3 py-2">{{ c.get_state_display }}</td>
+                    <td class="px-3 py-2 truncate max-w-xs">{{ c.external_thread_id }}</td>
+                    <td class="px-3 py-2 text-on-surface-variant">{{ c.last_message_at|date:'Y-m-d H:i' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="px-3 py-6 text-center text-on-surface-variant">No conversations yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

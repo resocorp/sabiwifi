@@ -41,20 +41,21 @@ def _render(body, context):
     return re.sub(r'\{\{(\w+)\}\}', replacer, body)
 
 
-def _get_template(reseller, event_type):
+def _get_template(reseller, event_type, channel='sms'):
     """
-    Return the rendered-ready body for this event.
-    Tries reseller's custom template first; falls back to built-in default.
-    Returns None if the template is explicitly disabled.
+    Return (body, subject) for this event + channel. Tries the channel-specific
+    reseller override first, falls back to any channel row the reseller has for
+    this event, then the built-in default. Returns (None, '') if the matching
+    template is explicitly disabled.
     """
     from notifications.models import NotificationTemplate
-    try:
-        tmpl = NotificationTemplate.objects.get(reseller=reseller, event_type=event_type)
+    qs = NotificationTemplate.objects.filter(reseller=reseller, event_type=event_type)
+    tmpl = qs.filter(channel=channel).first() or qs.first()
+    if tmpl is not None:
         if not tmpl.is_enabled:
-            return None
-        return tmpl.body
-    except NotificationTemplate.DoesNotExist:
-        return NotificationTemplate.DEFAULT_BODIES.get(event_type)
+            return None, ''
+        return tmpl.body, tmpl.subject
+    return NotificationTemplate.DEFAULT_BODIES.get(event_type), ''
 
 
 def _ensure_config(reseller):
@@ -139,16 +140,20 @@ def _mark_failed(log_entry, error=''):
 # ---------------------------------------------------------------------------
 
 def _dispatch(reseller, phone, body, channel, event_type,
-              subscriber=None, broadcast=None):
+              subscriber=None, broadcast=None, email=None, subject=''):
     """
     Send via the requested channel(s), write a NotificationLog entry per send.
-    channel: 'sms' | 'whatsapp' | 'both'
+    channel: 'sms' | 'whatsapp' | 'both' | 'email'
     """
     sms_svc = get_sms_service()
-    channels = ['whatsapp', 'sms'] if channel == 'both' else [channel]
+    if channel == 'both':
+        channels = ['whatsapp', 'sms']
+    else:
+        channels = [channel]
 
     for ch in channels:
-        log = _log(reseller, phone, ch, event_type, body,
+        recipient = email if ch == 'email' else phone
+        log = _log(reseller, recipient, ch, event_type, body,
                    subscriber=subscriber, broadcast=broadcast)
         if ch == 'whatsapp':
             if _wa_connected(reseller):
@@ -156,6 +161,13 @@ def _dispatch(reseller, phone, body, channel, event_type,
                 _mark_sent(log) if ok else _mark_failed(log, 'WA service error')
             else:
                 _mark_failed(log, 'WhatsApp not connected')
+        elif ch == 'email':
+            if not email:
+                _mark_failed(log, 'No email on recipient')
+                continue
+            from notifications.email import send_email
+            ok = send_email(email, subject or event_type, body)
+            _mark_sent(log) if ok else _mark_failed(log, 'Email send failed')
         else:  # sms
             ok = sms_svc.send_sms(phone, body)
             _mark_sent(log) if ok else _mark_failed(log, 'SMS send failed')
@@ -201,16 +213,6 @@ def notify_subscriber(subscriber, event_type, context=None):
         if guard and not getattr(config, guard, True):
             return
 
-        body_template = _get_template(reseller, event_type)
-        if not body_template:
-            return
-
-        # Build full context — portal link uses reseller slug + subscriber serial
-        link = f'https://app.sabiwifi.com/portal/account/?r={subscriber.reseller.slug}'
-        full_context = {'name': subscriber.phone, 'link': link}
-        full_context.update(context)
-
-        body = _render(body_template, full_context)
         channel = prefs.transactional_channel
         # If subscriber prefers WA but reseller config says sms, use sms
         if channel == 'whatsapp' and config.subscriber_channel == 'sms':
@@ -220,8 +222,24 @@ def notify_subscriber(subscriber, event_type, context=None):
         else:
             channel = config.subscriber_channel
 
+        # Use the template for the primary channel (for 'both' we pick sms).
+        template_channel = 'sms' if channel == 'both' else channel
+        body_template, subject_template = _get_template(reseller, event_type, template_channel)
+        if not body_template:
+            return
+
+        # Build full context — portal link uses reseller slug + subscriber serial
+        link = f'https://app.sabiwifi.com/portal/account/?r={subscriber.reseller.slug}'
+        full_context = {'name': subscriber.phone, 'link': link}
+        full_context.update(context)
+
+        body = _render(body_template, full_context)
+        subject = _render(subject_template, full_context) if subject_template else ''
+
         _dispatch(reseller, subscriber.phone, body, channel, event_type,
-                  subscriber=subscriber)
+                  subscriber=subscriber,
+                  email=getattr(subscriber, 'email', '') or None,
+                  subject=subject)
 
     except Exception as exc:
         logger.error(f'notify_subscriber error ({event_type} → {subscriber.phone}): {exc}')
@@ -240,12 +258,16 @@ def notify_reseller(reseller, event_type, context=None):
         if guard and not getattr(config, guard, True):
             return
 
-        body_template = _get_template(reseller, event_type)
+        channel = config.reseller_channel
+        template_channel = 'sms' if channel == 'both' else channel
+        body_template, subject_template = _get_template(reseller, event_type, template_channel)
         if not body_template:
             return
 
         body = _render(body_template, context)
-        _dispatch(reseller, reseller.phone, body, config.reseller_channel, event_type)
+        subject = _render(subject_template, context) if subject_template else ''
+        _dispatch(reseller, reseller.phone, body, channel, event_type,
+                  email=getattr(reseller, 'email', '') or None, subject=subject)
 
     except Exception as exc:
         logger.error(f'notify_reseller error ({event_type} → {reseller.slug}): {exc}')
@@ -262,12 +284,7 @@ def notify_admin_contacts(reseller, event_type, context=None):
         if not contacts.exists():
             return
 
-        body_template = _get_template(reseller, event_type)
-        if not body_template:
-            return
-
-        body = _render(body_template, context)
-
+        # Pick a single template per contact — use the contact's own channel.
         for contact in contacts:
             # Check per-contact guards
             if event_type in ('router_offline', 'router_recovered') and not contact.recv_router_alerts:
@@ -276,7 +293,16 @@ def notify_admin_contacts(reseller, event_type, context=None):
                 continue
             if event_type == 'payment_received' and not contact.recv_payment_summary:
                 continue
-            _dispatch(reseller, contact.phone, body, contact.channel, event_type)
+            template_channel = 'sms' if contact.channel == 'both' else contact.channel
+            body_template, subject_template = _get_template(
+                reseller, event_type, template_channel,
+            )
+            if not body_template:
+                continue
+            body = _render(body_template, context)
+            subject = _render(subject_template, context) if subject_template else ''
+            _dispatch(reseller, contact.phone, body, contact.channel, event_type,
+                      subject=subject)
 
     except Exception as exc:
         logger.error(f'notify_admin_contacts error ({event_type} → {reseller.slug}): {exc}')

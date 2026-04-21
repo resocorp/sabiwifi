@@ -1,6 +1,8 @@
 """Operator panel URLs."""
 from django.urls import path
 from operator_panel import views
+from operator_panel import crm_views
+from operator_panel import ai_views
 
 urlpatterns = [
     path('overview/', views.operator_overview, name='operator-overview'),
@@ -16,4 +18,18 @@ urlpatterns = [
     path('api/wa/disconnect/', views.operator_wa_disconnect, name='operator-wa-disconnect'),
     path('api/wa/test/', views.operator_wa_test, name='operator-wa-test'),
     path('api/settings/save/', views.operator_settings_save, name='operator-settings-save'),
+
+    # Cross-tenant CRM & KPI (Phase 1 operator oversight)
+    path('tickets/', crm_views.operator_tickets, name='operator-tickets'),
+    path('conversations/', crm_views.operator_conversations, name='operator-conversations'),
+    path('kpis/', crm_views.operator_kpis, name='operator-kpis'),
+    path('api/kpis/', crm_views.operator_kpis_api, name='operator-kpis-api'),
+    path('api/queue-health/', crm_views.operator_queue_health, name='operator-queue-health'),
+
+    # Phase 2 AI oversight
+    path('ai/', ai_views.operator_ai_overview, name='operator-ai-overview'),
+    path('ai/runs/', ai_views.operator_ai_runs, name='operator-ai-runs'),
+    path('ai/runs/<int:run_id>/', ai_views.operator_ai_run_detail, name='operator-ai-run-detail'),
+    path('ai/<int:reseller_pk>/pause/', ai_views.operator_ai_pause, name='operator-ai-pause'),
+    path('ai/<int:reseller_pk>/resume/', ai_views.operator_ai_resume, name='operator-ai-resume'),
 ]

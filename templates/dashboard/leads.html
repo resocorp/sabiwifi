@@ -1,0 +1,140 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Leads — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-headline font-bold">Leads</h1>
+    <button onclick="openNewLead()" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">+ New lead</button>
+</div>
+
+<div class="flex gap-2 mb-4 text-sm">
+    <select id="status-filter" class="rounded border px-2 py-1">
+        <option value="">All statuses</option>
+        <option value="new">New</option>
+        <option value="qualified">Qualified</option>
+        <option value="quoted">Quoted</option>
+        <option value="paid">Paid</option>
+        <option value="installed">Installed</option>
+        <option value="lost">Lost</option>
+    </select>
+    <select id="intent-filter" class="rounded border px-2 py-1">
+        <option value="">All intents</option>
+        <option value="home">Home</option>
+        <option value="cluster">Cluster</option>
+        <option value="technical">Technical</option>
+        <option value="unknown">Unknown</option>
+        <option value="other">Other</option>
+    </select>
+</div>
+
+<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+            <tr>
+                <th class="px-3 py-2">Name</th>
+                <th class="px-3 py-2">Phone</th>
+                <th class="px-3 py-2">Intent</th>
+                <th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2">Quoted ₦</th>
+                <th class="px-3 py-2">Created</th>
+                <th class="px-3 py-2"></th>
+            </tr>
+        </thead>
+        <tbody id="leads-body"></tbody>
+    </table>
+</div>
+
+<!-- New lead modal -->
+<div id="new-lead-modal" class="hidden fixed inset-0 bg-black/40 z-40 flex items-center justify-center">
+    <div class="bg-surface-container-lowest rounded-xl p-4 w-full max-w-md">
+        <h2 class="font-semibold mb-3">New lead</h2>
+        <label class="block text-sm mb-2">Phone <input id="new-phone" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Name <input id="new-name" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Address <input id="new-address" class="mt-1 w-full border rounded px-2 py-1" /></label>
+        <label class="block text-sm mb-2">Intent
+            <select id="new-intent" class="mt-1 w-full border rounded px-2 py-1">
+                <option value="unknown">Unknown</option>
+                <option value="home">Home</option>
+                <option value="cluster">Cluster</option>
+                <option value="technical">Technical</option>
+                <option value="other">Other</option>
+            </select>
+        </label>
+        <div class="flex justify-end gap-2 mt-3">
+            <button onclick="closeNewLead()" class="px-3 py-1 text-sm">Cancel</button>
+            <button onclick="createLead()" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+}
+
+async function loadLeads() {
+    const status = document.getElementById('status-filter').value;
+    const intent = document.getElementById('intent-filter').value;
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (intent) params.set('intent', intent);
+    const resp = await fetch('/api/leads/?' + params.toString());
+    const data = await resp.json();
+    const tbody = document.getElementById('leads-body');
+    tbody.innerHTML = '';
+    for (const l of data) {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-surface-container';
+        tr.innerHTML =
+            '<td class="px-3 py-2">' + (l.name || '—') + '</td>' +
+            '<td class="px-3 py-2 font-mono">' + l.phone + '</td>' +
+            '<td class="px-3 py-2">' + l.intent + '</td>' +
+            '<td class="px-3 py-2">' + l.status + '</td>' +
+            '<td class="px-3 py-2">' + (l.quoted_amount_ngn || '—') + '</td>' +
+            '<td class="px-3 py-2 text-on-surface-variant">' + new Date(l.created_at).toLocaleString() + '</td>' +
+            '<td class="px-3 py-2"><button class="text-primary underline text-xs" onclick="quoteLead(' + l.id + ')">Send quote</button></td>';
+        tbody.appendChild(tr);
+    }
+}
+
+function openNewLead() { document.getElementById('new-lead-modal').classList.remove('hidden'); }
+function closeNewLead() { document.getElementById('new-lead-modal').classList.add('hidden'); }
+
+async function createLead() {
+    const body = {
+        phone: document.getElementById('new-phone').value.trim(),
+        name: document.getElementById('new-name').value.trim(),
+        address: document.getElementById('new-address').value.trim(),
+        intent: document.getElementById('new-intent').value,
+        source: 'manual',
+    };
+    if (!body.phone) { alert('Phone required'); return; }
+    const resp = await fetch('/api/leads/create/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify(body),
+    });
+    if (resp.ok) { closeNewLead(); loadLeads(); }
+    else alert('Create failed');
+}
+
+async function quoteLead(id) {
+    const amount = prompt('Quote amount (NGN)?');
+    if (!amount) return;
+    const resp = await fetch('/api/leads/' + id + '/quote/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({amount}),
+    });
+    const data = await resp.json();
+    if (resp.ok) alert('Sent via ' + (data.sent_via || 'fallback') + '\nLink: ' + (data.url || ''));
+    else alert('Quote failed: ' + (data.error || ''));
+    loadLeads();
+}
+
+document.getElementById('status-filter').addEventListener('change', loadLeads);
+document.getElementById('intent-filter').addEventListener('change', loadLeads);
+loadLeads();
+</script>
+{% endblock %}

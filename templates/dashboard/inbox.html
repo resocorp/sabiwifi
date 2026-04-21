@@ -1,0 +1,100 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Inbox — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-headline font-bold">Inbox</h1>
+    <select id="state-filter" class="rounded border px-2 py-1 text-sm">
+        <option value="">All states</option>
+        <option value="open">Open</option>
+        <option value="pending_human">Pending human</option>
+        <option value="ai_drafted">AI drafted</option>
+        <option value="resolved">Resolved</option>
+    </select>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm">
+        <ul id="conversation-list" class="divide-y divide-surface-container">
+            <li class="p-3 text-sm text-on-surface-variant">Loading…</li>
+        </ul>
+    </div>
+    <div class="md:col-span-2 bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4" id="conversation-detail">
+        <p class="text-sm text-on-surface-variant">Pick a conversation on the left.</p>
+    </div>
+</div>
+
+<script>
+let activeConvoId = null;
+
+async function loadConversations() {
+    const state = document.getElementById('state-filter').value;
+    const url = '/api/conversations/' + (state ? '?state=' + state : '');
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const list = document.getElementById('conversation-list');
+    list.innerHTML = '';
+    if (!data.length) {
+        list.innerHTML = '<li class="p-3 text-sm text-on-surface-variant">No conversations.</li>';
+        return;
+    }
+    for (const c of data) {
+        const li = document.createElement('li');
+        li.className = 'p-3 cursor-pointer hover:bg-surface-container';
+        li.innerHTML = '<div class="text-sm font-medium">' + (c.channel || '') + ' · ' + (c.external_thread_id || '') + '</div>' +
+                       '<div class="text-xs text-on-surface-variant">' + (c.state || '') +
+                       (c.last_message_at ? ' · ' + new Date(c.last_message_at).toLocaleString() : '') + '</div>';
+        li.onclick = () => loadConversation(c.id);
+        list.appendChild(li);
+    }
+}
+
+async function loadConversation(id) {
+    activeConvoId = id;
+    const resp = await fetch('/api/conversations/' + id + '/');
+    const data = await resp.json();
+    const detail = document.getElementById('conversation-detail');
+    const msgs = (data.messages || []).map(m =>
+        '<div class="mb-2 text-sm">' +
+        '<div class="text-xs text-on-surface-variant">' + (m.direction || '') + ' · ' +
+        (m.source || '') + ' · ' + new Date(m.created_at).toLocaleString() + '</div>' +
+        '<div class="whitespace-pre-wrap">' + (m.body || '') + '</div></div>'
+    ).join('');
+    detail.innerHTML =
+        '<div class="flex items-center justify-between mb-3">' +
+        '<h2 class="font-semibold">' + (data.conversation.channel || '') + ' · ' + (data.conversation.external_thread_id || '') + '</h2>' +
+        '<button onclick="toggleAI(' + id + ')" class="text-xs underline">toggle AI</button>' +
+        '</div>' +
+        '<div class="max-h-80 overflow-y-auto border rounded p-2 mb-3">' + (msgs || '<em>No messages.</em>') + '</div>' +
+        '<textarea id="reply-body" class="w-full border rounded p-2 text-sm" rows="3" placeholder="Type a reply…"></textarea>' +
+        '<button onclick="sendReply(' + id + ')" class="mt-2 px-3 py-1 rounded bg-primary text-on-primary text-sm">Send</button>';
+}
+
+async function sendReply(id) {
+    const body = document.getElementById('reply-body').value.trim();
+    if (!body) return;
+    const resp = await fetch('/api/conversations/' + id + '/reply/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({body}),
+    });
+    if (resp.ok) loadConversation(id);
+}
+
+async function toggleAI(id) {
+    await fetch('/api/conversations/' + id + '/toggle-ai/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+    });
+    loadConversation(id);
+}
+
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+}
+
+document.getElementById('state-filter').addEventListener('change', loadConversations);
+loadConversations();
+</script>
+{% endblock %}
