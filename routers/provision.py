@@ -1,10 +1,12 @@
 """
-Generate provision.rsc scripts for MikroTik routers.
-Each variable is templated from the Router model + PlatformSettings.
+Generate provision.rsc scripts for MikroTik routers (RouterOS v7+ only).
 
-Note: Uses RouterOS v7 command syntax (v7.13+ /interface/wifi system).
-All commands use :do/on-error for idempotency so re-provisioning
-(factory reset) doesn't fail on duplicate resources.
+Each variable is templated from the Router model + PlatformSettings.
+The script is hardware-agnostic: it discovers WAN at runtime, bridges
+all non-WAN ether ports, and only configures WiFi if the device has it.
+
+Re-provisioning is safe — every command is wrapped in :do/on-error or
+checked for existence first.
 """
 from django.conf import settings
 
@@ -21,6 +23,13 @@ PROVISION_TEMPLATE = """\
 :do {{ /system scheduler remove [find name=sabiwifi-setup] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-setup] }} on-error={{}}
 
+# --- 0a. Require RouterOS v7+ ---
+:local osMajor [:tonum [:pick [/system resource get version] 0 1]]
+:if ($osMajor < 7) do={{
+  :log error "SabiWiFi: RouterOS v7 required — refusing to provision on legacy firmware"
+  :error "RouterOS v7 required"
+}}
+
 # --- 1. Identity ---
 /system identity set name="{serial_number}"
 
@@ -31,17 +40,56 @@ PROVISION_TEMPLATE = """\
 /ip service set www address=10.99.0.0/16 disabled=no
 /ip service set www-ssl disabled=yes
 
-# --- 3. Guest network bridge + DHCP ---
+# --- 3. WAN auto-discovery ---
+# Customer can plug internet into ANY ether port. Bootstrap already enabled
+# DHCP on every ether port; whichever got a lease becomes WAN. The rest
+# get bridged to the guest network.
+:local wanIface ""
+:foreach c in=[/ip dhcp-client find status=bound] do={{
+  :if ($wanIface = "") do={{ :set wanIface [/ip dhcp-client get $c interface] }}
+}}
+:if ($wanIface = "") do={{
+  # No DHCP lease found — fall back to ether1 so re-provision doesn't dead-end
+  :set wanIface "ether1"
+  :log warning "SabiWiFi: no DHCP lease detected, defaulting WAN to ether1"
+}}
+:log info ("SabiWiFi: WAN detected on " . $wanIface)
+
+# WAN interface-list (used by NAT rule below — survives port changes)
+:do {{ /interface list add name=WAN }} on-error={{}}
+/interface list member remove [find list=WAN]
+/interface list member add list=WAN interface=$wanIface
+
+# --- 4. Guest network bridge + DHCP ---
 :do {{ /interface bridge add name=hotspot-br }} on-error={{}}
 :do {{ /ip address add address=10.8.0.1/16 interface=hotspot-br }} on-error={{}}
 :do {{ /ip pool add name=hotspot-pool ranges=10.8.0.2-10.8.255.254 }} on-error={{}}
 :do {{ /ip dhcp-server add name=hotspot-dhcp interface=hotspot-br address-pool=hotspot-pool lease-time=2d }} on-error={{}}
 :do {{ /ip dhcp-server network add address=10.8.0.0/16 gateway=10.8.0.1 dns-server=10.8.0.1 }} on-error={{}}
 
-# --- 4. DNS (router acts as recursive resolver for hotspot clients) ---
+# --- 4a. Bridge every non-WAN ether port to the guest network ---
+:foreach e in=[/interface ethernet find] do={{
+  :local ename [/interface ethernet get $e name]
+  :if ($ename != $wanIface) do={{
+    # Drop DHCP on this port (it's a LAN port now)
+    :foreach c in=[/ip dhcp-client find interface=$ename] do={{
+      :do {{ /ip dhcp-client remove $c }} on-error={{}}
+    }}
+    # Drop any IP we accidentally have on it
+    :foreach a in=[/ip address find interface=$ename] do={{
+      :do {{ /ip address remove $a }} on-error={{}}
+    }}
+    # Add to bridge (idempotent)
+    :if ([:len [/interface bridge port find interface=$ename]] = 0) do={{
+      :do {{ /interface bridge port add bridge=hotspot-br interface=$ename }} on-error={{}}
+    }}
+  }}
+}}
+
+# --- 5. DNS (router acts as recursive resolver for hotspot clients) ---
 /ip dns set allow-remote-requests=yes servers=8.8.8.8,1.1.1.1
 
-# --- 5. WireGuard tunnel to SabiWiFi server ---
+# --- 6. WireGuard tunnel to SabiWiFi server ---
 :do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
 # Idempotent peer: update if exists, add if not (avoids tearing down active handshake)
 :if ([:len [/interface wireguard peers find interface=wg0 public-key="{server_wg_public_key}"]] > 0) do={{
@@ -60,12 +108,9 @@ PROVISION_TEMPLATE = """\
 }}
 
 # --- 7. Walled garden (allow access before hotspot auth) ---
-# Only specific hosts needed by the portal page. Do NOT add broad wildcards like
-# *.gstatic.com, *.googleapis.com, or www.google.com — those match Android/Chrome
-# captive-portal probes (connectivitycheck.gstatic.com/generate_204, www.google.com/
-# generate_204), so the probe succeeds and the OS suppresses the "Sign in to
-# network" prompt. Splash never appears. Allow only fonts/CDNs the portal loads.
-# Purge any pre-existing broad entries left by earlier provisions.
+# Only specific hosts needed by the portal page. Do NOT add broad wildcards
+# matching captive-portal probes (gstatic.com generate_204) — those let the
+# OS suppress the "Sign in to network" prompt and the splash never appears.
 :do {{ /ip hotspot walled-garden remove [find dst-host="*.gstatic.com"] }} on-error={{}}
 :do {{ /ip hotspot walled-garden remove [find dst-host="*.googleapis.com"] }} on-error={{}}
 :do {{ /ip hotspot walled-garden remove [find dst-host="www.google.com"] }} on-error={{}}
@@ -89,51 +134,62 @@ PROVISION_TEMPLATE = """\
 /radius incoming set accept=yes port=3799
 
 # --- 9. Hotspot server profile + server (RouterOS v7 syntax) ---
-# login-by=http-pap: the portal runs on app.sabiwifi.com (different origin from
-# the MikroTik's 10.8.0.1), so any POST back to /login is cross-site. Modern
-# browsers default cookies to SameSite=Lax and drop them on cross-site POSTs,
-# which breaks http-chap (MikroTik stores chap-id/challenge keyed by the session
-# cookie — no cookie means "no chap for http-chap login method"). PAP is stateless
-# and self-contained in the POST. Security tradeoff is acceptable: the submitted
-# password is a rotatable per-subscriber auth_token, and the whole LAN between
-# device and router is already cleartext HTTP that anyone on the AP can sniff.
+# login-by=http-pap: the portal runs on a different origin from the MikroTik's
+# 10.8.0.1, so any POST back to /login is cross-site. Modern browsers default
+# cookies to SameSite=Lax and drop them on cross-site POSTs, which breaks
+# http-chap (MikroTik stores chap-id/challenge keyed by the session cookie).
+# PAP is stateless and self-contained in the POST.
 /ip hotspot profile set default use-radius=yes radius-interim-update=5m login-by=http-pap html-directory=hotspot dns-name=wifi.portal
 /ip/hotspot/user/profile/set default keepalive-timeout=2d
 :do {{ /ip hotspot add name=sabiwifi interface=hotspot-br address-pool=hotspot-pool idle-timeout=5m }} on-error={{}}
 /ip hotspot set sabiwifi disabled=no
 
 # --- 9b. Download hotspot redirect HTML (AFTER hotspot add so hotspot/ dir exists) ---
-# login.html is per-router: Django bakes the serial into the redirect URL so
-# we don't depend on any RouterOS template variable for the identifier.
 :do {{ /tool fetch url="https://{platform_domain}/api/routers/hotspot-html/{serial_number}/login.html" dst-path=hotspot/login.html mode=https check-certificate=no }} on-error={{}}
 :do {{ /tool fetch url="https://{platform_domain}/static/hotspot/alogin.html" dst-path=hotspot/alogin.html mode=https check-certificate=no }} on-error={{}}
 :do {{ /tool fetch url="https://{platform_domain}/static/hotspot/flogin.html" dst-path=hotspot/flogin.html mode=https check-certificate=no }} on-error={{}}
 :do {{ /tool fetch url="https://{platform_domain}/static/hotspot/rlogin.html" dst-path=hotspot/rlogin.html mode=https check-certificate=no }} on-error={{}}
 
-# --- 10. WiFi (RouterOS v7 /interface/wifi system) ---
-# 2.4GHz channel: WiFi 6 (ax), auto channel selection, 20/40MHz width
-:do {{ /interface/wifi/channel remove [find name=sabiwifi-ch-2g] }} on-error={{}}
-/interface/wifi/channel add name=sabiwifi-ch-2g band=2ghz-ax width=20/40mhz
+# --- 10. WiFi (only if hardware exists; loops over actual radios found) ---
+# RouterOS v7 /interface/wifi system. Devices without WiFi (hEX, RB750)
+# have an empty /interface/wifi list — the whole block is skipped.
+:if ([:len [/interface wifi find]] > 0) do={{
+  # Drop any prior SabiWiFi profiles (clean re-provision)
+  :do {{ /interface/wifi/security remove [find name=sabiwifi-sec] }} on-error={{}}
+  :do {{ /interface/wifi/configuration remove [find name=sabiwifi-2g] }} on-error={{}}
+  :do {{ /interface/wifi/configuration remove [find name=sabiwifi-5g] }} on-error={{}}
+  :do {{ /interface/wifi/channel remove [find name=sabiwifi-ch-2g] }} on-error={{}}
+  :do {{ /interface/wifi/channel remove [find name=sabiwifi-ch-5g] }} on-error={{}}
 
-# 2.4GHz configuration: open AP for hotspot (captive portal handles auth)
-:do {{ /interface/wifi/configuration remove [find name=sabiwifi-2g] }} on-error={{}}
-/interface/wifi/configuration add name=sabiwifi-2g mode=ap ssid="{wifi_ssid}" country=Nigeria channel=sabiwifi-ch-2g
+  # Channels (one per band — the radio picks the right one based on its band)
+  /interface/wifi/channel add name=sabiwifi-ch-2g band=2ghz-ax width=20/40mhz
+  :do {{ /interface/wifi/channel add name=sabiwifi-ch-5g band=5ghz-ax width=20/40/80mhz }} on-error={{}}
 
-# Apply to wifi1 (primary 2.4GHz radio) and enable
-/interface/wifi set [find default-name=wifi1] configuration=sabiwifi-2g disabled=no
+  # Optional WPA2/WPA3 security profile (only if a password is set; otherwise open AP)
+{wifi_security_block}
+  # Per-band configuration
+  /interface/wifi/configuration add name=sabiwifi-2g mode=ap ssid="{wifi_ssid}" channel=sabiwifi-ch-2g{wifi_security_attr}
+  :do {{ /interface/wifi/configuration add name=sabiwifi-5g mode=ap ssid="{wifi_ssid_5g}" channel=sabiwifi-ch-5g{wifi_security_attr} }} on-error={{}}
 
-# Add wifi1 to hotspot bridge
-:do {{ /interface/bridge/port remove [find interface=wifi1] }} on-error={{}}
-/interface/bridge/port add bridge=hotspot-br interface=wifi1
-
-# 5GHz radio (wifi2) if present - silently skips if hardware not available
-:do {{ /interface/wifi/channel remove [find name=sabiwifi-ch-5g] }} on-error={{}}
-:do {{ /interface/wifi/channel add name=sabiwifi-ch-5g band=5ghz-ax width=20/40/80mhz }} on-error={{}}
-:do {{ /interface/wifi/configuration remove [find name=sabiwifi-5g] }} on-error={{}}
-:do {{ /interface/wifi/configuration add name=sabiwifi-5g mode=ap ssid="{wifi_ssid_5g}" country=Nigeria channel=sabiwifi-ch-5g }} on-error={{}}
-:do {{ /interface/wifi set [find default-name=wifi2] configuration=sabiwifi-5g disabled=no }} on-error={{}}
-:do {{ /interface/bridge/port remove [find interface=wifi2] }} on-error={{}}
-:do {{ /interface/bridge/port add bridge=hotspot-br interface=wifi2 }} on-error={{}}
+  # Apply to every wifi radio: pick 5g config if the radio supports 5GHz, else 2g.
+  # Then add to hotspot bridge (idempotent).
+  :foreach w in=[/interface wifi find] do={{
+    :local wname [/interface wifi get $w name]
+    # Hardware capability lives on /interface/wifi/radio — /interface/wifi's
+    # channel.band just reflects the last applied config, so it can't be
+    # trusted to tell us which bands this radio actually supports.
+    :local hwBands ""
+    :do {{ :set hwBands [/interface/wifi/radio get [find interface=$wname] bands] }} on-error={{}}
+    :local cfg "sabiwifi-2g"
+    :if ([:find $hwBands "5ghz"] != -1) do={{ :set cfg "sabiwifi-5g" }}
+    :do {{ /interface/wifi set $w configuration=$cfg disabled={wifi_disabled} }} on-error={{}}
+    :if ([:len [/interface bridge port find interface=$wname]] = 0) do={{
+      :do {{ /interface/bridge/port add bridge=hotspot-br interface=$wname }} on-error={{}}
+    }}
+  }}
+}} else={{
+  :log info "SabiWiFi: no WiFi hardware on this device — skipping WiFi block"
+}}
 
 {pppoe_block}
 # --- 11. Firewall ---
@@ -141,18 +197,40 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip firewall filter add chain=input in-interface=wg0 action=accept comment="SabiWiFi WG management" }} on-error={{}}
 :do {{ /ip firewall filter add chain=input connection-state=established,related action=accept comment="SabiWiFi established" }} on-error={{}}
 :do {{ /ip firewall filter add chain=forward connection-state=established,related action=accept comment="SabiWiFi forward" }} on-error={{}}
-:do {{ /ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="SabiWiFi NAT" }} on-error={{}}
+# NAT uses the WAN interface-list so the rule survives WAN port changes
+:do {{ /ip firewall nat remove [find comment="SabiWiFi NAT"] }} on-error={{}}
+/ip firewall nat add chain=srcnat out-interface-list=WAN action=masquerade comment="SabiWiFi NAT"
 
 # --- 12. Bidirectional heartbeat + self-healing WG tunnel ---
 # The heartbeat fetches a response body. If the server needs to push a
-# re-provision (e.g. WG handshake never happened), the body begins with
-# the sentinel "# SABIWIFI-REPROVISION-v1" — in which case the script
-# /import-s the body. Plain "# ok" responses are discarded. This removes
-# the one-shot provision limitation that left earlier devices unrecoverable.
+# re-provision, the body begins with "# SABIWIFI-REPROVISION-v1" — in
+# which case the script /import-s the body. Plain "# ok" responses are
+# discarded. Also pings 10.99.0.1 and resets WG if the tunnel is dead.
 :do {{ /system scheduler remove [find name=sabiwifi-heartbeat] }} on-error={{}}
 :do {{ /system script remove [find name=sabiwifi-heartbeat] }} on-error={{}}
 /system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" dst-path=sabiwifi-hb.rsc mode=https check-certificate=no }} on-error={{}}\\r\\n:local body \\"\\"\\r\\n:do {{ :set body [/file get [/file find name=sabiwifi-hb.rsc] contents] }} on-error={{}}\\r\\n:if ([:pick \\$body 0 25] = \\"# SABIWIFI-REPROVISION-v1\\") do={{ :log info \\"SabiWiFi: server requested re-provision\\"; /import sabiwifi-hb.rsc }}\\r\\n:do {{ /file remove sabiwifi-hb.rsc }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
 /system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
+
+# --- 13. Watchdog: if WG never handshakes within 5 min of provision, reboot. ---
+# Replaces RouterOS CLI safe-mode (which is interactive-only). A bad provision
+# that wedges the management tunnel triggers a reboot, which restarts the
+# heartbeat and lets the server re-push a corrected script.
+:do {{ /system scheduler remove [find name=sabiwifi-watchdog] }} on-error={{}}
+/system scheduler add name=sabiwifi-watchdog start-time=startup interval=5m on-event=":local lh [/interface/wireguard/peers get [find interface=wg0] last-handshake]; :if ([:typeof \\$lh] = \\"nothing\\" || \\$lh > 10m) do={{ :log error \\"SabiWiFi watchdog: WG dead, rebooting\\"; /system reboot }}"
+
+# --- 14. Announce hardware capabilities to platform (one-shot, drives the GUI) ---
+:local board [/system resource get board-name]
+:local ros [/system resource get version]
+:local wif "no"
+:local fg "no"
+:if ([:len [/interface wifi find]] > 0) do={{
+  :set wif "yes"
+  :foreach w in=[/interface wifi find] do={{
+    :do {{ :local b [/interface wifi get $w channel.band]; :if ([:find $b "5g"] != -1) do={{ :set fg "yes" }} }} on-error={{}}
+  }}
+}}
+:local ec [:len [/interface ethernet find]]
+:do {{ /tool fetch url=("https://{platform_domain}/api/routers/announce/{serial_number}/?board=" . $board . "&ros=" . $ros . "&wifi=" . $wif . "&fg=" . $fg . "&ether=" . $ec . "&wan=" . $wanIface) mode=https check-certificate=no keep-result=no }} on-error={{}}
 
 :log info "SabiWiFi: provisioning complete for {serial_number}"
 """
@@ -165,14 +243,28 @@ def generate_provision_rsc(router, wg_private_key):
     """
     from django.utils import timezone
 
-    # WiFi SSID: use reseller branding if set, otherwise default
-    wifi_ssid = 'SabiWiFi-2G'
-    wifi_ssid_5g = 'SabiWiFi-5G'
-    if router.reseller and router.reseller.branding:
-        custom_ssid = router.reseller.branding.get('ssid', '')
+    # WiFi SSID resolution: explicit Router.wifi_ssid > reseller branding > default
+    wifi_ssid = (getattr(router, 'wifi_ssid', '') or '').strip() or 'SabiWiFi'
+    if wifi_ssid == 'SabiWiFi' and router.reseller and router.reseller.branding:
+        custom_ssid = (router.reseller.branding.get('ssid', '') or '').strip()
         if custom_ssid:
             wifi_ssid = custom_ssid
-            wifi_ssid_5g = f'{custom_ssid}-5G'
+    wifi_ssid_5g = f'{wifi_ssid}-5G'
+
+    # WiFi enabled flag → maps to RouterOS disabled=yes/no
+    wifi_disabled = 'no' if getattr(router, 'wifi_enabled', True) else 'yes'
+
+    # Optional WPA2/WPA3 security profile
+    wifi_password = (getattr(router, 'wifi_password', '') or '').strip()
+    if wifi_password:
+        wifi_security_block = (
+            '  /interface/wifi/security add name=sabiwifi-sec '
+            'authentication-types=wpa2-psk,wpa3-psk passphrase="{pw}"\n'
+        ).format(pw=wifi_password)
+        wifi_security_attr = ' security=sabiwifi-sec'
+    else:
+        wifi_security_block = '  # (open network — no password set)\n'
+        wifi_security_attr = ''
 
     # RADIUS services based on router service_mode
     mode = getattr(router, 'service_mode', 'hotspot')
@@ -183,16 +275,19 @@ def generate_provision_rsc(router, wg_private_key):
     else:
         radius_services = 'hotspot'
 
-    # PPPoE server block (only when PPPoE is enabled)
+    # PPPoE server block — reuses subscriber phone+PIN via RADIUS
+    # (radcheck.Cleartext-Password is populated by accounts; MS-CHAPv2 works).
     pppoe_block = ''
     if mode in ('pppoe', 'both'):
-        pppoe_service_name = wifi_ssid.replace(' ', '-') + '-PPPoE' if wifi_ssid else 'SabiWiFi-PPPoE'
+        pppoe_service_name = wifi_ssid.replace(' ', '-') + '-PPPoE'
         pppoe_block = f"""
 # --- 10b. PPPoE Server ---
+# Customers dial PPPoE with username = phone (E.164), password = SabiWiFi PIN.
+# Authentication methods include MS-CHAPv2 for Windows' built-in dialer.
 /ppp profile set default use-radius=yes only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1
 :do {{{{ /ip pool add name=pppoe-pool ranges=10.9.0.2-10.9.255.254 }}}} on-error={{{{}}}}
 /ppp profile set default local-address=10.9.0.1 remote-address=pppoe-pool
-:do {{{{ /interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=default one-session-per-host=yes max-sessions=200 }}}} on-error={{{{}}}}
+:do {{{{ /interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=default one-session-per-host=yes max-sessions=200 authentication=pap,chap,mschap2 }}}} on-error={{{{}}}}
 """
 
     return PROVISION_TEMPLATE.format(
@@ -208,6 +303,9 @@ def generate_provision_rsc(router, wg_private_key):
         nas_secret=router.nas_secret,
         wifi_ssid=wifi_ssid,
         wifi_ssid_5g=wifi_ssid_5g,
+        wifi_disabled=wifi_disabled,
+        wifi_security_block=wifi_security_block,
+        wifi_security_attr=wifi_security_attr,
         radius_services=radius_services,
         pppoe_block=pppoe_block,
     )
