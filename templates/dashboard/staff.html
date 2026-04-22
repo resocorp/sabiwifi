@@ -15,6 +15,7 @@
                 <th class="px-3 py-2">Role</th>
                 <th class="px-3 py-2">Phone</th>
                 <th class="px-3 py-2">Email</th>
+                <th class="px-3 py-2">Login</th>
                 <th class="px-3 py-2">Active</th>
                 <th class="px-3 py-2">Load</th>
             </tr>
@@ -38,6 +39,19 @@
                 <option value="manager">Manager</option>
             </select>
         </label>
+        <div class="border-t border-surface-container pt-3 mt-2">
+            <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" id="n-can-login" onchange="toggleLoginFields()">
+                <span><b>Can log in</b> — let this person sign in to the dashboard</span>
+            </label>
+            <div id="login-fields" class="hidden mt-2 space-y-2">
+                <label class="block text-xs">Initial password
+                    <input id="n-password" type="text" autocomplete="new-password"
+                           class="mt-1 w-full border rounded px-2 py-1 font-mono">
+                    <span class="text-on-surface-variant text-[11px]">They sign in with their email + this password. Tell them to change it after first login.</span>
+                </label>
+            </div>
+        </div>
         <div class="flex justify-end gap-2 mt-3">
             <button onclick="closeNew()" class="px-3 py-1 text-sm">Cancel</button>
             <button onclick="createStaff()" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Create</button>
@@ -58,34 +72,53 @@ async function loadStaff() {
     for (const s of data) {
         const tr = document.createElement('tr');
         tr.className = 'border-t border-surface-container';
+        const loginCell = s.can_log_in
+            ? '<span class="text-[11px] px-1.5 py-0.5 rounded bg-primary-container/40 text-on-surface">enabled</span>'
+            : '<span class="text-[11px] text-on-surface-variant">—</span>';
         tr.innerHTML =
             '<td class="px-3 py-2">' + (s.name || '') + '</td>' +
             '<td class="px-3 py-2">' + s.role + '</td>' +
             '<td class="px-3 py-2 font-mono">' + (s.phone || '') + '</td>' +
             '<td class="px-3 py-2">' + (s.email || '') + '</td>' +
+            '<td class="px-3 py-2">' + loginCell + '</td>' +
             '<td class="px-3 py-2">' + (s.active ? 'yes' : 'no') + '</td>' +
             '<td class="px-3 py-2">' + (s.current_load || 0) + '</td>';
         tbody.appendChild(tr);
     }
 }
+function toggleLoginFields() {
+    const on = document.getElementById('n-can-login').checked;
+    document.getElementById('login-fields').classList.toggle('hidden', !on);
+}
 function openNew() { document.getElementById('new-modal').classList.remove('hidden'); }
 function closeNew() { document.getElementById('new-modal').classList.add('hidden'); }
 async function createStaff() {
+    const canLogin = document.getElementById('n-can-login').checked;
+    const password = document.getElementById('n-password').value;
     const body = {
         name: document.getElementById('n-name').value.trim(),
         phone: document.getElementById('n-phone').value.trim(),
         whatsapp: document.getElementById('n-wa').value.trim(),
         email: document.getElementById('n-email').value.trim(),
         role: document.getElementById('n-role').value,
+        can_log_in: canLogin,
     };
     if (!body.name || !body.phone) { alert('Name and phone required'); return; }
+    if (canLogin && (!body.email || !password)) {
+        alert('Email and initial password are required when login is enabled.');
+        return;
+    }
+    if (canLogin) body.password = password;
     const resp = await fetch('/api/staff/create/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
         body: JSON.stringify(body),
     });
     if (resp.ok) { closeNew(); loadStaff(); }
-    else alert('Create failed');
+    else {
+        const err = await resp.json().catch(() => ({error: 'Create failed'}));
+        alert(err.error || 'Create failed');
+    }
 }
 loadStaff();
 </script>

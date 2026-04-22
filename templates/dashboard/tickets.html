@@ -1,9 +1,13 @@
 {% extends "dashboard/base.html" %}
+{% load permissions_tags %}
 {% block title %}Tickets — SabiWiFi{% endblock %}
 
 {% block content %}
 <div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-headline font-bold">Tickets</h1>
+    <div>
+        <h1 class="text-2xl font-headline font-bold">Tickets</h1>
+        <p class="text-sm text-on-surface-variant">Open work items + AI-suggested assignments. Click a row to view details and assign.</p>
+    </div>
 </div>
 
 <div class="flex gap-2 mb-4 text-sm">
@@ -29,25 +33,43 @@
     </label>
 </div>
 
-<div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
-    <table class="w-full text-sm">
-        <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
-            <tr>
-                <th class="px-3 py-2">#</th>
-                <th class="px-3 py-2">Type</th>
-                <th class="px-3 py-2">Status</th>
-                <th class="px-3 py-2">Priority</th>
-                <th class="px-3 py-2">Subject</th>
-                <th class="px-3 py-2">Assignee</th>
-                <th class="px-3 py-2">SLA</th>
-                <th class="px-3 py-2">Created</th>
-            </tr>
-        </thead>
-        <tbody id="tickets-body"></tbody>
-    </table>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="text-left text-on-surface-variant text-xs uppercase bg-surface-container">
+                <tr>
+                    <th class="px-3 py-2">#</th>
+                    <th class="px-3 py-2">Type</th>
+                    <th class="px-3 py-2">Status</th>
+                    <th class="px-3 py-2">Cause</th>
+                    <th class="px-3 py-2">Subject</th>
+                    <th class="px-3 py-2">Assignee</th>
+                    <th class="px-3 py-2">SLA</th>
+                </tr>
+            </thead>
+            <tbody id="tickets-body"></tbody>
+        </table>
+    </div>
+    <div id="ticket-detail" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 text-sm">
+        <p class="text-on-surface-variant">Pick a ticket on the left.</p>
+    </div>
 </div>
 
 <script>
+const CAN_ASSIGN = {{ user|can:"assign_ticket"|yesno:"true,false" }};
+let activeTicketId = null;
+
+function escapeHTML(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
+
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+}
+
 async function loadTickets() {
     const status = document.getElementById('status-filter').value;
     const type = document.getElementById('type-filter').value;
@@ -57,26 +79,141 @@ async function loadTickets() {
     if (type) params.set('type', type);
     if (breached) params.set('breached', '1');
     const resp = await fetch('/api/tickets/?' + params.toString());
+    if (!resp.ok) return;
     const data = await resp.json();
     const tbody = document.getElementById('tickets-body');
     tbody.innerHTML = '';
     for (const t of data) {
         const tr = document.createElement('tr');
-        tr.className = 'border-t border-surface-container';
+        tr.className = 'border-t border-surface-container cursor-pointer hover:bg-surface-container'
+            + (t.id === activeTicketId ? ' bg-surface-container' : '');
         const slaCell = t.sla_breached
             ? '<span class="text-error font-semibold">BREACHED</span>'
-            : (t.sla_due_at ? new Date(t.sla_due_at).toLocaleString() : '—');
+            : (t.sla_due_at ? timeOnly(t.sla_due_at) : '—');
+        const causeChip = t.diagnosed_cause
+            ? '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-tertiary-container/40 text-on-surface">' + escapeHTML(t.diagnosed_cause.replace(/_/g, ' ')) + '</span>'
+            : '<span class="text-on-surface-variant">—</span>';
         tr.innerHTML =
             '<td class="px-3 py-2 font-mono">#' + t.id + '</td>' +
             '<td class="px-3 py-2">' + t.type + '</td>' +
             '<td class="px-3 py-2">' + t.status + '</td>' +
-            '<td class="px-3 py-2">' + t.priority + '</td>' +
-            '<td class="px-3 py-2 truncate max-w-xs">' + (t.subject || '') + '</td>' +
-            '<td class="px-3 py-2">' + (t.assigned_staff_name || '—') + '</td>' +
-            '<td class="px-3 py-2">' + slaCell + '</td>' +
-            '<td class="px-3 py-2 text-on-surface-variant">' + new Date(t.created_at).toLocaleString() + '</td>';
+            '<td class="px-3 py-2">' + causeChip + '</td>' +
+            '<td class="px-3 py-2 truncate max-w-xs">' + escapeHTML(t.subject || '') + '</td>' +
+            '<td class="px-3 py-2">' + escapeHTML(t.assigned_staff_name || '—') + '</td>' +
+            '<td class="px-3 py-2">' + slaCell + '</td>';
+        tr.onclick = () => loadTicket(t.id);
         tbody.appendChild(tr);
     }
+}
+
+function timeOnly(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString();
+}
+
+async function loadTicket(id) {
+    activeTicketId = id;
+    await loadTickets();  // re-render highlight
+    const resp = await fetch('/api/tickets/' + id + '/');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const t = data.ticket;
+    const events = data.events || [];
+
+    // Find the most recent AI propose-assignment recommendation
+    let aiRec = null;
+    for (const e of events.slice().reverse()) {
+        if (e.kind === 'comment' && e.actor === 'ai_field' && e.metadata && e.metadata.recommended_staff_id) {
+            aiRec = e;
+            break;
+        }
+    }
+
+    const aiBlock = aiRec
+        ? `<div class="rounded-lg p-3 mb-3 bg-primary-container/20 border border-primary/30">
+                <div class="text-xs uppercase font-semibold text-primary mb-1">AI recommendation</div>
+                <div class="text-sm">${escapeHTML(aiRec.note || '')}</div>
+                ${CAN_ASSIGN
+                    ? `<button onclick="quickAssign(${id}, ${aiRec.metadata.recommended_staff_id})"
+                              class="mt-2 px-3 py-1 rounded bg-primary text-on-primary text-xs">
+                            Assign ${escapeHTML(aiRec.metadata.recommended_staff_name || ('staff #' + aiRec.metadata.recommended_staff_id))}
+                       </button>`
+                    : ''}
+           </div>`
+        : '';
+
+    const eventsHTML = events.map(e => `
+        <div class="border-l-2 border-surface-container pl-3 py-1 mb-2">
+            <div class="text-[11px] text-on-surface-variant">
+                <span class="font-semibold">${escapeHTML(e.actor)}</span>
+                · <span>${escapeHTML(e.kind)}</span>
+                ${e.from_status || e.to_status ? `· ${escapeHTML(e.from_status || '?')} → ${escapeHTML(e.to_status || '?')}` : ''}
+                · ${new Date(e.created_at).toLocaleString()}
+            </div>
+            ${e.note ? `<div class="text-sm whitespace-pre-wrap">${escapeHTML(e.note)}</div>` : ''}
+        </div>
+    `).join('');
+
+    const assignControls = CAN_ASSIGN ? `
+        <div class="border-t border-surface-container pt-3 mt-3">
+            <label class="block text-xs text-on-surface-variant mb-1">Assign manually</label>
+            <div class="flex gap-2">
+                <select id="assign-staff" class="flex-1 rounded border px-2 py-1 text-sm"></select>
+                <button onclick="assignFromSelect(${id})" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Assign</button>
+            </div>
+        </div>` : '';
+
+    document.getElementById('ticket-detail').innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+            <div class="font-mono text-sm">#${t.id}</div>
+            <div class="text-xs text-on-surface-variant">${escapeHTML(t.status)} · ${escapeHTML(t.priority)}</div>
+        </div>
+        <h2 class="font-semibold text-base mb-2">${escapeHTML(t.subject)}</h2>
+        ${t.diagnosed_cause ? `<div class="text-xs mb-2">
+            <span class="text-on-surface-variant">Diagnosed:</span>
+            <span class="font-medium">${escapeHTML(t.diagnosed_cause.replace(/_/g, ' '))}</span>
+            <span class="text-on-surface-variant">→ ${escapeHTML((t.suggested_action || '').replace(/_/g, ' '))}</span>
+        </div>` : ''}
+        ${t.body ? `<div class="text-sm whitespace-pre-wrap mb-3">${escapeHTML(t.body)}</div>` : ''}
+        ${aiBlock}
+        <div class="text-xs uppercase font-semibold text-on-surface-variant mt-3 mb-1">Activity</div>
+        ${eventsHTML || '<div class="text-sm text-on-surface-variant">No events yet.</div>'}
+        ${assignControls}
+    `;
+
+    if (CAN_ASSIGN) {
+        // Populate the staff dropdown lazily
+        const staffResp = await fetch('/api/staff/?role=field_tech&active_only=1');
+        if (staffResp.ok) {
+            const staff = await staffResp.json();
+            const sel = document.getElementById('assign-staff');
+            for (const s of staff) {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `${s.name} (load ${s.current_load})`;
+                if (aiRec && aiRec.metadata.recommended_staff_id === s.id) {
+                    opt.selected = true;
+                    opt.textContent += ' — AI pick';
+                }
+                sel.appendChild(opt);
+            }
+        }
+    }
+}
+
+async function quickAssign(ticketId, staffId) {
+    const resp = await fetch('/api/tickets/' + ticketId + '/assign/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({staff_id: staffId}),
+    });
+    if (resp.ok) loadTicket(ticketId);
+}
+
+async function assignFromSelect(ticketId) {
+    const sel = document.getElementById('assign-staff');
+    if (!sel.value) return;
+    quickAssign(ticketId, parseInt(sel.value, 10));
 }
 
 document.getElementById('status-filter').addEventListener('change', loadTickets);

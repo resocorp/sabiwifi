@@ -8,6 +8,11 @@
         <p class="text-sm text-on-surface-variant">Customer conversations across WhatsApp, SMS and email — including AI drafts awaiting your approval.</p>
     </div>
     <div class="flex items-center gap-2">
+        <div id="kind-tabs" class="inline-flex rounded-lg border bg-surface-container-low p-0.5 text-xs">
+            <button data-kind="" class="kind-tab px-2 py-1 rounded font-medium">All</button>
+            <button data-kind="customer" class="kind-tab px-2 py-1 rounded">Customer</button>
+            <button data-kind="tech" class="kind-tab px-2 py-1 rounded">Field</button>
+        </div>
         <select id="state-filter" class="rounded border px-2 py-1 text-sm">
             <option value="">All states</option>
             <option value="open">Open</option>
@@ -33,6 +38,7 @@
 <script>
 const POLL_MS = 5000;
 let activeConvoId = null;
+let activeKind = '';
 let pollTimer = null;
 
 function escapeHTML(s) {
@@ -90,7 +96,11 @@ function authorMeta(m) {
 
 async function loadConversations() {
     const state = document.getElementById('state-filter').value;
-    const url = '/api/conversations/' + (state ? '?state=' + state : '');
+    const params = new URLSearchParams();
+    if (state) params.set('state', state);
+    if (activeKind) params.set('kind', activeKind);
+    const qs = params.toString();
+    const url = '/api/conversations/' + (qs ? '?' + qs : '');
     const resp = await fetch(url);
     if (!resp.ok) return;
     const data = await resp.json();
@@ -273,6 +283,25 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
     loadConversations();
     if (activeConvoId) loadConversation(activeConvoId);
 });
+
+document.querySelectorAll('.kind-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        activeKind = btn.dataset.kind;
+        document.querySelectorAll('.kind-tab').forEach(b => {
+            b.classList.toggle('bg-primary', b.dataset.kind === activeKind);
+            b.classList.toggle('text-on-primary', b.dataset.kind === activeKind);
+        });
+        // Switching tabs clears the selected detail to avoid showing a
+        // conversation that no longer matches the filter.
+        activeConvoId = null;
+        document.getElementById('conversation-detail').innerHTML =
+            '<p class="text-sm text-on-surface-variant">Pick a conversation on the left.</p>';
+        loadConversations();
+    });
+});
+// Default-select "All"
+document.querySelector('.kind-tab[data-kind=""]').classList.add('bg-primary', 'text-on-primary');
+
 loadConversations();
 startPolling();
 </script>

@@ -154,26 +154,21 @@ class SalesWorkflowE2ETest(TestCase):
         self.assertEqual(run.status, AIAgentRun.STATUS_SUCCESS)
 
 
-class FieldDispatchWorkflowE2ETest(TestCase):
-    def test_field_picks_lowest_load_in_area_and_dispatches(self):
+class FieldProposeWorkflowE2ETest(TestCase):
+    """Field-supervisor is now PROPOSE-ONLY. It lists techs and posts a
+    KIND_COMMENT TicketEvent with the recommendation; it does NOT call
+    assign_ticket. (Detailed propose+dispatch coverage lives in
+    test_autonomous_flow.py — this test just confirms the seeded prompt
+    reaches the LLM via _latest_override.)"""
+
+    def test_propose_runs_with_seeded_prompt_and_no_assignment(self):
         reseller, cfg = _seed_reseller(slug='nedu-field')
 
-        busy = StaffMember.objects.create(
-            reseller=reseller, name='Tunde', phone='+2348011110001',
-            role=StaffMember.ROLE_FIELD_TECH, active=True,
-            coverage_areas=['Lekki', 'VI'], current_load=4,
-        )
         free = StaffMember.objects.create(
             reseller=reseller, name='Bola', phone='+2348011110002',
             whatsapp='+2348011110002',
             role=StaffMember.ROLE_FIELD_TECH, active=True,
             coverage_areas=['Lekki'], current_load=1,
-        )
-        # Out-of-area: should be ignored regardless of load.
-        StaffMember.objects.create(
-            reseller=reseller, name='Chika', phone='+2348011110003',
-            role=StaffMember.ROLE_FIELD_TECH, active=True,
-            coverage_areas=['Ikeja'], current_load=0,
         )
 
         ticket = create_ticket(
@@ -181,53 +176,28 @@ class FieldDispatchWorkflowE2ETest(TestCase):
             subject='Slow internet', body='Customer reports buffering on Netflix',
             priority=Ticket.PRIORITY_NORMAL,
         )
-        # Stamp area into installation/lead path is heavy — easier: rely on the
-        # prompt-injected area in the user-message brief. The agent should
-        # still call list_available_techs(area='lekki').
         canned = [
-            ChatResponse(
-                text='', prompt_tokens=12, completion_tokens=8,
+            ChatResponse(text='', prompt_tokens=12, completion_tokens=8,
                 tool_calls=[ToolCall(id='f1', name='list_available_techs',
-                                     arguments={'area': 'Lekki'})],
-            ),
-            ChatResponse(
-                text='', prompt_tokens=18, completion_tokens=10,
-                tool_calls=[ToolCall(id='f2', name='assign_ticket', arguments={
-                    'ticket_id': ticket.pk, 'staff_id': free.pk,
-                })],
-            ),
-            ChatResponse(
-                text='', prompt_tokens=20, completion_tokens=20,
-                tool_calls=[ToolCall(id='f3', name='send_dispatch_wa', arguments={
-                    'staff_id': free.pk,
-                    'body': (f'TICKET #{ticket.pk} — support — normal\n'
-                             'Lekki\n'
-                             'Customer reports buffering on Netflix.\n'
-                             'Reply DONE on this chat when resolved.'),
-                })],
-            ),
-            ChatResponse(text='Dispatched.', tool_calls=[],
+                                     arguments={})]),
+            ChatResponse(text='', prompt_tokens=18, completion_tokens=10,
+                tool_calls=[ToolCall(id='f2', name='add_ticket_comment', arguments={
+                    'ticket_id': ticket.pk,
+                    'note': 'Bola — lowest load in Lekki',
+                    'metadata': {'recommended_staff_id': free.pk,
+                                 'recommended_staff_name': 'Bola'},
+                })]),
+            ChatResponse(text='proposed', tool_calls=[],
                          prompt_tokens=5, completion_tokens=2),
         ]
-
         provider = _ScriptedProvider(canned)
-        with patch('ai.agents.runner.get_provider', return_value=provider), \
-             patch('ai.tools.send_whatsapp', return_value=True, create=True):
-            result = FieldSupervisorAgent(cfg).handle_new_ticket(ticket=ticket)
+        with patch('ai.agents.runner.get_provider', return_value=provider):
+            result = FieldSupervisorAgent(cfg).propose_assignment(ticket=ticket)
 
         self.assertFalse(result.skipped)
-
-        # Seeded field prompt landed in the system message
         self.assertIn('SabiWiFi field-dispatch playbook', provider.systems_seen[0])
-
         ticket.refresh_from_db()
-        self.assertEqual(ticket.assigned_staff_id, free.pk,
-                         'Should pick lowest-load tech in coverage area')
-
+        self.assertIsNone(ticket.assigned_staff_id, 'must NOT auto-assign')
         run = AIAgentRun.objects.get(reseller=reseller, agent_role='field')
         names = [tc['name'] for tc in (run.tool_calls or [])]
-        self.assertEqual(names, ['list_available_techs',
-                                 'assign_ticket', 'send_dispatch_wa'])
-        # Brief must not contain the customer phone (rule from override).
-        brief_call = run.tool_calls[2]
-        self.assertNotIn('+234', brief_call['arguments']['body'])
+        self.assertEqual(names, ['list_available_techs', 'add_ticket_comment'])

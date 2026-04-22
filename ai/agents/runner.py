@@ -28,7 +28,7 @@ from conversations.models import Conversation, Message
 from conversations.services import record_outbound_message
 
 
-MAX_STEPS = 5
+MAX_STEPS = 10
 
 
 @dataclass
@@ -170,7 +170,7 @@ class AgentRunner:
         args = tc.arguments or {}
 
         # Gate 1: quote cap. Payment links above the cap always require a human.
-        if name == 'create_payment_link':
+        if name in ('create_payment_link', 'create_renewal_payment_link'):
             try:
                 amount = Decimal(str(args.get('amount_ngn', 0)))
             except Exception:

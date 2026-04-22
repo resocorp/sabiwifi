@@ -219,7 +219,7 @@ def tool_lookup_subscriber(ctx: ToolContext, args: dict) -> dict:
     return {
         'found': True,
         'subscriber_id': sub.pk,
-        'name': sub.first_name or '',
+        'name': '',
         'phone': sub.phone,
         'status': sub.status,
         'plan_id': sub.plan_id,
@@ -338,10 +338,15 @@ def tool_assign_ticket(ctx: ToolContext, args: dict) -> dict:
 
 
 def tool_send_dispatch_wa(ctx: ToolContext, args: dict) -> dict:
-    """Message a field tech on WhatsApp with a dispatch brief. No conversation
-    context is created — the tech replies (if at all) in a separate inbound
-    thread, and the AI follows up via the ticket timeline."""
+    """Message a field tech on WhatsApp with a dispatch brief AND record the
+    outbound message as a tech-kind Conversation so the inbox + future inbound
+    routing can correlate the thread to the staff member.
+
+    Stamps `Ticket.dispatch_sent_at` and `last_field_ping_at` so the periodic
+    sweep knows when to start pinging.
+    """
     staff_id = args.get('staff_id')
+    ticket_id = args.get('ticket_id')
     body = (args.get('body') or '').strip()
     if not (staff_id and body):
         return {'error': 'staff_id and body required'}
@@ -349,10 +354,58 @@ def tool_send_dispatch_wa(ctx: ToolContext, args: dict) -> dict:
         staff = StaffMember.objects.get(pk=staff_id, reseller=ctx.reseller)
     except StaffMember.DoesNotExist:
         return {'error': 'staff not found'}
-    from notifications.notify import send_whatsapp
+
     target = staff.whatsapp or staff.phone
+    if not target:
+        return {'error': 'staff has no whatsapp/phone'}
+
+    # Record (or look up) the tech-kind Conversation for this staff member
+    conv, _ = Conversation.objects.get_or_create(
+        reseller=ctx.reseller,
+        channel=Conversation.CHANNEL_WHATSAPP,
+        external_thread_id=target,
+        defaults={
+            'kind': Conversation.KIND_TECH,
+            'assigned_staff': staff,
+            'contact_phone': target,
+            'contact_display_name': staff.name,
+            'state': Conversation.STATE_OPEN,
+        },
+    )
+    # Defensive: existing convos may have been customer-kind by accident.
+    needs_save = []
+    if conv.kind != Conversation.KIND_TECH:
+        conv.kind = Conversation.KIND_TECH
+        needs_save.append('kind')
+    if conv.assigned_staff_id != staff.pk:
+        conv.assigned_staff = staff
+        needs_save.append('assigned_staff')
+    if needs_save:
+        needs_save.append('updated_at')
+        conv.save(update_fields=needs_save)
+
+    record_outbound_message(
+        conversation=conv, body=body, source=Message.SOURCE_AI_FIELD,
+        agent_run_id=ctx.run_id,
+    )
+    from notifications.notify import send_whatsapp
     ok = send_whatsapp(ctx.reseller.slug, target, body)
-    return {'ok': bool(ok), 'to': target}
+
+    # Update the ticket's dispatch tracking so the periodic sweep starts
+    # counting from now.
+    if ticket_id:
+        try:
+            t = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+        except Ticket.DoesNotExist:
+            t = None
+        if t is not None:
+            from django.utils import timezone
+            now = timezone.now()
+            t.dispatch_sent_at = t.dispatch_sent_at or now
+            t.last_field_ping_at = now
+            t.save(update_fields=['dispatch_sent_at', 'last_field_ping_at',
+                                  'updated_at'])
+    return {'ok': bool(ok), 'to': target, 'conversation_id': conv.pk}
 
 
 def tool_close_ticket(ctx: ToolContext, args: dict) -> dict:
@@ -365,6 +418,291 @@ def tool_close_ticket(ctx: ToolContext, args: dict) -> dict:
         return {'error': 'ticket not found'}
     change_status(ticket, Ticket.STATUS_RESOLVED, actor='ai_field', note=note)
     return {'ok': True, 'ticket_id': ticket.pk}
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics — Support agent reads telemetry through these
+# ---------------------------------------------------------------------------
+
+def tool_get_subscriber_router(ctx: ToolContext, args: dict) -> dict:
+    """Identify which Router this subscriber currently connects through."""
+    from accounts.models import Subscriber
+    from ai.diagnostics import lookup_subscriber_router
+    sub_id = args.get('subscriber_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    router = lookup_subscriber_router(sub)
+    if router is None:
+        return {'found': False}
+    return {
+        'found': True,
+        'router_id': router.pk,
+        'name': getattr(router, 'name', '') or '',
+        'service_mode': router.service_mode,
+        'status': router.status,
+        'last_seen': router.last_seen.isoformat() if router.last_seen else None,
+    }
+
+
+def tool_check_general_outage(ctx: ToolContext, args: dict) -> dict:
+    """Is this reseller's router currently down? (general outage)"""
+    from ai.diagnostics import is_router_currently_offline
+    rid = args.get('router_id')
+    try:
+        router = Router.objects.get(pk=rid, reseller=ctx.reseller)
+    except Router.DoesNotExist:
+        return {'error': 'router not found'}
+    return {
+        'offline': is_router_currently_offline(router),
+        'status': router.status,
+        'offline_since': router.offline_since.isoformat() if router.offline_since else None,
+    }
+
+
+def tool_infer_customer_type(ctx: ToolContext, args: dict) -> dict:
+    """Determine PPPoE vs hotspot vs unknown for the customer."""
+    from accounts.models import Subscriber
+    from ai.diagnostics import infer_customer_type
+    sub_id = args.get('subscriber_id')
+    rid = args.get('router_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    router = None
+    if rid:
+        try:
+            router = Router.objects.get(pk=rid, reseller=ctx.reseller)
+        except Router.DoesNotExist:
+            router = None
+    return {'customer_type': infer_customer_type(sub, router)}
+
+
+def tool_categorise_diagnosis(ctx: ToolContext, args: dict) -> dict:
+    """Aggregate read-only facts into a (cause, action) pair the Support
+    agent can hand straight to `open_ticket`. Args may include any subset of
+    the DiagnosticFacts fields (subscriber_id, router_id, customer_clue, etc.).
+    """
+    from accounts.models import Subscriber
+    from ai.diagnostics import (
+        DiagnosticFacts, categorise_cause, infer_customer_type,
+        is_router_currently_offline,
+    )
+    from plans.models import Subscription
+    from billing.models import Payment
+    from radius.models import Radacct
+
+    facts = DiagnosticFacts(
+        subscriber_id=args.get('subscriber_id'),
+        router_id=args.get('router_id'),
+        customer_clue=(args.get('customer_clue') or '').strip(),
+    )
+
+    if facts.subscriber_id:
+        try:
+            sub = Subscriber.objects.get(pk=facts.subscriber_id, reseller=ctx.reseller)
+        except Subscriber.DoesNotExist:
+            sub = None
+        if sub is not None:
+            active = Subscription.objects.filter(subscriber=sub, status='active').first()
+            facts.subscription_active = bool(active)
+            latest = (Subscription.objects.filter(subscriber=sub)
+                      .order_by('-expiry_date').first())
+            if latest is not None:
+                facts.subscription_expired = (latest.status == 'expired')
+            last_pay = (Payment.objects.filter(reseller=ctx.reseller, subscriber=sub)
+                        .order_by('-created_at').first())
+            if last_pay is not None:
+                facts.last_payment_status = last_pay.paystack_status or ''
+            row = (Radacct.objects.filter(username=sub.phone, acctstoptime__isnull=True)
+                   .order_by('-acctstarttime').first())
+            facts.has_live_session = row is not None
+            facts.customer_type = infer_customer_type(
+                sub,
+                Router.objects.filter(pk=facts.router_id, reseller=ctx.reseller).first()
+                if facts.router_id else None,
+            )
+
+    if facts.router_id:
+        router = Router.objects.filter(pk=facts.router_id, reseller=ctx.reseller).first()
+        if router is not None:
+            facts.router_offline = is_router_currently_offline(router)
+
+    cause, action = categorise_cause(facts)
+    return {'cause': cause, 'action': action, 'facts': facts.as_dict()}
+
+
+# ---------------------------------------------------------------------------
+# Renewal payment links — Support sends these without escalation
+# ---------------------------------------------------------------------------
+
+def tool_create_renewal_payment_link(ctx: ToolContext, args: dict) -> dict:
+    from accounts.models import Subscriber
+    from plans.models import ServicePlan
+    from billing.services import create_renewal_payment_link
+    sub_id = args.get('subscriber_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    plan = None
+    if args.get('plan_id'):
+        plan = ServicePlan.objects.filter(pk=args['plan_id'], reseller=ctx.reseller).first()
+    try:
+        payment, url = create_renewal_payment_link(
+            subscriber=sub, plan=plan, amount=args.get('amount_ngn'),
+            description=args.get('description', '') or '',
+        )
+    except ValueError as exc:
+        return {'error': str(exc)}
+    return {'payment_id': payment.pk, 'url': url,
+            'amount_ngn': str(payment.amount_ngn)}
+
+
+# ---------------------------------------------------------------------------
+# Ticket lookup + status confirmation flow (used by FieldInboundAgent)
+# ---------------------------------------------------------------------------
+
+def tool_lookup_ticket_for_tech(ctx: ToolContext, args: dict) -> dict:
+    """Find non-terminal tickets a tech might be referring to.
+
+    Strategies (any of):
+      - explicit ticket_id (looked up directly)
+      - phone — find tickets where subscriber.phone or lead.phone matches
+      - email — likewise on email
+      - default — tickets currently assigned to this tech (caller passes
+        `assigned_staff_id`)
+    Returns up to 5 with a one-line summary.
+    """
+    from accounts.models import Subscriber
+    from leads.models import Lead
+
+    ticket_id = args.get('ticket_id')
+    phone = (args.get('phone') or '').strip()
+    email = (args.get('email') or '').strip()
+    assigned_staff_id = args.get('assigned_staff_id')
+
+    qs = Ticket.objects.filter(reseller=ctx.reseller).exclude(
+        status__in=Ticket.TERMINAL_STATUSES,
+    ).select_related('subscriber', 'lead', 'assigned_staff')
+
+    if ticket_id:
+        qs = qs.filter(pk=ticket_id)
+    elif phone:
+        sub_ids = list(Subscriber.objects.filter(
+            reseller=ctx.reseller, phone__icontains=phone[-7:],
+        ).values_list('pk', flat=True))
+        lead_ids = list(Lead.objects.filter(
+            reseller=ctx.reseller, phone__icontains=phone[-7:],
+        ).values_list('pk', flat=True))
+        from django.db.models import Q
+        qs = qs.filter(Q(subscriber_id__in=sub_ids) | Q(lead_id__in=lead_ids))
+    elif email:
+        sub_ids = list(Subscriber.objects.filter(
+            reseller=ctx.reseller, email__iexact=email,
+        ).values_list('pk', flat=True))
+        lead_ids = list(Lead.objects.filter(
+            reseller=ctx.reseller, email__iexact=email,
+        ).values_list('pk', flat=True))
+        from django.db.models import Q
+        qs = qs.filter(Q(subscriber_id__in=sub_ids) | Q(lead_id__in=lead_ids))
+    elif assigned_staff_id:
+        qs = qs.filter(assigned_staff_id=assigned_staff_id)
+    else:
+        return {'matches': [], 'reason': 'no lookup key supplied'}
+
+    matches = []
+    for t in qs.order_by('-dispatch_sent_at', '-created_at')[:5]:
+        contact_name = ''
+        contact_phone = ''
+        if t.subscriber_id:
+            contact_name = ''  # Subscriber model has no name field today
+            contact_phone = t.subscriber.phone or ''
+        elif t.lead_id:
+            contact_name = t.lead.name or ''
+            contact_phone = t.lead.phone or ''
+        matches.append({
+            'ticket_id': t.pk,
+            'status': t.status,
+            'subject': t.subject,
+            'cause': t.diagnosed_cause,
+            'contact_name': contact_name,
+            'contact_phone': contact_phone,
+            'dispatch_sent_at': t.dispatch_sent_at.isoformat() if t.dispatch_sent_at else None,
+        })
+    return {'matches': matches}
+
+
+def tool_set_pending_close_action(ctx: ToolContext, args: dict) -> dict:
+    """Stash a pending status-change confirmation on the ticket. Cleared
+    when the tech replies YES/NO or the AI clears it."""
+    from django.utils import timezone
+    ticket_id = args.get('ticket_id')
+    expected_status = args.get('expected_status')
+    valid = dict(Ticket.STATUS_CHOICES)
+    if expected_status not in valid:
+        return {'error': 'invalid expected_status'}
+    try:
+        t = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+    except Ticket.DoesNotExist:
+        return {'error': 'ticket not found'}
+    t.pending_close_action = {
+        'action': args.get('action', 'change_status'),
+        'expected_status': expected_status,
+        'asked_at': timezone.now().isoformat(),
+        'by_run_id': ctx.run_id,
+    }
+    t.save(update_fields=['pending_close_action', 'updated_at'])
+    return {'ok': True, 'ticket_id': t.pk}
+
+
+def tool_consume_pending_close_action(ctx: ToolContext, args: dict) -> dict:
+    """Read + clear the pending action. Returns the snapshot for the agent
+    to reason over before calling change_status_ticket."""
+    ticket_id = args.get('ticket_id')
+    try:
+        t = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+    except Ticket.DoesNotExist:
+        return {'error': 'ticket not found'}
+    snapshot = dict(t.pending_close_action or {})
+    if snapshot:
+        t.pending_close_action = {}
+        t.save(update_fields=['pending_close_action', 'updated_at'])
+    return {'ok': True, 'pending': snapshot}
+
+
+def tool_change_status_ticket(ctx: ToolContext, args: dict) -> dict:
+    """Wrap tickets.services.change_status with actor='ai_field'."""
+    from tickets.services import change_status
+    ticket_id = args.get('ticket_id')
+    new_status = args.get('new_status')
+    note = (args.get('note') or '').strip()
+    valid = dict(Ticket.STATUS_CHOICES)
+    if new_status not in valid:
+        return {'error': 'invalid new_status'}
+    try:
+        t = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+    except Ticket.DoesNotExist:
+        return {'error': 'ticket not found'}
+    change_status(t, new_status, actor='ai_field', note=note)
+    return {'ok': True, 'ticket_id': t.pk, 'status': new_status}
+
+
+def tool_add_ticket_comment(ctx: ToolContext, args: dict) -> dict:
+    from tickets.services import add_comment
+    ticket_id = args.get('ticket_id')
+    note = (args.get('note') or '').strip()
+    if not note:
+        return {'error': 'note required'}
+    try:
+        t = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+    except Ticket.DoesNotExist:
+        return {'error': 'ticket not found'}
+    add_comment(t, actor='ai_field', note=note,
+                metadata=args.get('metadata') or {})
+    return {'ok': True, 'ticket_id': t.pk}
 
 
 # ---------------------------------------------------------------------------
@@ -493,9 +831,10 @@ _SCHEMAS = {
     },
     'send_dispatch_wa': {
         'name': 'send_dispatch_wa',
-        'description': 'Send a WhatsApp dispatch brief directly to a field tech.',
+        'description': 'Send a WhatsApp dispatch brief directly to a field tech AND record it as a tech-kind conversation. Pass ticket_id so dispatch tracking is updated.',
         'parameters': {'type': 'object', 'properties': {
             'staff_id': {'type': 'integer'},
+            'ticket_id': {'type': 'integer'},
             'body': {'type': 'string'},
         }, 'required': ['staff_id', 'body']},
     },
@@ -506,6 +845,94 @@ _SCHEMAS = {
             'ticket_id': {'type': 'integer'},
             'note': {'type': 'string'},
         }, 'required': ['ticket_id']},
+    },
+    'get_subscriber_router': {
+        'name': 'get_subscriber_router',
+        'description': "Identify which Router this subscriber currently connects through (via the active RADIUS session).",
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+        }, 'required': ['subscriber_id']},
+    },
+    'check_general_outage': {
+        'name': 'check_general_outage',
+        'description': 'Is this router currently offline? (general outage detection)',
+        'parameters': {'type': 'object', 'properties': {
+            'router_id': {'type': 'integer'},
+        }, 'required': ['router_id']},
+    },
+    'infer_customer_type': {
+        'name': 'infer_customer_type',
+        'description': "Determine whether the customer is on PPPoE, hotspot, or unknown.",
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+            'router_id': {'type': 'integer'},
+        }, 'required': ['subscriber_id']},
+    },
+    'categorise_diagnosis': {
+        'name': 'categorise_diagnosis',
+        'description': "Aggregate read-only diagnostic facts into a (cause, action) pair. Pass any hardware clue from the customer (e.g. 'PON light blinking red') as customer_clue.",
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+            'router_id': {'type': 'integer'},
+            'customer_clue': {'type': 'string'},
+        }, 'required': []},
+    },
+    'create_renewal_payment_link': {
+        'name': 'create_renewal_payment_link',
+        'description': "Generate a Paystack renewal payment link for an existing subscriber. Subject to the same auto_quote_below_ngn cap as new payment links.",
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+            'plan_id': {'type': 'integer'},
+            'amount_ngn': {'type': 'number'},
+            'description': {'type': 'string'},
+        }, 'required': ['subscriber_id']},
+    },
+    'lookup_ticket_for_tech': {
+        'name': 'lookup_ticket_for_tech',
+        'description': "Find non-terminal tickets a tech might be referring to. Use ticket_id, phone, email, or assigned_staff_id.",
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+            'phone': {'type': 'string'},
+            'email': {'type': 'string'},
+            'assigned_staff_id': {'type': 'integer'},
+        }, 'required': []},
+    },
+    'set_pending_close_action': {
+        'name': 'set_pending_close_action',
+        'description': "Stash a pending status-change confirmation on the ticket. The next inbound from the tech (YES/NO) consumes it.",
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+            'action': {'type': 'string'},
+            'expected_status': {'type': 'string',
+                                'enum': ['in_progress', 'resolved', 'awaiting_customer', 'closed']},
+        }, 'required': ['ticket_id', 'expected_status']},
+    },
+    'consume_pending_close_action': {
+        'name': 'consume_pending_close_action',
+        'description': "Read + clear any pending close-action snapshot stored on this ticket.",
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+        }, 'required': ['ticket_id']},
+    },
+    'change_status_ticket': {
+        'name': 'change_status_ticket',
+        'description': "Change a ticket's status. Use ONLY after the tech has confirmed via YES.",
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+            'new_status': {'type': 'string',
+                           'enum': ['in_progress', 'resolved',
+                                    'awaiting_customer', 'closed']},
+            'note': {'type': 'string'},
+        }, 'required': ['ticket_id', 'new_status']},
+    },
+    'add_ticket_comment': {
+        'name': 'add_ticket_comment',
+        'description': 'Add a free-text comment to a ticket (audit trail only — does not message the customer).',
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+            'note': {'type': 'string'},
+            'metadata': {'type': 'object'},
+        }, 'required': ['ticket_id', 'note']},
     },
 }
 
@@ -528,6 +955,17 @@ TOOL_FNS: dict[str, ToolFn] = {
     'assign_ticket': tool_assign_ticket,
     'send_dispatch_wa': tool_send_dispatch_wa,
     'close_ticket': tool_close_ticket,
+    # Phase 2b — diagnostics + ticket lifecycle
+    'get_subscriber_router': tool_get_subscriber_router,
+    'check_general_outage': tool_check_general_outage,
+    'infer_customer_type': tool_infer_customer_type,
+    'categorise_diagnosis': tool_categorise_diagnosis,
+    'create_renewal_payment_link': tool_create_renewal_payment_link,
+    'lookup_ticket_for_tech': tool_lookup_ticket_for_tech,
+    'set_pending_close_action': tool_set_pending_close_action,
+    'consume_pending_close_action': tool_consume_pending_close_action,
+    'change_status_ticket': tool_change_status_ticket,
+    'add_ticket_comment': tool_add_ticket_comment,
 }
 
 
@@ -538,10 +976,21 @@ AGENT_TOOLS = {
     'support': ['lookup_subscriber', 'check_subscription',
                 'check_router_status', 'check_live_session',
                 'check_recent_payments',
+                # Phase 2b: full diagnostic chain + renewal links
+                'get_subscriber_router', 'check_general_outage',
+                'infer_customer_type', 'categorise_diagnosis',
+                'create_renewal_payment_link',
                 'send_reply', 'open_ticket', 'escalate_to_human'],
-    'field':  ['list_available_techs', 'assign_ticket',
-               'send_dispatch_wa', 'close_ticket',
+    # Field-supervisor (propose-only — assign_ticket dropped):
+    'field':  ['list_available_techs',
+               'send_dispatch_wa', 'add_ticket_comment',
                'send_reply', 'escalate_to_human'],
+    # Field-inbound: tech replies on WA. Confirm-before-action pattern.
+    'field_inbound': ['lookup_ticket_for_tech',
+                      'set_pending_close_action',
+                      'consume_pending_close_action',
+                      'change_status_ticket', 'add_ticket_comment',
+                      'send_reply', 'escalate_to_human'],
 }
 
 
