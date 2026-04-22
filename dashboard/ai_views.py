@@ -176,10 +176,23 @@ def ai_test_whatsapp(request):
         messages.error(request, 'Phone number is required.')
         return redirect('dashboard-ai-config')
 
-    if not _wa_status(reseller)['connected']:
+    wa = _wa_status(reseller)
+    if not wa['connected']:
         messages.error(request,
                        'WhatsApp session is not connected. Link the session first '
                        'on the WhatsApp page, then retry the test.')
+        return redirect('dashboard-ai-config')
+
+    # WhatsApp does not deliver messages from a linked number to itself.
+    # Strip non-digits and compare last 10 digits of both.
+    def _last10(s):
+        d = ''.join(c for c in (s or '') if c.isdigit())
+        return d[-10:] if len(d) >= 10 else d
+    if _last10(phone) and _last10(phone) == _last10(wa.get('wa_phone', '')):
+        messages.error(request,
+                       f"You cannot send a test to your own linked number "
+                       f"({wa['wa_phone']}). WhatsApp blocks self-delivery. "
+                       "Use a different phone number you control.")
         return redirect('dashboard-ai-config')
 
     ok = send_whatsapp(reseller.slug, phone, body)
