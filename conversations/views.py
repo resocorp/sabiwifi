@@ -53,6 +53,7 @@ def inbound_wa(request):
 
     from_jid = request.data.get('from_jid', '')
     from_phone = request.data.get('from_phone', '')
+    display_name = (request.data.get('display_name') or '').strip()
     body = request.data.get('body', '') or ''
     attachments = request.data.get('attachments', []) or []
     external_id = request.data.get('external_message_id', '') or ''
@@ -76,6 +77,7 @@ def inbound_wa(request):
         attachments=attachments,
         external_message_id=external_id,
         sender_phone=from_phone,
+        display_name=display_name,
         timestamp=ts,
     )
 

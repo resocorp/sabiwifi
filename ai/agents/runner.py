@@ -151,8 +151,12 @@ class AgentRunner:
         )
 
         if status == AIAgentRun.STATUS_FAILED:
-            from ai.safety import trip_circuit_breaker
-            trip_circuit_breaker(self.config)
+            from ai.safety import pause_on_provider_config_error, trip_circuit_breaker
+            # Permanent config errors (401/403/404, invalid model, bad key)
+            # pause AI immediately. Transient failures fall through to the
+            # rolling-window breaker.
+            if not pause_on_provider_config_error(self.config, err):
+                trip_circuit_breaker(self.config)
 
         return AgentResult(
             skipped=False, run_id=run.pk,
