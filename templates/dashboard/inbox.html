@@ -3,19 +3,25 @@
 
 {% block content %}
 <div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-headline font-bold">Inbox</h1>
-    <select id="state-filter" class="rounded border px-2 py-1 text-sm">
-        <option value="">All states</option>
-        <option value="open">Open</option>
-        <option value="pending_human">Pending human</option>
-        <option value="ai_drafted">AI drafted</option>
-        <option value="resolved">Resolved</option>
-    </select>
+    <div>
+        <h1 class="text-2xl font-headline font-bold">Inbox</h1>
+        <p class="text-sm text-on-surface-variant">Customer conversations across WhatsApp, SMS and email — including AI drafts awaiting your approval.</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <select id="state-filter" class="rounded border px-2 py-1 text-sm">
+            <option value="">All states</option>
+            <option value="open">Open</option>
+            <option value="ai_drafted">AI drafted</option>
+            <option value="pending_human">Pending human</option>
+            <option value="resolved">Resolved</option>
+        </select>
+        <button id="refresh-btn" class="text-xs px-2 py-1 rounded border" title="Refresh">↻</button>
+    </div>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm">
-        <ul id="conversation-list" class="divide-y divide-surface-container">
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm overflow-hidden">
+        <ul id="conversation-list" class="divide-y divide-surface-container max-h-[75vh] overflow-y-auto">
             <li class="p-3 text-sm text-on-surface-variant">Loading…</li>
         </ul>
     </div>
@@ -25,60 +31,216 @@
 </div>
 
 <script>
+const POLL_MS = 5000;
 let activeConvoId = null;
+let pollTimer = null;
+
+function escapeHTML(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
+
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+}
+
+function stateBadge(state) {
+    const map = {
+        'open':           {label: 'Open',          cls: 'bg-surface-container text-on-surface-variant'},
+        'ai_drafted':     {label: 'AI drafted',    cls: 'bg-primary-container/40 text-on-surface'},
+        'pending_human':  {label: 'Needs human',   cls: 'bg-error-container/40 text-on-error-container'},
+        'resolved':       {label: 'Resolved',      cls: 'bg-surface-container text-on-surface-variant'},
+    };
+    const m = map[state] || {label: state || '—', cls: 'bg-surface-container text-on-surface-variant'};
+    return `<span class="text-[10px] px-1.5 py-0.5 rounded-full ${m.cls}">${escapeHTML(m.label)}</span>`;
+}
+
+function channelChip(channel) {
+    const m = {
+        'whatsapp': {label: 'WA', cls: 'bg-emerald-100 text-emerald-800'},
+        'sms':      {label: 'SMS', cls: 'bg-sky-100 text-sky-800'},
+        'email':    {label: 'EMAIL', cls: 'bg-violet-100 text-violet-800'},
+    }[channel] || {label: (channel || '?').toUpperCase(), cls: 'bg-surface-container text-on-surface-variant'};
+    return `<span class="text-[10px] font-mono px-1.5 py-0.5 rounded ${m.cls}">${m.label}</span>`;
+}
+
+function timeAgo(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h';
+    return Math.floor(s / 86400) + 'd';
+}
+
+function authorMeta(m) {
+    if (m.direction === 'in') return {label: 'Customer',  cls: 'text-on-surface-variant'};
+    const map = {
+        'human':       {label: 'You',           cls: 'text-primary'},
+        'ai_sales':    {label: 'AI · Sales',    cls: 'text-primary'},
+        'ai_support':  {label: 'AI · Support',  cls: 'text-primary'},
+        'ai_field':    {label: 'AI · Field',    cls: 'text-primary'},
+        'system':      {label: 'System',        cls: 'text-on-surface-variant'},
+    };
+    return map[m.source] || {label: m.source || 'Outbound', cls: 'text-on-surface-variant'};
+}
 
 async function loadConversations() {
     const state = document.getElementById('state-filter').value;
     const url = '/api/conversations/' + (state ? '?state=' + state : '');
     const resp = await fetch(url);
+    if (!resp.ok) return;
     const data = await resp.json();
     const list = document.getElementById('conversation-list');
-    list.innerHTML = '';
     if (!data.length) {
-        list.innerHTML = '<li class="p-3 text-sm text-on-surface-variant">No conversations.</li>';
+        list.innerHTML = '<li class="p-4 text-sm text-on-surface-variant text-center">No conversations yet.<br><span class="text-xs">Inbound WhatsApp messages will appear here.</span></li>';
         return;
     }
-    for (const c of data) {
-        const li = document.createElement('li');
-        li.className = 'p-3 cursor-pointer hover:bg-surface-container';
-        li.innerHTML = '<div class="text-sm font-medium">' + (c.channel || '') + ' · ' + (c.external_thread_id || '') + '</div>' +
-                       '<div class="text-xs text-on-surface-variant">' + (c.state || '') +
-                       (c.last_message_at ? ' · ' + new Date(c.last_message_at).toLocaleString() : '') + '</div>';
-        li.onclick = () => loadConversation(c.id);
-        list.appendChild(li);
-    }
+    list.innerHTML = data.map(c => {
+        const isActive = c.id === activeConvoId;
+        const unread = c.unread_count > 0
+            ? `<span class="ml-1 inline-block min-w-[1.25rem] text-center text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-on-primary">${c.unread_count}</span>`
+            : '';
+        return `
+            <li class="p-3 cursor-pointer ${isActive ? 'bg-surface-container' : 'hover:bg-surface-container'}" onclick="loadConversation(${c.id})">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                        ${channelChip(c.channel)}
+                        <span class="text-sm font-medium truncate">${escapeHTML(c.contact || c.contact_phone || '(unknown)')}</span>
+                        ${unread}
+                    </div>
+                    <span class="text-[10px] text-on-surface-variant whitespace-nowrap">${timeAgo(c.last_message_at)}</span>
+                </div>
+                <div class="mt-1 flex items-center gap-2">
+                    ${stateBadge(c.state)}
+                    <span class="text-xs text-on-surface-variant truncate">${escapeHTML(c.last_body || '')}</span>
+                </div>
+            </li>`;
+    }).join('');
 }
 
 async function loadConversation(id) {
     activeConvoId = id;
+    await loadConversations();  // re-render highlight
     const resp = await fetch('/api/conversations/' + id + '/');
+    if (!resp.ok) return;
     const data = await resp.json();
+    const c = data.conversation;
     const detail = document.getElementById('conversation-detail');
-    const msgs = (data.messages || []).map(m =>
-        '<div class="mb-2 text-sm">' +
-        '<div class="text-xs text-on-surface-variant">' + (m.direction || '') + ' · ' +
-        (m.source || '') + ' · ' + new Date(m.created_at).toLocaleString() + '</div>' +
-        '<div class="whitespace-pre-wrap">' + (m.body || '') + '</div></div>'
-    ).join('');
-    detail.innerHTML =
-        '<div class="flex items-center justify-between mb-3">' +
-        '<h2 class="font-semibold">' + (data.conversation.channel || '') + ' · ' + (data.conversation.external_thread_id || '') + '</h2>' +
-        '<button onclick="toggleAI(' + id + ')" class="text-xs underline">toggle AI</button>' +
-        '</div>' +
-        '<div class="max-h-80 overflow-y-auto border rounded p-2 mb-3">' + (msgs || '<em>No messages.</em>') + '</div>' +
-        '<textarea id="reply-body" class="w-full border rounded p-2 text-sm" rows="3" placeholder="Type a reply…"></textarea>' +
-        '<button onclick="sendReply(' + id + ')" class="mt-2 px-3 py-1 rounded bg-primary text-on-primary text-sm">Send</button>';
+
+    const messageHTML = (data.messages || []).map(m => {
+        const meta = authorMeta(m);
+        const align = m.direction === 'in' ? 'items-start' : 'items-end';
+        const bubble = m.direction === 'in'
+            ? 'bg-surface-container text-on-surface'
+            : (m.is_draft ? 'bg-primary-container/30 text-on-surface border border-dashed border-primary'
+                          : 'bg-primary text-on-primary');
+        const draftBadge = m.is_draft
+            ? `<span class="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-primary-container text-on-surface">AI draft</span>`
+            : '';
+        const failBadge = m.delivery_status === 'failed'
+            ? `<span class="ml-2 text-[10px] uppercase px-1.5 py-0.5 rounded bg-error text-on-error">delivery failed</span>`
+            : '';
+        const draftActions = m.is_draft ? `
+            <div class="flex gap-2 mt-2">
+                <button onclick="sendDraft(${id}, ${m.id})"
+                        class="text-xs px-2 py-1 rounded bg-primary text-on-primary">Send</button>
+                <button onclick="editDraft(${id}, ${m.id}, ${JSON.stringify(m.body)})"
+                        class="text-xs px-2 py-1 rounded border">Edit &amp; send</button>
+                <button onclick="discardDraft(${id}, ${m.id})"
+                        class="text-xs px-2 py-1 rounded text-error">Discard</button>
+            </div>` : '';
+        return `
+            <div class="flex flex-col ${align} mb-3">
+                <div class="text-[11px] ${meta.cls} mb-1">
+                    <span class="font-semibold">${escapeHTML(meta.label)}</span>
+                    <span class="text-on-surface-variant">· ${new Date(m.created_at).toLocaleString()}</span>
+                    ${draftBadge}${failBadge}
+                </div>
+                <div class="max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${bubble}">
+                    ${escapeHTML(m.body)}
+                </div>
+                ${draftActions}
+            </div>`;
+    }).join('') || '<em class="text-sm text-on-surface-variant">No messages yet.</em>';
+
+    const aiToggle = c.ai_enabled
+        ? `<button onclick="toggleAI(${id})" class="text-xs px-2 py-1 rounded border" title="AI is currently ON for this conversation">AI: on</button>`
+        : `<button onclick="toggleAI(${id})" class="text-xs px-2 py-1 rounded border bg-surface-container" title="AI is currently OFF for this conversation">AI: off</button>`;
+
+    detail.innerHTML = `
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-container">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    ${channelChip(c.channel)}
+                    <h2 class="font-semibold truncate">${escapeHTML(c.contact || c.contact_phone || '(unknown)')}</h2>
+                    ${stateBadge(c.state)}
+                </div>
+                <div class="text-xs text-on-surface-variant mt-0.5">
+                    ${escapeHTML(c.contact_phone || '')}
+                    ${c.subscriber_id ? '· <a href="/dashboard/subscribers/' + c.subscriber_id + '/" class="underline">subscriber</a>' : ''}
+                    ${c.lead_id ? '· lead #' + c.lead_id : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                ${aiToggle}
+                <button onclick="resolveConvo(${id})" class="text-xs px-2 py-1 rounded border">Mark resolved</button>
+            </div>
+        </div>
+        <div id="messages-pane" class="max-h-[55vh] overflow-y-auto pr-1 mb-3">${messageHTML}</div>
+        <div>
+            <textarea id="reply-body" class="w-full border rounded p-2 text-sm" rows="3" placeholder="Type a reply…"></textarea>
+            <div class="flex justify-end mt-2">
+                <button onclick="sendReply(${id})" class="px-3 py-1 rounded bg-primary text-on-primary text-sm">Send reply</button>
+            </div>
+        </div>`;
+    // Scroll to bottom
+    const pane = document.getElementById('messages-pane');
+    if (pane) pane.scrollTop = pane.scrollHeight;
 }
 
 async function sendReply(id) {
-    const body = document.getElementById('reply-body').value.trim();
+    const ta = document.getElementById('reply-body');
+    const body = ta.value.trim();
     if (!body) return;
     const resp = await fetch('/api/conversations/' + id + '/reply/', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
         body: JSON.stringify({body}),
     });
-    if (resp.ok) loadConversation(id);
+    if (resp.ok) { ta.value = ''; loadConversation(id); }
+}
+
+async function sendDraft(convoId, msgId) {
+    const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/send/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({}),
+    });
+    if (resp.ok) loadConversation(convoId);
+}
+
+async function editDraft(convoId, msgId, currentBody) {
+    const next = window.prompt('Edit the draft before sending:', currentBody);
+    if (next === null) return;
+    const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/send/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({body: next}),
+    });
+    if (resp.ok) loadConversation(convoId);
+}
+
+async function discardDraft(convoId, msgId) {
+    if (!confirm('Discard this AI draft?')) return;
+    const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/discard/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+    });
+    if (resp.ok) loadConversation(convoId);
 }
 
 async function toggleAI(id) {
@@ -89,12 +251,29 @@ async function toggleAI(id) {
     loadConversation(id);
 }
 
-function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
+async function resolveConvo(id) {
+    await fetch('/api/conversations/' + id + '/resolve/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+    });
+    loadConversations();
+    if (activeConvoId === id) loadConversation(id);
+}
+
+function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+        loadConversations();
+        if (activeConvoId) loadConversation(activeConvoId);
+    }, POLL_MS);
 }
 
 document.getElementById('state-filter').addEventListener('change', loadConversations);
+document.getElementById('refresh-btn').addEventListener('click', () => {
+    loadConversations();
+    if (activeConvoId) loadConversation(activeConvoId);
+});
 loadConversations();
+startPolling();
 </script>
 {% endblock %}

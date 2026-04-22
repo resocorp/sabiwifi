@@ -134,7 +134,8 @@ def conversation_detail(request, pk):
 
     messages = list(convo.messages.order_by('created_at').values(
         'id', 'direction', 'body', 'attachments', 'source',
-        'delivery_status', 'delivery_error', 'created_at', 'sent_at',
+        'delivery_status', 'delivery_error', 'is_draft', 'agent_run_id',
+        'created_at', 'sent_at',
     ))
     for m in messages:
         m['created_at'] = m['created_at'].isoformat()
