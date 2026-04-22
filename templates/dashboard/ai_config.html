@@ -28,6 +28,57 @@
     </div>
     {% endif %}
 
+    {% if messages %}
+    <div class="space-y-2 mb-4">
+        {% for m in messages %}
+        <div class="rounded-xl px-3 py-2 text-sm {% if m.tags == 'success' %}bg-primary-container/30 text-on-surface{% elif m.tags == 'error' %}bg-error-container/30 text-on-error-container{% else %}bg-surface-container-low text-on-surface-variant{% endif %}">
+            {{ m }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+                <h2 class="font-semibold">WhatsApp connectivity test</h2>
+                <p class="text-xs text-on-surface-variant">Send a one-off message to confirm your WhatsApp sidecar is connected before turning AI on.</p>
+            </div>
+            {% if wa_status.connected %}
+                <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary-container/40 text-on-surface">
+                    ● Connected{% if wa_status.wa_phone %} · {{ wa_status.wa_phone }}{% endif %}
+                </span>
+            {% else %}
+                <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-error-container/40 text-on-error-container">
+                    ● {{ wa_status.status|default:'no session'|capfirst }}
+                </span>
+            {% endif %}
+        </div>
+
+        <form method="post" action="{% url 'dashboard-ai-test-whatsapp' %}" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            {% csrf_token %}
+            <label class="text-sm md:col-span-4">
+                <span class="block text-on-surface-variant text-xs mb-1">Recipient phone</span>
+                <input name="phone" required placeholder="2348012345678 or +234801…"
+                       class="w-full rounded border px-2 py-2 font-mono">
+                <span class="block text-xs text-on-surface-variant mt-1">Use a phone you control. Include country code.</span>
+            </label>
+            <label class="text-sm md:col-span-6">
+                <span class="block text-on-surface-variant text-xs mb-1">Message (optional)</span>
+                <input name="body" placeholder="Leave blank to send the default test message"
+                       class="w-full rounded border px-2 py-2">
+            </label>
+            <div class="md:col-span-2">
+                <button class="w-full px-3 py-2 rounded bg-primary text-on-primary text-sm">Send test</button>
+            </div>
+        </form>
+        {% if not wa_status.connected %}
+        <p class="text-xs text-on-error-container mt-2">
+            Your WhatsApp session is not connected — link it on the WhatsApp page first, otherwise the test will fail.
+        </p>
+        {% endif %}
+    </div>
+
     <form method="post" action="{% url 'dashboard-ai-config-save' %}" class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6">
         {% csrf_token %}
         <h2 class="font-semibold mb-3">Provider &amp; model</h2>

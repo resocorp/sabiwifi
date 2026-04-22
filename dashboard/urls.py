@@ -17,6 +17,7 @@ urlpatterns = [
     path('ai/prompts/', ai_views.ai_prompt_save, name='dashboard-ai-prompt-save'),
     path('ai/pause/', ai_views.ai_pause, name='dashboard-ai-pause'),
     path('ai/resume/', ai_views.ai_resume, name='dashboard-ai-resume'),
+    path('ai/test-whatsapp/', ai_views.ai_test_whatsapp, name='dashboard-ai-test-whatsapp'),
 
     path('', views.overview, name='dashboard-overview'),
     path('plans/', views.plans_list, name='dashboard-plans'),
