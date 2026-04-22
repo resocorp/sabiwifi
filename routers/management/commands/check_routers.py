@@ -119,9 +119,12 @@ class Command(BaseCommand):
                         f'Router {router.serial_number}: flagged needs_reprovision '
                         f'(heartbeat OK but no WG handshake)'
                     )
-            elif handshake_fresh and router.needs_reprovision:
-                # Tunnel recovered — clear the flag
-                router.needs_reprovision = False
+            # Don't auto-clear the flag here. The heartbeat view clears it
+            # on successful delivery. Auto-clearing would clobber manually
+            # queued re-provisions (redeploy, service-mode change, wifi
+            # config) that land between check_routers ticks. Re-provision
+            # is idempotent, so delivering one when WG is already healthy
+            # is harmless.
 
             # Status calculation with hysteresis
             if old_status == 'pending_provision':

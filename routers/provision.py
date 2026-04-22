@@ -167,9 +167,12 @@ PROVISION_TEMPLATE = """\
 
   # Optional WPA2/WPA3 security profile (only if a password is set; otherwise open AP)
 {wifi_security_block}
-  # Per-band configuration
-  /interface/wifi/configuration add name=sabiwifi-2g mode=ap ssid="{wifi_ssid}" channel=sabiwifi-ch-2g{wifi_security_attr}
-  :do {{ /interface/wifi/configuration add name=sabiwifi-5g mode=ap ssid="{wifi_ssid_5g}" channel=sabiwifi-ch-5g{wifi_security_attr} }} on-error={{}}
+  # Per-band configuration.
+  # country= is REQUIRED: without it, RouterOS v7 wifi regulatory blocks every
+  # channel and the radio stays stuck at running=false with no SSID on air.
+  # The enum is case-sensitive title-case ("Nigeria", not "nigeria"/"NG").
+  /interface/wifi/configuration add name=sabiwifi-2g mode=ap country=Nigeria ssid="{wifi_ssid}" channel=sabiwifi-ch-2g{wifi_security_attr}
+  :do {{ /interface/wifi/configuration add name=sabiwifi-5g mode=ap country=Nigeria ssid="{wifi_ssid_5g}" channel=sabiwifi-ch-5g{wifi_security_attr} }} on-error={{}}
 
   # Apply to every wifi radio: pick 5g config if the radio supports 5GHz, else 2g.
   # Then add to hotspot bridge (idempotent).
@@ -178,10 +181,20 @@ PROVISION_TEMPLATE = """\
     # Hardware capability lives on /interface/wifi/radio — /interface/wifi's
     # channel.band just reflects the last applied config, so it can't be
     # trusted to tell us which bands this radio actually supports.
-    :local hwBands ""
-    :do {{ :set hwBands [/interface/wifi/radio get [find interface=$wname] bands] }} on-error={{}}
+    #
+    # /interface/wifi/radio get bands returns an ARRAY, not a string.
+    # [:find $array "..."] returns "nothing", and `nothing != -1` is true
+    # in RouterOS — so the old single-expression form ALWAYS chose 5g
+    # even on 2.4GHz-only boards, leaving the radio unable to transmit.
+    # Iterate the array explicitly instead.
+    :local is5g false
+    :do {{
+      :foreach b in=[/interface/wifi/radio get [find interface=$wname] bands] do={{
+        :if ([:find $b "5ghz"] != -1) do={{ :set is5g true }}
+      }}
+    }} on-error={{}}
     :local cfg "sabiwifi-2g"
-    :if ([:find $hwBands "5ghz"] != -1) do={{ :set cfg "sabiwifi-5g" }}
+    :if ($is5g) do={{ :set cfg "sabiwifi-5g" }}
     :do {{ /interface/wifi set $w configuration=$cfg disabled={wifi_disabled} }} on-error={{}}
     :if ([:len [/interface bridge port find interface=$wname]] = 0) do={{
       :do {{ /interface/bridge/port add bridge=hotspot-br interface=$wname }} on-error={{}}
@@ -206,17 +219,34 @@ PROVISION_TEMPLATE = """\
 # re-provision, the body begins with "# SABIWIFI-REPROVISION-v1" — in
 # which case the script /import-s the body. Plain "# ok" responses are
 # discarded. Also pings 10.99.0.1 and resets WG if the tunnel is dead.
-:do {{ /system scheduler remove [find name=sabiwifi-heartbeat] }} on-error={{}}
-:do {{ /system script remove [find name=sabiwifi-heartbeat] }} on-error={{}}
-/system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" dst-path=sabiwifi-hb.rsc mode=https check-certificate=no }} on-error={{}}\\r\\n:local body \\"\\"\\r\\n:do {{ :set body [/file get [/file find name=sabiwifi-hb.rsc] contents] }} on-error={{}}\\r\\n:if ([:pick \\$body 0 25] = \\"# SABIWIFI-REPROVISION-v1\\") do={{ :log info \\"SabiWiFi: server requested re-provision\\"; /import sabiwifi-hb.rsc }}\\r\\n:do {{ /file remove sabiwifi-hb.rsc }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
-/system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
+#
+# IMPORTANT: this whole provision script is /import-ed FROM the running
+# sabiwifi-heartbeat script. Removing that script mid-import interrupts
+# execution ("script error: interrupted"), so Sections 12/13 never run
+# and the heartbeat loop dies. Always update in-place via /system script
+# set, never remove the running script.
+:local hbSrc ":do {{ /tool fetch url=\\"https://{platform_domain}/api/routers/heartbeat/{serial_number}/\\" dst-path=sabiwifi-hb.rsc mode=https check-certificate=no }} on-error={{}}\\r\\n:local body \\"\\"\\r\\n:do {{ :set body [/file get [/file find name=sabiwifi-hb.rsc] contents] }} on-error={{}}\\r\\n:if ([:pick \\$body 0 25] = \\"# SABIWIFI-REPROVISION-v1\\") do={{ :log info \\"SabiWiFi: server requested re-provision\\"; /import sabiwifi-hb.rsc }}\\r\\n:do {{ /file remove sabiwifi-hb.rsc }} on-error={{}}\\r\\n:if ([/ping 10.99.0.1 count=2 interval=1] = 0) do={{ :log warning \\"SabiWiFi: WG tunnel down, resetting\\"; /interface/wireguard/disable wg0; :delay 2s; /interface/wireguard/enable wg0 }}"
+:if ([:len [/system script find name=sabiwifi-heartbeat]] = 0) do={{
+  /system script add name=sabiwifi-heartbeat dont-require-permissions=yes source=$hbSrc
+}} else={{
+  /system script set [find name=sabiwifi-heartbeat] source=$hbSrc
+}}
+:if ([:len [/system scheduler find name=sabiwifi-heartbeat]] = 0) do={{
+  /system scheduler add name=sabiwifi-heartbeat interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
+}} else={{
+  /system scheduler set [find name=sabiwifi-heartbeat] interval=2m start-time=startup on-event="/system script run sabiwifi-heartbeat"
+}}
 
 # --- 13. Watchdog: if WG never handshakes within 5 min of provision, reboot. ---
 # Replaces RouterOS CLI safe-mode (which is interactive-only). A bad provision
 # that wedges the management tunnel triggers a reboot, which restarts the
 # heartbeat and lets the server re-push a corrected script.
-:do {{ /system scheduler remove [find name=sabiwifi-watchdog] }} on-error={{}}
-/system scheduler add name=sabiwifi-watchdog start-time=startup interval=5m on-event=":local lh [/interface/wireguard/peers get [find interface=wg0] last-handshake]; :if ([:typeof \\$lh] = \\"nothing\\" || \\$lh > 10m) do={{ :log error \\"SabiWiFi watchdog: WG dead, rebooting\\"; /system reboot }}"
+:local wdEvent ":local lh [/interface/wireguard/peers get [find interface=wg0] last-handshake]; :if ([:typeof \\$lh] = \\"nothing\\" || \\$lh > 10m) do={{ :log error \\"SabiWiFi watchdog: WG dead, rebooting\\"; /system reboot }}"
+:if ([:len [/system scheduler find name=sabiwifi-watchdog]] = 0) do={{
+  /system scheduler add name=sabiwifi-watchdog start-time=startup interval=5m on-event=$wdEvent
+}} else={{
+  /system scheduler set [find name=sabiwifi-watchdog] start-time=startup interval=5m on-event=$wdEvent
+}}
 
 # --- 14. Announce hardware capabilities to platform (one-shot, drives the GUI) ---
 :local board [/system resource get board-name]
@@ -225,8 +255,14 @@ PROVISION_TEMPLATE = """\
 :local fg "no"
 :if ([:len [/interface wifi find]] > 0) do={{
   :set wif "yes"
-  :foreach w in=[/interface wifi find] do={{
-    :do {{ :local b [/interface wifi get $w channel.band]; :if ([:find $b "5g"] != -1) do={{ :set fg "yes" }} }} on-error={{}}
+  # Read the hardware-supported bands from /interface/wifi/radio (channel.band
+  # would just reflect whatever config we just applied, not real capability).
+  :foreach ra in=[/interface/wifi/radio find] do={{
+    :do {{
+      :foreach b in=[/interface/wifi/radio get $ra bands] do={{
+        :if ([:find $b "5ghz"] != -1) do={{ :set fg "yes" }}
+      }}
+    }} on-error={{}}
   }}
 }}
 :local ec [:len [/interface ethernet find]]
@@ -284,10 +320,21 @@ def generate_provision_rsc(router, wg_private_key):
 # --- 10b. PPPoE Server ---
 # Customers dial PPPoE with username = phone (E.164), password = SabiWiFi PIN.
 # Authentication methods include MS-CHAPv2 for Windows' built-in dialer.
-/ppp profile set default use-radius=yes only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1
-:do {{{{ /ip pool add name=pppoe-pool ranges=10.9.0.2-10.9.255.254 }}}} on-error={{{{}}}}
-/ppp profile set default local-address=10.9.0.1 remote-address=pppoe-pool
-:do {{{{ /interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=default one-session-per-host=yes max-sessions=200 authentication=pap,chap,mschap2 }}}} on-error={{{{}}}}
+# RouterOS v7 moved the RADIUS toggle from /ppp profile to /ppp aaa.
+# We use a dedicated 'sabiwifi-pppoe' profile so we don't mutate the
+# built-in default profile (shared by L2TP/PPTP/etc).
+/ppp aaa set use-radius=yes accounting=yes interim-update=5m
+:do {{ /ip pool add name=pppoe-pool ranges=10.9.0.2-10.9.255.254 }} on-error={{}}
+# Tear down the pppoe-server BEFORE the profile, otherwise the profile
+# is still referenced and the remove silently fails — then the bare
+# profile-add halts the whole script.
+:do {{ /interface pppoe-server server remove [find interface=hotspot-br] }} on-error={{}}
+:if ([:len [/ppp profile find name=sabiwifi-pppoe]] = 0) do={{
+  /ppp profile add name=sabiwifi-pppoe only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1 local-address=10.9.0.1 remote-address=pppoe-pool
+}} else={{
+  /ppp profile set [find name=sabiwifi-pppoe] only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1 local-address=10.9.0.1 remote-address=pppoe-pool
+}}
+/interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=sabiwifi-pppoe one-session-per-host=yes max-sessions=200 authentication=pap,chap,mschap2 disabled=no
 """
 
     return PROVISION_TEMPLATE.format(
