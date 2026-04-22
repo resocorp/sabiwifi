@@ -18,7 +18,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from ai.agents.runner import AgentRunner, AgentResult
-from ai.models import AIAgentRun, ResellerAIConfig
+from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Conversation, Message
 
 
@@ -39,7 +39,8 @@ Never quote prices you did not get from `lookup_plans` or `suggest_plan`.
 Never invent coverage areas or hardware capabilities.
 If the customer's phone is already attached to this conversation, do not ask for it again.
 
-Reseller-specific overrides (FAQ, tone, guardrails): {overrides_json}
+Reseller-specific overrides (FAQ, tone, guardrails) — follow these on top of the rules above:
+{overrides}
 """
 
 
@@ -75,5 +76,16 @@ class SalesAgent:
     def _render_system(self) -> str:
         return SALES_SYSTEM_PROMPT.format(
             reseller_name=self.config.reseller.name,
-            overrides_json=self.config.prompt_overrides or {},
+            overrides=_latest_override(self.config, AIPromptVersion.ROLE_SALES),
         )
+
+
+def _latest_override(config: ResellerAIConfig, role: str) -> str:
+    v = (AIPromptVersion.objects
+         .filter(config=config, agent_role=role)
+         .order_by('-created_at').first())
+    if v and v.body.strip():
+        return v.body.strip()
+    legacy = (config.prompt_overrides or {}).get(role) if isinstance(
+        config.prompt_overrides, dict) else None
+    return (legacy or '(none configured)').strip()

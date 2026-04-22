@@ -12,7 +12,8 @@ behaviour has been proven in production.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.models import AIAgentRun, ResellerAIConfig
+from ai.agents.sales import _latest_override
+from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Conversation, Message
 
 
@@ -33,7 +34,8 @@ Rules:
   - Under 3 short sentences per reply. Warm, professional tone.
   - Do NOT offer to reboot routers, resend credentials, or disconnect sessions — those tools are not available to you yet.
 
-Reseller-specific overrides: {overrides_json}
+Reseller-specific overrides — follow these on top of the rules above:
+{overrides}
 """
 
 
@@ -67,5 +69,5 @@ class SupportAgent:
     def _render_system(self) -> str:
         return SUPPORT_SYSTEM_PROMPT.format(
             reseller_name=self.config.reseller.name,
-            overrides_json=self.config.prompt_overrides or {},
+            overrides=_latest_override(self.config, AIPromptVersion.ROLE_SUPPORT),
         )

@@ -9,7 +9,8 @@ Sales/Support draft-mode rollout is stable.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.models import AIAgentRun, ResellerAIConfig
+from ai.agents.sales import _latest_override
+from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Message
 from tickets.models import Ticket
 
@@ -31,7 +32,8 @@ Rules:
   - Do not invent tech names. Only use techs returned by `list_available_techs`.
   - Never expose customer phone numbers in the dispatch brief — use the ticket id.
 
-Reseller-specific overrides: {overrides_json}
+Reseller-specific overrides — follow these on top of the rules above:
+{overrides}
 """
 
 
@@ -61,7 +63,7 @@ class FieldSupervisorAgent:
     def _render_system(self) -> str:
         return FIELD_SYSTEM_PROMPT.format(
             reseller_name=self.config.reseller.name,
-            overrides_json=self.config.prompt_overrides or {},
+            overrides=_latest_override(self.config, AIPromptVersion.ROLE_FIELD),
         )
 
     def _ticket_brief(self, ticket: Ticket) -> str:
