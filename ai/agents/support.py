@@ -22,7 +22,7 @@ agent's tool set yet — proven read-only first.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.agents.sales import _latest_override
+from ai.agents.sales import _latest_override, normalised_history
 from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Conversation, Message
 
@@ -95,14 +95,6 @@ class SupportAgent:
         if not self.config.is_agent_enabled('support'):
             return AgentResult(skipped=True, reason='support agent disabled')
 
-        history = list(conversation.messages.order_by('-created_at')
-                       .values('direction', 'body', 'source')[:30])
-        history.reverse()
-        normalised = []
-        for m in history:
-            role = 'assistant' if m['direction'] == Message.DIRECTION_OUT else 'user'
-            normalised.append({'role': role, 'content': m['body'] or ''})
-
         from decimal import Decimal
         runner = AgentRunner(
             config=self.config, role=self.ROLE, source=self.SOURCE,
@@ -110,7 +102,7 @@ class SupportAgent:
             conversation=conversation, trigger_message=message,
         )
         return runner.run(
-            messages=normalised,
+            messages=normalised_history(conversation),
             auto_quote_cap_ngn=Decimal(str(
                 self.config.cap('auto_quote_below_ngn', 0) or 0,
             )),

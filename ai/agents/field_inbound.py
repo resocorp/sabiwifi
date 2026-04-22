@@ -18,7 +18,7 @@ the side effects.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.agents.sales import _latest_override
+from ai.agents.sales import _latest_override, normalised_history
 from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Conversation, Message
 from staff.models import StaffMember
@@ -97,21 +97,12 @@ class FieldInboundAgent:
         if tech is None:
             return AgentResult(skipped=True, reason='conversation has no assigned tech')
 
-        # Conversation history (recent N) — gives LLM context across turns
-        history = list(conversation.messages.order_by('-created_at')
-                       .values('direction', 'body', 'source')[:30])
-        history.reverse()
-        normalised = []
-        for m in history:
-            role = 'assistant' if m['direction'] == Message.DIRECTION_OUT else 'user'
-            normalised.append({'role': role, 'content': m['body'] or ''})
-
         runner = AgentRunner(
             config=self.config, role=self.ROLE, source=self.SOURCE,
             system_prompt=self._render_system(tech),
             conversation=conversation, trigger_message=message,
         )
-        return runner.run(messages=normalised)
+        return runner.run(messages=normalised_history(conversation))
 
     def _render_system(self, tech: StaffMember) -> str:
         from tickets.models import Ticket

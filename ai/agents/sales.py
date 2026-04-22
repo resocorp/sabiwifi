@@ -56,20 +56,12 @@ class SalesAgent:
         if not self.config.is_agent_enabled('sales'):
             return AgentResult(skipped=True, reason='sales agent disabled')
 
-        history = list(conversation.messages.order_by('-created_at')
-                       .values('direction', 'body', 'source')[:30])
-        history.reverse()
-        normalised = []
-        for m in history:
-            role = 'assistant' if m['direction'] == Message.DIRECTION_OUT else 'user'
-            normalised.append({'role': role, 'content': m['body'] or ''})
-
         runner = AgentRunner(
             config=self.config, role=self.ROLE, source=self.SOURCE,
             system_prompt=self._render_system(),
             conversation=conversation, trigger_message=message,
         )
-        return runner.run(messages=normalised,
+        return runner.run(messages=normalised_history(conversation),
                           auto_quote_cap_ngn=Decimal(str(
                               self.config.cap('auto_quote_below_ngn', 0) or 0)))
 
@@ -89,3 +81,32 @@ def _latest_override(config: ResellerAIConfig, role: str) -> str:
     legacy = (config.prompt_overrides or {}).get(role) if isinstance(
         config.prompt_overrides, dict) else None
     return (legacy or '(none configured)').strip()
+
+
+def normalised_history(conversation: Conversation, *, limit: int = 30) -> list[dict]:
+    """Pull recent messages and shape them for the LLM.
+
+    - Outbound → role='assistant'.
+    - Inbound  → role='user'.
+    - Empty bodies are substituted with a placeholder describing attachments
+      (or skipped if both body and attachments are empty). Anthropic returns
+      400 Bad Request if a message has empty content, so we must never send
+      ''.
+
+    Returns oldest-first list of {'role', 'content'} dicts.
+    """
+    rows = list(conversation.messages.order_by('-created_at')
+                .values('direction', 'body', 'source', 'attachments')[:limit])
+    rows.reverse()
+    out = []
+    for m in rows:
+        body = (m.get('body') or '').strip()
+        if not body:
+            atts = m.get('attachments') or []
+            if not atts:
+                continue  # nothing to say; drop the row
+            kinds = ', '.join(sorted({(a or {}).get('kind', 'attachment') for a in atts}))
+            body = f'[customer sent: {kinds}]'
+        role = 'assistant' if m['direction'] == Message.DIRECTION_OUT else 'user'
+        out.append({'role': role, 'content': body})
+    return out
