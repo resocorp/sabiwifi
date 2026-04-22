@@ -167,6 +167,12 @@ def conversation_detail(request, pk):
     contact = convo.display_contact
     if convo.kind == Conversation.KIND_TECH and convo.assigned_staff_id:
         contact = convo.assigned_staff.name
+    tickets = list(convo.tickets.all().order_by('-created_at')[:10].values(
+        'id', 'status', 'type', 'subject', 'diagnosed_cause',
+        'assigned_staff__name',
+    ))
+    for t in tickets:
+        t['assigned_staff_name'] = t.pop('assigned_staff__name', None)
     return Response({
         'conversation': {
             'id': convo.pk,
@@ -181,6 +187,7 @@ def conversation_detail(request, pk):
             'staff_id': convo.assigned_staff_id,
         },
         'messages': messages,
+        'tickets': tickets,
     })
 
 
