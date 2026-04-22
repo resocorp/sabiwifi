@@ -38,6 +38,13 @@ class Conversation(models.Model):
         (STATE_RESOLVED, 'Resolved'),
     ]
 
+    KIND_CUSTOMER = 'customer'
+    KIND_TECH = 'tech'
+    KIND_CHOICES = [
+        (KIND_CUSTOMER, 'Customer'),
+        (KIND_TECH, 'Field tech'),
+    ]
+
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.CASCADE, related_name='conversations',
     )
@@ -57,6 +64,10 @@ class Conversation(models.Model):
     contact_display_name = models.CharField(max_length=200, blank=True, default='')
 
     state = models.CharField(max_length=20, choices=STATE_CHOICES, default=STATE_OPEN)
+    kind = models.CharField(
+        max_length=10, choices=KIND_CHOICES, default=KIND_CUSTOMER, db_index=True,
+        help_text='customer = end-user thread; tech = field-tech dispatch thread.',
+    )
     # Per-conversation override of reseller AI toggle. False disables AI for
     # this thread even if the reseller has AI on.
     ai_enabled = models.BooleanField(default=True)
@@ -80,6 +91,7 @@ class Conversation(models.Model):
         indexes = [
             models.Index(fields=['reseller', 'state']),
             models.Index(fields=['reseller', 'channel']),
+            models.Index(fields=['reseller', 'kind', 'state']),
         ]
 
     def __str__(self):

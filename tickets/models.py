@@ -66,6 +66,33 @@ class Ticket(models.Model):
         (PRIORITY_URGENT, 'Urgent'),
     ]
 
+    # Diagnosed cause + suggested action — set by Support agent at ticket
+    # creation. Drive the field-supervisor's dispatch decision and the
+    # operator-side summary.
+    CAUSE_GENERAL_OUTAGE = 'general_outage'
+    CAUSE_EXPIRED_SUBSCRIPTION = 'expired_subscription'
+    CAUSE_PAYMENT_FAILED = 'payment_failed'
+    CAUSE_DEVICE_SIDE_UNKNOWN = 'device_side_unknown'
+    CAUSE_PON_SIGNAL_LOST = 'pon_signal_lost'
+    CAUSE_OTHER = 'other'
+    CAUSE_CHOICES = [
+        (CAUSE_GENERAL_OUTAGE, 'General outage'),
+        (CAUSE_EXPIRED_SUBSCRIPTION, 'Expired subscription'),
+        (CAUSE_PAYMENT_FAILED, 'Payment failed'),
+        (CAUSE_DEVICE_SIDE_UNKNOWN, 'Device-side unknown'),
+        (CAUSE_PON_SIGNAL_LOST, 'PON signal lost'),
+        (CAUSE_OTHER, 'Other'),
+    ]
+
+    ACTION_NO_ACTION = 'no_action'
+    ACTION_CUSTOMER_ACTION = 'customer_action'
+    ACTION_DISPATCH = 'dispatch'
+    ACTION_CHOICES = [
+        (ACTION_NO_ACTION, 'No action'),
+        (ACTION_CUSTOMER_ACTION, 'Customer action'),
+        (ACTION_DISPATCH, 'Dispatch tech'),
+    ]
+
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.CASCADE, related_name='tickets',
     )
@@ -117,6 +144,23 @@ class Ticket(models.Model):
     ai_handled = models.BooleanField(default=False)
     ai_confidence = models.FloatField(null=True, blank=True)
     escalation_reason = models.CharField(max_length=200, blank=True, default='')
+
+    diagnosed_cause = models.CharField(
+        max_length=32, choices=CAUSE_CHOICES, blank=True, default='',
+    )
+    suggested_action = models.CharField(
+        max_length=20, choices=ACTION_CHOICES, blank=True, default='',
+    )
+
+    # Tech dispatch + ping bookkeeping for the field-supervisor follow-up loop.
+    dispatch_sent_at = models.DateTimeField(null=True, blank=True)
+    last_field_ping_at = models.DateTimeField(null=True, blank=True)
+    field_ping_count = models.PositiveSmallIntegerField(default=0)
+
+    # Pending status-change confirmation initiated by FieldInboundAgent. Cleared
+    # once the tech replies YES/NO. Shape: {action, expected_status, asked_at,
+    # by_run_id}.
+    pending_close_action = models.JSONField(default=dict, blank=True)
 
     resolution_note = models.TextField(blank=True, default='')
 

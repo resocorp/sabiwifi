@@ -17,6 +17,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import Reseller
+from accounts.permissions import scope_queryset, effective_reseller, effective_role, ROLE_FIELD_TECH
 from conversations.models import Conversation, Message
 from conversations.services import record_inbound_message, record_outbound_message
 
@@ -94,15 +95,26 @@ def _conversation_for_reseller(pk, reseller):
     return get_object_or_404(Conversation, pk=pk, reseller=reseller)
 
 
+def _convos_for_user(request):
+    """Returns the Conversation queryset visible to the authenticated user.
+    Field techs see only tech-kind conversations assigned to them."""
+    return scope_queryset(Conversation.objects.all(), request.user)
+
+
 def _serialise_conversation_row(c):
     last_body = ''
     last = c.messages.order_by('-created_at').first()
     if last:
         last_body = last.body or ('[attachment]' if last.attachments else '')
+    contact = c.display_contact
+    # For tech-kind conversations, show the staff name as the contact label
+    if c.kind == Conversation.KIND_TECH and c.assigned_staff_id:
+        contact = c.assigned_staff.name
     return {
         'id': c.pk,
         'channel': c.channel,
-        'contact': c.display_contact,
+        'kind': c.kind,
+        'contact': contact,
         'contact_phone': c.contact_phone,
         'state': c.state,
         'unread_count': c.unread_count,
@@ -110,20 +122,23 @@ def _serialise_conversation_row(c):
         'last_body': last_body[:140],
         'subscriber_id': c.subscriber_id,
         'lead_id': c.lead_id,
+        'staff_id': c.assigned_staff_id,
     }
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conversation_list(request):
-    reseller = request.user.reseller
-    qs = Conversation.objects.filter(reseller=reseller).prefetch_related('messages')
+    qs = _convos_for_user(request).prefetch_related('messages')
     channel = request.GET.get('channel')
     if channel:
         qs = qs.filter(channel=channel)
     state = request.GET.get('state')
     if state:
         qs = qs.filter(state=state)
+    kind = request.GET.get('kind')
+    if kind:
+        qs = qs.filter(kind=kind)
     qs = qs[:100]
     return Response([_serialise_conversation_row(c) for c in qs])
 
@@ -131,8 +146,8 @@ def conversation_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conversation_detail(request, pk):
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
 
     messages = list(convo.messages.order_by('created_at').values(
         'id', 'direction', 'body', 'attachments', 'source',
@@ -149,16 +164,21 @@ def conversation_detail(request, pk):
         convo.unread_count = 0
         convo.save(update_fields=['unread_count'])
 
+    contact = convo.display_contact
+    if convo.kind == Conversation.KIND_TECH and convo.assigned_staff_id:
+        contact = convo.assigned_staff.name
     return Response({
         'conversation': {
             'id': convo.pk,
             'channel': convo.channel,
-            'contact': convo.display_contact,
+            'kind': convo.kind,
+            'contact': contact,
             'contact_phone': convo.contact_phone,
             'state': convo.state,
             'ai_enabled': convo.ai_enabled,
             'subscriber_id': convo.subscriber_id,
             'lead_id': convo.lead_id,
+            'staff_id': convo.assigned_staff_id,
         },
         'messages': messages,
     })
@@ -168,8 +188,8 @@ def conversation_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def conversation_reply(request, pk):
     """Human reply from the inbox. Records + triggers the wire send."""
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
 
     body = (request.data.get('body') or '').strip()
     if not body:
@@ -196,8 +216,8 @@ def conversation_reply(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def conversation_resolve(request, pk):
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
     convo.state = Conversation.STATE_RESOLVED
     convo.save(update_fields=['state'])
     return Response({'ok': True})
@@ -206,8 +226,8 @@ def conversation_resolve(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def conversation_toggle_ai(request, pk):
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
     convo.ai_enabled = not convo.ai_enabled
     convo.save(update_fields=['ai_enabled'])
     return Response({'ok': True, 'ai_enabled': convo.ai_enabled})
@@ -218,8 +238,8 @@ def conversation_toggle_ai(request, pk):
 def conversation_send_draft(request, pk, message_id):
     """Human approves an AI draft. Optional `body` override lets the agent
     pre-fill a reply that the human edits before sending."""
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
     try:
         msg = convo.messages.get(pk=message_id, is_draft=True)
     except Message.DoesNotExist:
@@ -250,8 +270,8 @@ def conversation_send_draft(request, pk, message_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def conversation_discard_draft(request, pk, message_id):
-    reseller = request.user.reseller
-    convo = _conversation_for_reseller(pk, reseller)
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
     convo.messages.filter(pk=message_id, is_draft=True).delete()
     if not convo.messages.filter(is_draft=True).exists():
         convo.state = Conversation.STATE_OPEN

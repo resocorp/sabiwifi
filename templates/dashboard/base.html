@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load permissions_tags %}
 
 {% block body %}
 <div class="flex min-h-screen">
@@ -11,22 +12,31 @@
             </a>
         </div>
         <nav class="flex-1 p-3 space-y-1">
+            {% if user|can:"overview" %}
             <a href="{% url 'dashboard-overview' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'overview' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">bar_chart_4_bars</span> Overview
             </a>
+            {% endif %}
+            {% if user|can:"plans" %}
             <a href="{% url 'dashboard-plans' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'plans' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">list_alt</span> Plans
             </a>
+            {% endif %}
+            {% if user|can:"subscribers" %}
             <a href="{% url 'dashboard-subscribers' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'subscribers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">group</span> Subscribers
             </a>
+            {% endif %}
+            {% if user|can:"all" %}
             <a href="{% url 'dashboard-payments' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'payments' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">payments</span> Payments
             </a>
+            {% endif %}
+            {% if user|can:"routers" %}
             <a href="{% url 'dashboard-routers' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'routers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">router</span> Routers
@@ -35,47 +45,68 @@
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'online_users' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">wifi_tethering</span> Online Users
             </a>
+            {% endif %}
+            {% if user|can_any:"inbox_customer,inbox_field,inbox_field_own" %}
             <a href="{% url 'dashboard-inbox' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'inbox' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">forum</span> Inbox
             </a>
+            {% endif %}
+            {% if user|can:"leads" %}
             <a href="{% url 'dashboard-leads' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'leads' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">person_add</span> Leads
             </a>
+            {% endif %}
+            {% if user|can_any:"tickets,tickets_read,tickets_own" %}
             <a href="{% url 'dashboard-tickets' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'tickets' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">support_agent</span> Tickets
             </a>
+            {% endif %}
+            {% if user|can_any:"staff_crud,staff_read" %}
             <a href="{% url 'dashboard-staff' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'staff' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">badge</span> Team
             </a>
+            {% endif %}
+            {% if user|can:"vouchers" %}
             <a href="{% url 'dashboard-voucher-batches' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'vouchers' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">confirmation_number</span> Vouchers
             </a>
+            {% endif %}
+            {% if user|can:"broadcasts" %}
             <a href="{% url 'dashboard-broadcasts' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'broadcasts' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">campaign</span> Broadcasts
             </a>
+            {% endif %}
+            {% if user|can_any:"reports,reports_read" %}
             <a href="{% url 'dashboard-traffic-report' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'reports' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">analytics</span> Reports
             </a>
+            {% endif %}
+            {% if user|can:"all" %}
             <a href="{% url 'shop-home' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-surface-container"
                target="_blank">
                 <span class="material-symbols-outlined text-[20px]">shopping_cart</span> Shop
             </a>
+            {% endif %}
+            {% if user|can:"ai_config" %}
             <a href="{% url 'dashboard-ai-config' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'ai' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">smart_toy</span> AI
             </a>
+            {% endif %}
+            {% if user|can:"all" %}
             <a href="{% url 'dashboard-settings' %}"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium {% if active_tab == 'settings' %}bg-primary/10 text-primary{% else %}text-on-surface-variant hover:bg-surface-container{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">settings</span> Settings
             </a>
+            {% endif %}
         </nav>
         <div class="p-3 space-y-1">
             <button onclick="SabiTheme.cycle(); updateThemeBtn();"
@@ -129,26 +160,36 @@
     <!-- Mobile Bottom Tab Bar -->
     <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface-container-lowest shadow-ambient-up z-30">
         <div class="flex justify-around py-2">
+            {% if user|can:"overview" %}
             <a href="{% url 'dashboard-overview' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'overview' %}text-primary{% else %}text-on-surface-variant{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">bar_chart_4_bars</span>
                 <span class="text-[10px] mt-0.5">Home</span>
             </a>
-            <a href="{% url 'dashboard-plans' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'plans' %}text-primary{% else %}text-on-surface-variant{% endif %}">
-                <span class="material-symbols-outlined text-[20px]">list_alt</span>
-                <span class="text-[10px] mt-0.5">Plans</span>
+            {% endif %}
+            {% if user|can_any:"inbox_customer,inbox_field,inbox_field_own" %}
+            <a href="{% url 'dashboard-inbox' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'inbox' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">forum</span>
+                <span class="text-[10px] mt-0.5">Inbox</span>
             </a>
+            {% endif %}
+            {% if user|can_any:"tickets,tickets_read,tickets_own" %}
+            <a href="{% url 'dashboard-tickets' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'tickets' %}text-primary{% else %}text-on-surface-variant{% endif %}">
+                <span class="material-symbols-outlined text-[20px]">support_agent</span>
+                <span class="text-[10px] mt-0.5">Tickets</span>
+            </a>
+            {% endif %}
+            {% if user|can:"subscribers" %}
             <a href="{% url 'dashboard-subscribers' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'subscribers' %}text-primary{% else %}text-on-surface-variant{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">group</span>
                 <span class="text-[10px] mt-0.5">Subs</span>
             </a>
-            <a href="{% url 'dashboard-payments' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'payments' %}text-primary{% else %}text-on-surface-variant{% endif %}">
-                <span class="material-symbols-outlined text-[20px]">payments</span>
-                <span class="text-[10px] mt-0.5">Pay</span>
-            </a>
+            {% endif %}
+            {% if user|can:"all" %}
             <a href="{% url 'dashboard-settings' %}" class="flex flex-col items-center py-1 px-2 {% if active_tab == 'settings' %}text-primary{% else %}text-on-surface-variant{% endif %}">
                 <span class="material-symbols-outlined text-[20px]">settings</span>
                 <span class="text-[10px] mt-0.5">Settings</span>
             </a>
+            {% endif %}
         </div>
     </nav>
 </div>

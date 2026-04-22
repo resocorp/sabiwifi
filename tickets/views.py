@@ -1,12 +1,16 @@
 """
 Ticket API — reseller dashboard.
 """
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from accounts.permissions import (
+    can, effective_reseller, scope_queryset,
+)
 from tickets.models import Ticket, TicketEvent
 from tickets.services import (
     add_comment, assign_ticket, change_status, create_ticket, escalate,
@@ -36,6 +40,8 @@ def _serialise_ticket(ticket):
         'ai_confidence': ticket.ai_confidence,
         'escalation_reason': ticket.escalation_reason,
         'resolution_note': ticket.resolution_note,
+        'diagnosed_cause': ticket.diagnosed_cause,
+        'suggested_action': ticket.suggested_action,
         'time_to_resolution_seconds': ticket.time_to_resolution_seconds(),
         'time_to_first_response_seconds': ticket.time_to_first_response_seconds(),
         'created_at': ticket.created_at.isoformat(),
@@ -56,11 +62,22 @@ def _serialise_event(event):
     }
 
 
+def _require(request, *caps):
+    """Raise PermissionDenied unless the user has any of the named caps."""
+    if not any(can(request.user, c) for c in caps):
+        raise PermissionDenied()
+
+
+def _tickets_for_user(request):
+    """Reseller- and (for field tech) ownership-scoped queryset."""
+    return scope_queryset(Ticket.objects.all(), request.user)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def ticket_list(request):
-    reseller = request.user.reseller
-    qs = Ticket.objects.filter(reseller=reseller).select_related('assigned_staff')
+    _require(request, 'tickets', 'tickets_read', 'tickets_own')
+    qs = _tickets_for_user(request).select_related('assigned_staff')
     status = request.GET.get('status')
     if status:
         qs = qs.filter(status=status)
@@ -85,7 +102,8 @@ def ticket_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def ticket_create(request):
-    reseller = request.user.reseller
+    _require(request, 'tickets')
+    reseller = effective_reseller(request.user)
     data = request.data
     if not data.get('subject'):
         return Response({'error': 'subject required'}, status=400)
@@ -126,8 +144,8 @@ def ticket_create(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def ticket_detail(request, pk):
-    reseller = request.user.reseller
-    ticket = get_object_or_404(Ticket, pk=pk, reseller=reseller)
+    _require(request, 'tickets', 'tickets_read', 'tickets_own')
+    ticket = get_object_or_404(_tickets_for_user(request), pk=pk)
     events = [_serialise_event(e) for e in ticket.events.all()]
     return Response({'ticket': _serialise_ticket(ticket), 'events': events})
 
@@ -135,8 +153,9 @@ def ticket_detail(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def ticket_assign(request, pk):
-    reseller = request.user.reseller
-    ticket = get_object_or_404(Ticket, pk=pk, reseller=reseller)
+    _require(request, 'assign_ticket')
+    reseller = effective_reseller(request.user)
+    ticket = get_object_or_404(_tickets_for_user(request), pk=pk)
     staff_id = request.data.get('staff_id')
     if not staff_id:
         return Response({'error': 'staff_id required'}, status=400)
@@ -152,8 +171,8 @@ def ticket_assign(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def ticket_status(request, pk):
-    reseller = request.user.reseller
-    ticket = get_object_or_404(Ticket, pk=pk, reseller=reseller)
+    _require(request, 'tickets', 'tickets_own')
+    ticket = get_object_or_404(_tickets_for_user(request), pk=pk)
     new_status = request.data.get('status')
     valid = dict(Ticket.STATUS_CHOICES)
     if new_status not in valid:
@@ -167,8 +186,8 @@ def ticket_status(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def ticket_comment(request, pk):
-    reseller = request.user.reseller
-    ticket = get_object_or_404(Ticket, pk=pk, reseller=reseller)
+    _require(request, 'tickets', 'tickets_own')
+    ticket = get_object_or_404(_tickets_for_user(request), pk=pk)
     note = request.data.get('note', '').strip()
     if not note:
         return Response({'error': 'note required'}, status=400)
@@ -179,8 +198,8 @@ def ticket_comment(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def ticket_escalate(request, pk):
-    reseller = request.user.reseller
-    ticket = get_object_or_404(Ticket, pk=pk, reseller=reseller)
+    _require(request, 'tickets')
+    ticket = get_object_or_404(_tickets_for_user(request), pk=pk)
     reason = request.data.get('reason', '').strip()
     if not reason:
         return Response({'error': 'reason required'}, status=400)

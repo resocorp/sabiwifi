@@ -5,6 +5,7 @@ Each reseller registers their own team. Platform-staff entries (reseller=null)
 are used by SabiWiFi itself for cross-tenant dispatch or support during
 reseller incidents.
 """
+from django.conf import settings
 from django.db import models
 
 
@@ -44,6 +45,18 @@ class StaffMember(models.Model):
     current_load = models.IntegerField(default=0)
 
     notes = models.TextField(blank=True, default='')
+
+    # Optional Django auth user for RBAC. Owner accounts use Reseller.user;
+    # staff who can log in get their own User row linked here. Nullable so
+    # legacy data-only StaffMember rows keep working.
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='staff_member',
+    )
+    can_log_in = models.BooleanField(
+        default=False,
+        help_text='If true, staff member is provisioned with a login.',
+    )
 
     hired_at = models.DateTimeField(null=True, blank=True)
     last_active_at = models.DateTimeField(null=True, blank=True)

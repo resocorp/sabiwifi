@@ -1,6 +1,7 @@
 """Reseller dashboard server-rendered views."""
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from accounts.permissions import require_cap
 from django.contrib import messages
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -17,17 +18,10 @@ class _SerializerRequest:
         self.user = user
 
 
-def _get_reseller(request):
-    """Get the reseller for the current user, or redirect to login."""
-    if not hasattr(request.user, 'reseller'):
-        return None
-    return request.user.reseller
-
-
-@login_required
+@require_cap('overview')
 def overview(request):
     """Dashboard home — Getting Started or Overview depending on state."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -110,10 +104,10 @@ def overview(request):
     return render(request, 'dashboard/overview.html', context)
 
 
-@login_required
+@require_cap('plans')
 def plans_list(request):
     """List reseller's service plans."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -188,10 +182,10 @@ def _extract_plan_form_data(POST):
     return data
 
 
-@login_required
+@require_cap('plans')
 def plan_create(request):
     """Create a new service plan."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -228,10 +222,10 @@ def plan_create(request):
     })
 
 
-@login_required
+@require_cap('plans')
 def plan_edit(request, pk):
     """Edit an existing service plan."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -296,10 +290,10 @@ def plan_edit(request, pk):
     })
 
 
-@login_required
+@require_cap('plans')
 def plan_disable(request, pk):
     """Soft-disable a plan (stops new signups; existing subscribers keep access until expiry)."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -311,10 +305,10 @@ def plan_disable(request, pk):
     return redirect('dashboard-plans')
 
 
-@login_required
+@require_cap('plans')
 def plan_enable(request, pk):
     """Re-enable a disabled plan."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -326,10 +320,10 @@ def plan_enable(request, pk):
     return redirect('dashboard-plans')
 
 
-@login_required
+@require_cap('plans')
 def plan_delete(request, pk):
     """Hard-delete a plan. Refuses if any subscription is active."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -361,10 +355,10 @@ def plan_delete(request, pk):
     return redirect('dashboard-plans')
 
 
-@login_required
+@require_cap('subscribers')
 def subscribers_list(request):
     """List reseller's subscribers."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -414,10 +408,10 @@ def subscribers_list(request):
     })
 
 
-@login_required
+@require_cap('subscribers')
 def subscriber_create(request):
     """Manually create a subscriber (reseller-initiated). Optional plan activation."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -502,10 +496,10 @@ def subscriber_create(request):
     })
 
 
-@login_required
+@require_cap('subscribers')
 def subscriber_detail(request, pk):
     """Subscriber detail page with plan, usage, payments."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -526,10 +520,10 @@ def subscriber_detail(request, pk):
     })
 
 
-@login_required
+@require_cap('all')
 def payments_list(request):
     """Payments & earnings page."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -557,10 +551,10 @@ def payments_list(request):
     })
 
 
-@login_required
+@require_cap('routers')
 def routers_list(request):
     """Router management page."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -571,7 +565,7 @@ def routers_list(request):
     })
 
 
-@login_required
+@require_cap('routers')
 def router_add(request):
     """
     Add a router to the reseller's account.
@@ -584,7 +578,7 @@ def router_add(request):
               Server allocates WG tunnel IP + NAS secret, adds WG peer, and pushes
               the per-device context vars to OpenWISP so templates re-apply within 5 min.
     """
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -609,7 +603,7 @@ def router_add(request):
     })
 
 
-@login_required
+@require_cap('routers')
 def router_remove(request, pk):
     """
     Remove a router from the reseller's account.
@@ -621,7 +615,7 @@ def router_remove(request, pk):
     import logging
     logger = logging.getLogger(__name__)
 
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -854,10 +848,10 @@ def _register_openwrt_in_openwisp(router, reseller, logger):
         logger.warning(f'OpenWISP registration for {router.serial_number} failed: {e}')
 
 
-@login_required
+@require_cap('all')
 def settings_page(request):
     """Reseller settings — branding, account, bank."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -956,10 +950,10 @@ def settings_page(request):
     })
 
 
-@login_required
+@require_cap('broadcasts')
 def broadcasts_page(request):
     """Broadcasts — compose and track bulk messages."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
     try:
@@ -974,10 +968,10 @@ def broadcasts_page(request):
 
 # ── Voucher Management ──────────────────────────────────────────────
 
-@login_required
+@require_cap('vouchers')
 def voucher_batches(request):
     """List all voucher batches for this reseller."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -997,10 +991,10 @@ def voucher_batches(request):
     })
 
 
-@login_required
+@require_cap('vouchers')
 def voucher_batch_create(request):
     """Create a new voucher batch."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1049,10 +1043,10 @@ def voucher_batch_create(request):
     })
 
 
-@login_required
+@require_cap('vouchers')
 def voucher_batch_detail(request, pk):
     """View vouchers in a batch."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1068,13 +1062,13 @@ def voucher_batch_detail(request, pk):
     })
 
 
-@login_required
+@require_cap('vouchers')
 def voucher_batch_export_csv(request, pk):
     """Export voucher PINs as CSV for printing."""
     import csv
     from django.http import HttpResponse
 
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1093,10 +1087,10 @@ def voucher_batch_export_csv(request, pk):
     return response
 
 
-@login_required
+@require_cap('vouchers')
 def voucher_batch_toggle(request, pk):
     """Disable or re-enable a voucher batch."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1119,10 +1113,10 @@ def voucher_batch_toggle(request, pk):
 
 # ── Refill Cards ─────────────────────────────────────────────────────
 
-@login_required
+@require_cap('vouchers')
 def refill_batches(request):
     """List all refill card batches."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1142,10 +1136,10 @@ def refill_batches(request):
     })
 
 
-@login_required
+@require_cap('vouchers')
 def refill_batch_create(request):
     """Create a new refill card batch."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1177,13 +1171,13 @@ def refill_batch_create(request):
     })
 
 
-@login_required
+@require_cap('vouchers')
 def refill_batch_export_csv(request, pk):
     """Export refill card PINs as CSV."""
     import csv
     from django.http import HttpResponse
 
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1204,10 +1198,10 @@ def refill_batch_export_csv(request, pk):
 
 # ── Online Users & Session Management ────────────────────────────────
 
-@login_required
+@require_cap('routers')
 def online_users(request):
     """Show currently connected users from radacct."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1256,10 +1250,10 @@ def online_users(request):
     })
 
 
-@login_required
+@require_cap('routers')
 def disconnect_user(request, pk):
     """Manually disconnect a subscriber's sessions via CoA."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1275,10 +1269,10 @@ def disconnect_user(request, pk):
 
 # ── Reports & Analytics ──────────────────────────────────────────────
 
-@login_required
+@require_cap('reports')
 def traffic_report(request):
     """Per-subscriber traffic usage report from radacct."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1325,10 +1319,10 @@ def traffic_report(request):
     })
 
 
-@login_required
+@require_cap('reports')
 def session_report(request):
     """Session history from radacct."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1385,10 +1379,10 @@ def session_report(request):
     })
 
 
-@login_required
+@require_cap('reports')
 def financial_report(request):
     """Revenue report from Payment model."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -1430,14 +1424,14 @@ def financial_report(request):
     })
 
 
-@login_required
+@require_cap('reports')
 def report_csv_export(request, report_type):
     """Export report data as CSV."""
     import csv
     from django.http import StreamingHttpResponse
     from datetime import timedelta
 
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 

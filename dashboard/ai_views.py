@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from accounts.permissions import require_cap
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -25,12 +26,6 @@ INT_CAPS = (
     'max_auto_disconnects_per_hour',
     'max_outbound_per_customer_per_day',
 )
-
-
-def _get_reseller(request):
-    if not hasattr(request.user, 'reseller'):
-        return None
-    return request.user.reseller
 
 
 def _get_or_create_config(reseller):
@@ -58,9 +53,9 @@ def _latest_prompts(cfg):
     return out
 
 
-@login_required
+@require_cap('ai_config')
 def ai_config(request):
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -90,9 +85,9 @@ def _wa_status(reseller):
 
 
 @require_POST
-@login_required
+@require_cap('ai_config')
 def ai_config_save(request):
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -128,9 +123,9 @@ def ai_config_save(request):
 
 
 @require_POST
-@login_required
+@require_cap('ai_config')
 def ai_prompt_save(request):
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -152,9 +147,9 @@ def ai_prompt_save(request):
 
 
 @require_POST
-@login_required
+@require_cap('ai_config')
 def ai_pause(request):
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
     cfg = _get_or_create_config(reseller)
@@ -164,11 +159,11 @@ def ai_pause(request):
 
 
 @require_POST
-@login_required
+@require_cap('ai_config')
 def ai_test_whatsapp(request):
     """Send a one-off WhatsApp message to verify the sidecar is reachable
     and the reseller's session is connected. Does NOT touch the AI provider."""
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
 
@@ -200,9 +195,9 @@ def ai_test_whatsapp(request):
 
 
 @require_POST
-@login_required
+@require_cap('ai_config')
 def ai_resume(request):
-    reseller = _get_reseller(request)
+    reseller = request.effective_reseller
     if not reseller:
         return redirect('login')
     cfg = _get_or_create_config(reseller)

@@ -94,6 +94,9 @@ class NotificationTemplate(models.Model):
         ('router_recovered', 'Router back online'),
         ('new_subscriber', 'New subscriber alert (to partner)'),
         ('payment_received', 'Payment received (to partner)'),
+        ('ticket_opened', 'Support ticket opened'),
+        ('ticket_in_progress', 'Support ticket — tech in progress'),
+        ('ticket_resolved', 'Support ticket resolved'),
     ]
     EVENT_VARS = {
         'plan_expiry_3d':   ['name', 'plan', 'expiry_date', 'link'],
@@ -104,6 +107,9 @@ class NotificationTemplate(models.Model):
         'router_recovered': ['location', 'serial'],
         'new_subscriber':   ['name', 'phone', 'plan'],
         'payment_received': ['name', 'phone', 'plan', 'amount'],
+        'ticket_opened':      ['name', 'ticket_id'],
+        'ticket_in_progress': ['name', 'ticket_id', 'tech'],
+        'ticket_resolved':    ['name', 'ticket_id'],
     }
     DEFAULT_BODIES = {
         'plan_expiry_3d':
@@ -122,6 +128,12 @@ class NotificationTemplate(models.Model):
             'New subscriber: {{name}} ({{phone}}) just signed up on the {{plan}} plan.',
         'payment_received':
             'Payment received: \u20a6{{amount}} from {{name}} ({{phone}}) for {{plan}} plan.',
+        'ticket_opened':
+            "Hi {{name}}, we've logged your issue (ticket #{{ticket_id}}). Tech support is now on it.",
+        'ticket_in_progress':
+            'Hi {{name}}, {{tech}} has accepted ticket #{{ticket_id}} and is working on it now.',
+        'ticket_resolved':
+            "Hi {{name}}, your issue (ticket #{{ticket_id}}) has been marked resolved. Reply STILL if it's not actually fixed.",
     }
 
     reseller = models.ForeignKey(

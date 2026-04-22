@@ -8,9 +8,19 @@ from accounts.serializers import ResellerSignupSerializer
 import re
 
 
+def _has_dashboard_access(user) -> bool:
+    """True if this user can access the reseller dashboard (owner or staff)."""
+    if not user.is_authenticated:
+        return False
+    if hasattr(user, 'reseller'):
+        return True
+    staff = getattr(user, 'staff_member', None)
+    return bool(staff and staff.active and staff.can_log_in)
+
+
 def landing_page(request):
     """Public landing page — sales page for potential resellers."""
-    if request.user.is_authenticated and hasattr(request.user, 'reseller'):
+    if _has_dashboard_access(request.user):
         return redirect('dashboard-overview')
     from operator_panel.models import PlatformSettings
     settings_obj = PlatformSettings.load()
@@ -24,7 +34,7 @@ def landing_page(request):
 
 def signup_page(request):
     """One-step reseller signup form."""
-    if request.user.is_authenticated and hasattr(request.user, 'reseller'):
+    if _has_dashboard_access(request.user):
         return redirect('dashboard-overview')
 
     errors = {}
@@ -54,8 +64,8 @@ def signup_page(request):
 
 
 def login_page(request):
-    """Reseller login form."""
-    if request.user.is_authenticated and hasattr(request.user, 'reseller'):
+    """Reseller / staff login form."""
+    if _has_dashboard_access(request.user):
         return redirect('dashboard-overview')
 
     errors = {}
@@ -67,12 +77,15 @@ def login_page(request):
 
         user = authenticate(request, username=email, password=password)
         if user is not None:
-            if hasattr(user, 'reseller'):
+            if _has_dashboard_access(user):
                 login(request, user)
                 next_url = request.GET.get('next', 'dashboard-overview')
                 return redirect(next_url)
             else:
-                errors['non_field_errors'] = ['No reseller account found for this email.']
+                errors['non_field_errors'] = [
+                    'This account does not have dashboard access. '
+                    'Ask your administrator to enable login on your staff record.'
+                ]
         else:
             errors['non_field_errors'] = ['Invalid email or password.']
 

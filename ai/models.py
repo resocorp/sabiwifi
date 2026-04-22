@@ -46,6 +46,11 @@ class ResellerAIConfig(models.Model):
         'auto_quote_below_ngn': 0,
         'max_auto_disconnects_per_hour': 5,
         'max_outbound_per_customer_per_day': 4,
+        # Field-tech follow-up cadence: first ping after this many minutes,
+        # subsequent pings hourly, capped by max_field_pings before operator
+        # escalation.
+        'cap_field_ping_minutes': 30,
+        'max_field_pings': 4,
     }
 
     reseller = models.OneToOneField(
@@ -116,10 +121,12 @@ class AIPromptVersion(models.Model):
     ROLE_SALES = 'sales'
     ROLE_SUPPORT = 'support'
     ROLE_FIELD = 'field'
+    ROLE_FIELD_INBOUND = 'field_inbound'
     ROLE_CHOICES = [
         (ROLE_SALES, 'Sales'),
         (ROLE_SUPPORT, 'Support'),
         (ROLE_FIELD, 'Field supervisor'),
+        (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
     ]
 
     config = models.ForeignKey(ResellerAIConfig, on_delete=models.CASCADE,
@@ -145,10 +152,12 @@ class AIAgentRun(models.Model):
     ROLE_SALES = 'sales'
     ROLE_SUPPORT = 'support'
     ROLE_FIELD = 'field'
+    ROLE_FIELD_INBOUND = 'field_inbound'
     ROLE_CHOICES = [
         (ROLE_SALES, 'Sales'),
         (ROLE_SUPPORT, 'Support'),
         (ROLE_FIELD, 'Field supervisor'),
+        (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
     ]
 
     STATUS_SUCCESS = 'success'

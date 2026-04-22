@@ -7,8 +7,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from accounts.permissions import can, effective_reseller
 from leads.models import Lead, InstallationOrder
 from leads.services import convert_lead_to_subscriber
+
+
+def _require(request, *caps):
+    from django.core.exceptions import PermissionDenied
+    if not any(can(request.user, c) for c in caps):
+        raise PermissionDenied()
 
 
 def _serialise_lead(lead):
@@ -53,7 +60,8 @@ def _serialise_installation(order):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def lead_list(request):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     qs = Lead.objects.filter(reseller=reseller)
     status = request.GET.get('status')
     if status:
@@ -67,7 +75,8 @@ def lead_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def lead_create(request):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     data = request.data
     if not data.get('phone'):
         return Response({'error': 'phone required'}, status=400)
@@ -95,7 +104,8 @@ def _apply_lead_fields(lead, data):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def lead_detail(request, pk):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
     orders = [_serialise_installation(o) for o in lead.installation_orders.all()]
     return Response({'lead': _serialise_lead(lead), 'installations': orders})
@@ -104,7 +114,8 @@ def lead_detail(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def lead_update(request, pk):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
     _apply_lead_fields(lead, request.data)
     lead.save()
@@ -118,7 +129,8 @@ def lead_send_quote(request, pk):
     Generate a Paystack payment link for this lead and send it over WA / SMS.
     Thin wrapper over billing.services.create_lead_payment_link.
     """
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
 
     amount = request.data.get('amount') or lead.quoted_amount_ngn
@@ -169,7 +181,8 @@ def lead_convert(request, pk):
     Manually convert a paid-out-of-band lead (no webhook) into a Subscriber.
     Normal flow is automatic from the Paystack webhook.
     """
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
     service_mode = request.data.get('service_mode', InstallationOrder.SERVICE_MODE_PPPOE)
     subscriber, order = convert_lead_to_subscriber(lead, service_mode=service_mode)
@@ -181,7 +194,8 @@ def lead_convert(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def lead_mark_lost(request, pk):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
     lead.status = Lead.STATUS_LOST
     lead.lost_reason = request.data.get('reason', '') or lead.lost_reason
@@ -196,7 +210,8 @@ def lead_mark_lost(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def installation_list(request):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     qs = InstallationOrder.objects.filter(reseller=reseller)
     status = request.GET.get('status')
     if status:
@@ -207,7 +222,8 @@ def installation_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def installation_detail(request, pk):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     order = get_object_or_404(InstallationOrder, pk=pk, reseller=reseller)
     return Response(_serialise_installation(order))
 
@@ -215,7 +231,8 @@ def installation_detail(request, pk):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def installation_update(request, pk):
-    reseller = request.user.reseller
+    _require(request, 'leads')
+    reseller = effective_reseller(request.user)
     order = get_object_or_404(InstallationOrder, pk=pk, reseller=reseller)
     data = request.data
     for field in ('status', 'service_mode', 'address', 'notes', 'pppoe_username', 'pppoe_password'):
