@@ -81,7 +81,7 @@ class RunnerInvokesImmediatePauseTest(TestCase):
         from conversations.models import Conversation
         from conversations.services import record_inbound_message
         from ai.providers.base import LLMProvider
-        from ai.jobs import run_sales_agent
+        from ai.jobs import run_customer_agent
 
         reseller = _r('rfail')
         cfg = _cfg(reseller)
@@ -99,7 +99,7 @@ class RunnerInvokesImmediatePauseTest(TestCase):
                 raise HTTPError('404 Client Error: Not Found for url: …/v1/messages')
 
         with patch('ai.agents.runner.get_provider', return_value=_BoomProvider()):
-            run_sales_agent(msg.pk)
+            run_customer_agent(msg.pk)
 
         cfg.refresh_from_db()
         self.assertIsNotNone(cfg.ai_paused_at, 'AI should be paused after the first 404')

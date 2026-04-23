@@ -15,6 +15,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from decimal import Decimal
+
+from django.db.models import Sum
 from django.utils import timezone
 
 from radius.models import Radacct
@@ -111,8 +114,10 @@ class DiagnosticFacts:
     subscription_active: Optional[bool] = None
     subscription_expired: Optional[bool] = None
     last_payment_status: str = ''            # success / failed / pending / ''
+    data_cap_exhausted: Optional[bool] = None
     router_id: Optional[int] = None
     router_offline: Optional[bool] = None
+    reseller_wide_outage: Optional[bool] = None
     has_live_session: Optional[bool] = None
     customer_type: str = ''                  # pppoe / hotspot / unknown
     customer_clue: str = ''                  # 'pon_blink', 'no_lights', etc.
@@ -124,10 +129,10 @@ class DiagnosticFacts:
 def categorise_cause(facts: DiagnosticFacts) -> tuple[str, str]:
     """Return (cause, action) tuple matching `Ticket.CAUSE_*` and
     `Ticket.ACTION_*`. Apply checks in priority order: outage > billing >
-    hardware clue > unknown."""
+    data cap > hardware clue > unknown."""
 
-    # 1. General outage — the upstream router is down.
-    if facts.router_offline:
+    # 1. General outage — the upstream router is down (or the whole reseller).
+    if facts.router_offline or facts.reseller_wide_outage:
         return Ticket.CAUSE_GENERAL_OUTAGE, Ticket.ACTION_NO_ACTION
 
     # 2. Subscription / payment problems.
@@ -136,17 +141,98 @@ def categorise_cause(facts: DiagnosticFacts) -> tuple[str, str]:
             return Ticket.CAUSE_PAYMENT_FAILED, Ticket.ACTION_CUSTOMER_ACTION
         return Ticket.CAUSE_EXPIRED_SUBSCRIPTION, Ticket.ACTION_CUSTOMER_ACTION
 
-    # 3. Hardware clue from the customer (e.g. PON light blinking on a fiber CPE).
+    # 3. Data cap burned even though the subscription is still "active".
+    # Prepaid hotspot plans very commonly fail this way.
+    if facts.data_cap_exhausted:
+        return Ticket.CAUSE_DATA_CAP_EXHAUSTED, Ticket.ACTION_CUSTOMER_ACTION
+
+    # 4. Hardware clue from the customer (e.g. PON light blinking on a fiber CPE).
     clue = (facts.customer_clue or '').lower()
     if 'pon' in clue and ('blink' in clue or 'red' in clue or 'lost' in clue):
         return Ticket.CAUSE_PON_SIGNAL_LOST, Ticket.ACTION_DISPATCH
 
-    # 4. Active session but customer says no internet — likely device-side.
+    # 5. Active session but customer says no internet — likely device-side.
     if facts.has_live_session:
         return Ticket.CAUSE_DEVICE_SIDE_UNKNOWN, Ticket.ACTION_CUSTOMER_ACTION
 
-    # 5. No session, no expiry, no outage — unknown; dispatch a tech.
+    # 6. No session, no expiry, no outage — unknown; dispatch a tech.
     if facts.has_live_session is False and not facts.router_offline:
         return Ticket.CAUSE_DEVICE_SIDE_UNKNOWN, Ticket.ACTION_DISPATCH
 
     return Ticket.CAUSE_OTHER, Ticket.ACTION_DISPATCH
+
+
+# ---------------------------------------------------------------------------
+# Reseller-wide outage + data-cap helpers
+# ---------------------------------------------------------------------------
+
+def check_reseller_wide_outage(reseller) -> dict:
+    """Is a meaningful fraction of this reseller's router fleet offline right
+    now? Used to tell the customer "we're aware, whole service is down" rather
+    than treating it as a one-off.
+
+    Thresholds: 2+ routers offline OR 30%+ of the fleet.
+    """
+    all_routers = list(Router.objects.filter(reseller=reseller).only(
+        'id', 'status', 'last_seen',
+    ))
+    total = len(all_routers)
+    if total == 0:
+        return {'offline_count': 0, 'total_routers': 0, 'is_general_outage': False}
+    offline = sum(1 for r in all_routers if is_router_currently_offline(r))
+    is_general = offline >= 2 or (total > 0 and offline / total >= 0.3)
+    return {
+        'offline_count': offline,
+        'total_routers': total,
+        'is_general_outage': bool(is_general),
+    }
+
+
+def check_data_cap_remaining(subscriber) -> dict:
+    """Roll up DailyUsageSnapshot rows over the active subscription's
+    billing window and compare against ServicePlan.data_cap_gb.
+
+    Returns a dict with used_gb, cap_gb, percent_used, exhausted. Treats null
+    cap as unlimited (exhausted=False). Falls back to the latest snapshot's
+    `quota_exceeded` flag if the plan has daily quotas instead of a monthly cap.
+    """
+    from plans.models import DailyUsageSnapshot, Subscription
+    result = {
+        'used_gb': 0.0,
+        'cap_gb': None,
+        'percent_used': 0.0,
+        'exhausted': False,
+    }
+    sub = (Subscription.objects.filter(subscriber=subscriber, status='active')
+           .order_by('-start_date').first())
+    if sub is None:
+        return result
+    plan = sub.plan
+    cap = plan.data_cap_gb
+    start = sub.start_date.date() if sub.start_date else None
+    end = sub.expiry_date.date() if sub.expiry_date else timezone.now().date()
+    qs = DailyUsageSnapshot.objects.filter(subscriber=subscriber, date__lte=end)
+    if start is not None:
+        qs = qs.filter(date__gte=start)
+    agg = qs.aggregate(
+        total_down=Sum('download_bytes'), total_up=Sum('upload_bytes'),
+    )
+    total_bytes = (agg['total_down'] or 0) + (agg['total_up'] or 0)
+    used_gb = total_bytes / (1024 ** 3)
+    result['used_gb'] = round(used_gb, 3)
+
+    if cap is None:
+        # Unlimited plan — fall back to the latest snapshot's quota_exceeded
+        # flag, which covers daily-quota plans.
+        last = qs.order_by('-date').first()
+        if last is not None and last.quota_exceeded:
+            result['exhausted'] = True
+        return result
+
+    cap_float = float(cap)
+    result['cap_gb'] = cap_float
+    if cap_float > 0:
+        pct = (used_gb / cap_float) * 100
+        result['percent_used'] = round(pct, 1)
+        result['exhausted'] = used_gb >= cap_float
+    return result

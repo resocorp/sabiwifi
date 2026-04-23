@@ -148,6 +148,25 @@ def change_status(ticket, new_status, actor='system', note=''):
             )
         except Exception:
             pass
+
+    # Satisfaction ping: 15 min after resolve, ask the customer to confirm
+    # the fix. YES closes the ticket; NO reopens it. Only for support/billing
+    # tickets that have a linked customer conversation.
+    if (new_status == Ticket.STATUS_RESOLVED
+            and ticket.conversation_id
+            and ticket.type in (Ticket.TYPE_SUPPORT, Ticket.TYPE_BILLING)):
+        try:
+            import django_rq
+            from ai.jobs import send_satisfaction_ping
+            from datetime import timedelta
+            transaction.on_commit(
+                lambda tid=ticket.pk:
+                django_rq.get_queue('ai').enqueue_in(
+                    timedelta(minutes=15), send_satisfaction_ping, tid,
+                ),
+            )
+        except Exception:
+            pass
     return ticket
 
 
@@ -207,3 +226,152 @@ def _bump_staff_load(staff_member, delta):
     # contention without touching the call sites.
     staff_member.current_load = max(0, (staff_member.current_load or 0) + delta)
     staff_member.save(update_fields=['current_load'])
+
+
+# ---------------------------------------------------------------------------
+# KPI computation
+# ---------------------------------------------------------------------------
+
+def _percentile(values, pct):
+    data = sorted(int(v) for v in values if v is not None)
+    n = len(data)
+    if n == 0:
+        return None
+    idx = max(0, min(n - 1, int(round((pct / 100.0) * (n - 1)))))
+    return data[idx]
+
+
+def compute_kpis(reseller=None, days: int = 30) -> dict:
+    """Aggregate ticket KPIs over the last `days`. Pass reseller=None for a
+    platform-wide view (operator panel). All durations are in seconds.
+    """
+    from django.db.models import Count, F
+    from django.db.models.functions import Extract, TruncDate
+    now = timezone.now()
+    since = now - timezone.timedelta(days=days)
+    qs = Ticket.objects.all()
+    if reseller is not None:
+        qs = qs.filter(reseller=reseller)
+    window_qs = qs.filter(created_at__gte=since)
+
+    # Open-ticket counts (point-in-time, not window-filtered).
+    open_qs = qs.exclude(status__in=Ticket.TERMINAL_STATUSES)
+    open_count = open_qs.count()
+    open_by_priority = dict(
+        open_qs.values_list('priority').annotate(n=Count('id'))
+    )
+
+    # Window-scoped resolved tickets with timings.
+    resolved_qs = window_qs.filter(resolved_at__isnull=False).annotate(
+        resolution_seconds=Extract(F('resolved_at') - F('created_at'), 'epoch'),
+    )
+    resolved_rows = list(resolved_qs.values('id', 'resolution_seconds',
+                                            'sla_due_at', 'resolved_at'))
+    mttr_seconds = _percentile(
+        (r['resolution_seconds'] for r in resolved_rows), 50,
+    )
+    # Resolution rate within SLA: resolved_at <= sla_due_at.
+    within_sla = sum(
+        1 for r in resolved_rows
+        if r['sla_due_at'] and r['resolved_at']
+        and r['resolved_at'] <= r['sla_due_at']
+    )
+    resolution_rate_within_sla = (
+        round(within_sla / len(resolved_rows), 3) if resolved_rows else None
+    )
+
+    # Time to first response.
+    ft_qs = window_qs.filter(first_response_at__isnull=False).annotate(
+        first_response_seconds=Extract(
+            F('first_response_at') - F('created_at'), 'epoch',
+        ),
+    )
+    time_to_first_response_seconds = _percentile(
+        ft_qs.values_list('first_response_seconds', flat=True), 50,
+    )
+
+    # Time to assign — use the first KIND_ASSIGNED event per ticket.
+    assign_rows = list(TicketEvent.objects
+                       .filter(kind=TicketEvent.KIND_ASSIGNED,
+                               ticket__in=window_qs)
+                       .values('ticket_id', 'ticket__created_at', 'created_at'))
+    assign_by_ticket = {}
+    for row in assign_rows:
+        tid = row['ticket_id']
+        if tid in assign_by_ticket:
+            continue  # first only
+        secs = (row['created_at'] - row['ticket__created_at']).total_seconds()
+        assign_by_ticket[tid] = secs
+    time_to_assign_seconds = _percentile(assign_by_ticket.values(), 50)
+
+    # SLA breach rate — tickets in window whose SLA is past-due (whether
+    # resolved late or still open).
+    total_in_window = window_qs.count()
+    breach_count = 0
+    for r in window_qs.values('id', 'sla_due_at', 'resolved_at', 'status'):
+        if not r['sla_due_at']:
+            continue
+        if r['resolved_at'] and r['resolved_at'] > r['sla_due_at']:
+            breach_count += 1
+        elif (r['status'] not in Ticket.TERMINAL_STATUSES
+              and r['sla_due_at'] < now):
+            breach_count += 1
+    sla_breach_rate = (
+        round(breach_count / total_in_window, 3) if total_in_window else None
+    )
+
+    # Reopen rate — tickets in window that have any KIND_REOPENED event.
+    reopened_ticket_ids = set(
+        TicketEvent.objects.filter(
+            kind=TicketEvent.KIND_REOPENED,
+            ticket__in=window_qs,
+        ).values_list('ticket_id', flat=True).distinct()
+    )
+    reopen_rate = (
+        round(len(reopened_ticket_ids) / total_in_window, 3)
+        if total_in_window else None
+    )
+
+    # AI-handled share.
+    ai_handled_count = window_qs.filter(ai_handled=True).count()
+    ai_handled_share = (
+        round(ai_handled_count / total_in_window, 3)
+        if total_in_window else None
+    )
+
+    # Tickets per day (sparkline) — filled for every day in window.
+    per_day_raw = dict(
+        window_qs.annotate(day=TruncDate('created_at'))
+        .values_list('day').annotate(n=Count('id'))
+    )
+    tickets_per_day = []
+    for i in range(days):
+        d = (now - timezone.timedelta(days=days - 1 - i)).date()
+        tickets_per_day.append({
+            'date': d.isoformat(),
+            'count': int(per_day_raw.get(d, 0)),
+        })
+
+    # Top causes (by diagnosed_cause).
+    top_causes_raw = (window_qs.exclude(diagnosed_cause='')
+                      .values_list('diagnosed_cause')
+                      .annotate(n=Count('id'))
+                      .order_by('-n')[:5])
+    top_causes = [{'cause': c, 'count': n} for c, n in top_causes_raw]
+
+    return {
+        'window_days': days,
+        'open_count': open_count,
+        'open_by_priority': open_by_priority,
+        'total_in_window': total_in_window,
+        'resolved_in_window': len(resolved_rows),
+        'mttr_seconds': mttr_seconds,
+        'time_to_first_response_seconds': time_to_first_response_seconds,
+        'time_to_assign_seconds': time_to_assign_seconds,
+        'sla_breach_rate': sla_breach_rate,
+        'resolution_rate_within_sla': resolution_rate_within_sla,
+        'reopen_rate': reopen_rate,
+        'ai_handled_share': ai_handled_share,
+        'tickets_per_day': tickets_per_day,
+        'top_causes': top_causes,
+    }

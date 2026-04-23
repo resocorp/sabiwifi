@@ -72,6 +72,7 @@ class Ticket(models.Model):
     CAUSE_GENERAL_OUTAGE = 'general_outage'
     CAUSE_EXPIRED_SUBSCRIPTION = 'expired_subscription'
     CAUSE_PAYMENT_FAILED = 'payment_failed'
+    CAUSE_DATA_CAP_EXHAUSTED = 'data_cap_exhausted'
     CAUSE_DEVICE_SIDE_UNKNOWN = 'device_side_unknown'
     CAUSE_PON_SIGNAL_LOST = 'pon_signal_lost'
     CAUSE_OTHER = 'other'
@@ -79,6 +80,7 @@ class Ticket(models.Model):
         (CAUSE_GENERAL_OUTAGE, 'General outage'),
         (CAUSE_EXPIRED_SUBSCRIPTION, 'Expired subscription'),
         (CAUSE_PAYMENT_FAILED, 'Payment failed'),
+        (CAUSE_DATA_CAP_EXHAUSTED, 'Data cap exhausted'),
         (CAUSE_DEVICE_SIDE_UNKNOWN, 'Device-side unknown'),
         (CAUSE_PON_SIGNAL_LOST, 'PON signal lost'),
         (CAUSE_OTHER, 'Other'),

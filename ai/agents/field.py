@@ -14,7 +14,7 @@ in the prompt seed they send the LLM.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.agents.sales import _latest_override
+from ai.agents._helpers import _latest_override
 from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Message
 from tickets.models import Ticket

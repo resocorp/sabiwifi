@@ -147,6 +147,15 @@ def operator_kpis_api(request):
         .values_list('status').annotate(n=Count('id'))
     )
 
+    # ── Richer ticket KPIs (shares the reseller-dashboard computation so the
+    # operator and per-reseller views stay consistent). Pass reseller=None to
+    # aggregate platform-wide when no slug filter is applied.
+    from tickets.services import compute_kpis
+    scoped_reseller = None
+    if reseller_slug:
+        scoped_reseller = Reseller.objects.filter(slug=reseller_slug).first()
+    ticket_kpis = compute_kpis(reseller=scoped_reseller, days=window_days)
+
     return JsonResponse({
         'window_days': window_days,
         'reseller': reseller_slug or 'all',
@@ -155,6 +164,7 @@ def operator_kpis_api(request):
         'payment_to_service': service_time,
         'breached_open_tickets': breached_open,
         'lead_funnel': funnel,
+        'ticket_kpis': ticket_kpis,
     })
 
 

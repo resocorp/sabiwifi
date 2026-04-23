@@ -209,20 +209,35 @@ def tool_schedule_followup(ctx: ToolContext, args: dict) -> dict:
 
 
 def tool_lookup_subscriber(ctx: ToolContext, args: dict) -> dict:
+    """Find a subscriber by phone or email (or both — phone wins on conflict).
+    The agent uses this to identify the customer when `conversation.subscriber`
+    isn't already set, or to cross-check when the caller's phone doesn't
+    match any record (e.g., they messaged from a family member's number).
+    """
     from accounts.models import Subscriber
     phone = (args.get('phone') or '').strip()
-    if not phone:
-        return {'error': 'phone required'}
-    sub = Subscriber.objects.filter(reseller=ctx.reseller, phone=phone).first()
-    if not sub:
+    email = (args.get('email') or '').strip()
+    if not (phone or email):
+        return {'error': 'phone or email required'}
+    qs = Subscriber.objects.filter(reseller=ctx.reseller)
+    sub = None
+    if phone:
+        # Match exact first; fall back to last-10-digit match (E.164 vs local).
+        sub = qs.filter(phone=phone).first()
+        if sub is None:
+            digits = ''.join(c for c in phone if c.isdigit())
+            if len(digits) >= 10:
+                sub = qs.filter(phone__endswith=digits[-10:]).first()
+    if sub is None and email:
+        sub = qs.filter(email__iexact=email).first()
+    if sub is None:
         return {'found': False}
     return {
         'found': True,
         'subscriber_id': sub.pk,
-        'name': '',
         'phone': sub.phone,
-        'status': sub.status,
-        'plan_id': sub.plan_id,
+        'email': sub.email or '',
+        'verified': sub.verified,
     }
 
 
@@ -487,7 +502,8 @@ def tool_categorise_diagnosis(ctx: ToolContext, args: dict) -> dict:
     """
     from accounts.models import Subscriber
     from ai.diagnostics import (
-        DiagnosticFacts, categorise_cause, infer_customer_type,
+        DiagnosticFacts, categorise_cause, check_data_cap_remaining,
+        check_reseller_wide_outage, infer_customer_type,
         is_router_currently_offline,
     )
     from plans.models import Subscription
@@ -524,14 +540,176 @@ def tool_categorise_diagnosis(ctx: ToolContext, args: dict) -> dict:
                 Router.objects.filter(pk=facts.router_id, reseller=ctx.reseller).first()
                 if facts.router_id else None,
             )
+            # Data-cap exhaustion — only meaningful if the subscription is active.
+            if facts.subscription_active:
+                cap_info = check_data_cap_remaining(sub)
+                facts.data_cap_exhausted = bool(cap_info.get('exhausted'))
 
     if facts.router_id:
         router = Router.objects.filter(pk=facts.router_id, reseller=ctx.reseller).first()
         if router is not None:
             facts.router_offline = is_router_currently_offline(router)
 
+    # Reseller-wide outage check — flip the flag if multiple routers are down.
+    outage = check_reseller_wide_outage(ctx.reseller)
+    facts.reseller_wide_outage = bool(outage.get('is_general_outage'))
+
     cause, action = categorise_cause(facts)
     return {'cause': cause, 'action': action, 'facts': facts.as_dict()}
+
+
+# ---------------------------------------------------------------------------
+# State-machine support for the Support agent
+# ---------------------------------------------------------------------------
+
+_SUPPORT_STATES = (
+    # Pre-identify (sales / onboarding journey — used by CustomerAgent)
+    'enquiry', 'plan_quoted', 'payment_sent', 'awaiting_signup',
+    # Support diagnostic chain
+    'identify', 'status_reported', 'ask_connection_method',
+    'layer1_power', 'layer1_lights', 'layer2_ssid', 'layer2_reconnect',
+    'classify', 'act', 'followup_scheduled', 'awaiting_confirmation',
+)
+
+
+def tool_conversation_set_state(ctx: ToolContext, args: dict) -> dict:
+    """Persist the Support agent's state-machine checkpoint on the
+    Conversation. Shape:
+      {step, clues, account_summary, router_id, customer_type,
+       awaiting_confirmation_ticket_id, updated_at}
+    Pass `step` plus any fields you want to merge into the existing state.
+    """
+    if not ctx.conversation:
+        return {'error': 'no conversation context'}
+    step = (args.get('step') or '').strip()
+    if step and step not in _SUPPORT_STATES:
+        return {'error': f'invalid step: {step}'}
+    state = dict(ctx.conversation.diagnostic_state or {})
+    if step:
+        state['step'] = step
+    # Merge caller-provided fields (clues, account_summary, etc.)
+    for key in ('clues', 'account_summary', 'router_id', 'subscriber_id',
+                'customer_type', 'awaiting_confirmation_ticket_id'):
+        if key in args and args.get(key) is not None:
+            # `clues` is a dict; others are scalars.
+            if key == 'clues' and isinstance(args[key], dict):
+                merged = dict(state.get('clues') or {})
+                merged.update(args[key])
+                state['clues'] = merged
+            else:
+                state[key] = args[key]
+    state['updated_at'] = timezone.now().isoformat()
+    ctx.conversation.diagnostic_state = state
+    ctx.conversation.save(update_fields=['diagnostic_state', 'updated_at'])
+    return {'ok': True, 'state': state}
+
+
+def tool_conversation_get_state(ctx: ToolContext, args: dict) -> dict:
+    """Return the current diagnostic_state snapshot on the conversation."""
+    if not ctx.conversation:
+        return {'error': 'no conversation context'}
+    return {'state': dict(ctx.conversation.diagnostic_state or {})}
+
+
+def tool_get_account_summary_for_customer(ctx: ToolContext, args: dict) -> dict:
+    """Build a friendly one-liner the agent can narrate back to the customer.
+    Keeps the LLM from inventing plan names / expiry dates.
+    """
+    from accounts.models import Subscriber
+    from plans.models import Subscription
+    from billing.models import Payment
+    sub_id = args.get('subscriber_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    active = (Subscription.objects.filter(subscriber=sub, status='active')
+              .order_by('-expiry_date').first())
+    latest = (Subscription.objects.filter(subscriber=sub)
+              .order_by('-expiry_date').first())
+    now = timezone.now()
+    parts: list[str] = []
+    if active is not None:
+        plan_name = active.plan.name if active.plan_id else 'plan'
+        parts.append(f"{plan_name}")
+        if active.expiry_date:
+            days_left = (active.expiry_date - now).days
+            if days_left < 0:
+                parts.append('already expired')
+            elif days_left == 0:
+                parts.append('expires today')
+            elif days_left == 1:
+                parts.append('expires tomorrow')
+            else:
+                parts.append(f'{days_left} days left')
+    elif latest is not None:
+        parts.append(f"{latest.plan.name}" if latest.plan_id else 'plan')
+        if latest.status == 'expired':
+            parts.append('expired')
+        else:
+            parts.append(f'status: {latest.status}')
+    else:
+        parts.append('no active subscription on file')
+
+    last_pay = (Payment.objects.filter(reseller=ctx.reseller, subscriber=sub,
+                                       paystack_status='success')
+                .order_by('-created_at').first())
+    if last_pay is not None:
+        paid_at = last_pay.created_at.strftime('%b %d')
+        parts.append(f'last paid ₦{last_pay.amount_ngn} on {paid_at}')
+
+    summary = ', '.join(parts)
+    return {
+        'summary': summary,
+        'subscription_active': bool(active),
+        'plan_name': active.plan.name if active and active.plan_id else '',
+        'expiry_iso': active.expiry_date.isoformat() if active and active.expiry_date else '',
+    }
+
+
+def tool_check_reseller_wide_outage(ctx: ToolContext, args: dict) -> dict:
+    """Count routers offline in the reseller fleet. Used to distinguish
+    'your one router is down' from 'the whole service is down'."""
+    from ai.diagnostics import check_reseller_wide_outage
+    return check_reseller_wide_outage(ctx.reseller)
+
+
+def tool_check_data_cap_remaining(ctx: ToolContext, args: dict) -> dict:
+    """Report data-cap usage for this subscriber's active subscription.
+    Catches the 'subscription active but quota burned' case that
+    `check_subscription` misses."""
+    from accounts.models import Subscriber
+    from ai.diagnostics import check_data_cap_remaining
+    sub_id = args.get('subscriber_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    return check_data_cap_remaining(sub)
+
+
+def tool_schedule_satisfaction_ping(ctx: ToolContext, args: dict) -> dict:
+    """Enqueue a follow-up ping to the customer N minutes after a ticket is
+    resolved: 'Is your WiFi working now? Reply YES / NO.' Default 15 min.
+    Records the awaiting-confirmation ticket id on the conversation so the
+    pre-router in ai/jobs.py recognises the YES/NO when it comes in.
+    """
+    from datetime import timedelta as _td
+    import django_rq
+    ticket_id = args.get('ticket_id')
+    delay_minutes = int(args.get('delay_minutes') or 15)
+    if not ticket_id:
+        return {'error': 'ticket_id required'}
+    try:
+        ticket = Ticket.objects.get(pk=ticket_id, reseller=ctx.reseller)
+    except Ticket.DoesNotExist:
+        return {'error': 'ticket not found'}
+    from ai.jobs import send_satisfaction_ping
+    job = django_rq.get_queue('ai').enqueue_in(
+        _td(minutes=delay_minutes), send_satisfaction_ping, ticket.pk,
+    )
+    return {'ok': True, 'job_id': getattr(job, 'id', ''), 'ticket_id': ticket.pk,
+            'delay_minutes': delay_minutes}
 
 
 # ---------------------------------------------------------------------------
@@ -786,10 +964,11 @@ _SCHEMAS = {
     },
     'lookup_subscriber': {
         'name': 'lookup_subscriber',
-        'description': 'Find a subscriber on this reseller by phone number.',
+        'description': 'Find a subscriber on this reseller by phone or email (or both). At least one must be provided.',
         'parameters': {'type': 'object', 'properties': {
             'phone': {'type': 'string'},
-        }, 'required': ['phone']},
+            'email': {'type': 'string'},
+        }, 'required': []},
     },
     'check_subscription': {
         'name': 'check_subscription',
@@ -934,6 +1113,68 @@ _SCHEMAS = {
             'metadata': {'type': 'object'},
         }, 'required': ['ticket_id', 'note']},
     },
+    'conversation_set_state': {
+        'name': 'conversation_set_state',
+        'description': ("Persist the customer state-machine checkpoint. "
+                        "Call this at every state transition. Pass `step` (one of: "
+                        "enquiry, plan_quoted, payment_sent, awaiting_signup, "
+                        "identify, status_reported, ask_connection_method, "
+                        "layer1_power, layer1_lights, layer2_ssid, layer2_reconnect, "
+                        "classify, act, followup_scheduled, awaiting_confirmation) "
+                        "plus any fields to merge (clues dict, router_id, "
+                        "customer_type, account_summary)."),
+        'parameters': {'type': 'object', 'properties': {
+            'step': {'type': 'string'},
+            'clues': {'type': 'object'},
+            'account_summary': {'type': 'string'},
+            'router_id': {'type': 'integer'},
+            'subscriber_id': {'type': 'integer'},
+            'customer_type': {'type': 'string'},
+            'awaiting_confirmation_ticket_id': {'type': 'integer'},
+        }, 'required': ['step']},
+    },
+    'conversation_get_state': {
+        'name': 'conversation_get_state',
+        'description': "Return the current diagnostic_state snapshot on the conversation.",
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
+    },
+    'get_account_summary_for_customer': {
+        'name': 'get_account_summary_for_customer',
+        'description': ("Return a friendly one-liner like '10GB plan, 3 days left, "
+                        "last paid ₦2,500 on Apr 20' that the agent narrates back "
+                        "to the customer in the status_reported step. Do not "
+                        "paraphrase — use the returned `summary` verbatim."),
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+        }, 'required': ['subscriber_id']},
+    },
+    'check_reseller_wide_outage': {
+        'name': 'check_reseller_wide_outage',
+        'description': ("Count routers offline in the reseller's fleet right now. "
+                        "Returns {offline_count, total_routers, is_general_outage}. "
+                        "`is_general_outage` is True if 2+ routers or 30%+ of fleet are down."),
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
+    },
+    'check_data_cap_remaining': {
+        'name': 'check_data_cap_remaining',
+        'description': ("Report data-cap usage for this subscriber's active "
+                        "subscription. Returns {used_gb, cap_gb, percent_used, "
+                        "exhausted}. Catches the 'subscription active but quota "
+                        "burned' failure mode that check_subscription misses."),
+        'parameters': {'type': 'object', 'properties': {
+            'subscriber_id': {'type': 'integer'},
+        }, 'required': ['subscriber_id']},
+    },
+    'schedule_satisfaction_ping': {
+        'name': 'schedule_satisfaction_ping',
+        'description': ("Enqueue a follow-up 'Is it working now? YES/NO' message "
+                        "N minutes (default 15) after the ticket is resolved. Call "
+                        "once right after you resolve the ticket."),
+        'parameters': {'type': 'object', 'properties': {
+            'ticket_id': {'type': 'integer'},
+            'delay_minutes': {'type': 'integer'},
+        }, 'required': ['ticket_id']},
+    },
 }
 
 
@@ -966,21 +1207,32 @@ TOOL_FNS: dict[str, ToolFn] = {
     'consume_pending_close_action': tool_consume_pending_close_action,
     'change_status_ticket': tool_change_status_ticket,
     'add_ticket_comment': tool_add_ticket_comment,
+    # State-machine + new diagnostic tools
+    'conversation_set_state': tool_conversation_set_state,
+    'conversation_get_state': tool_conversation_get_state,
+    'get_account_summary_for_customer': tool_get_account_summary_for_customer,
+    'check_reseller_wide_outage': tool_check_reseller_wide_outage,
+    'check_data_cap_remaining': tool_check_data_cap_remaining,
+    'schedule_satisfaction_ping': tool_schedule_satisfaction_ping,
 }
 
 
 AGENT_TOOLS = {
-    'sales': ['lookup_plans', 'suggest_plan', 'create_lead',
-              'create_payment_link', 'schedule_followup',
-              'send_reply', 'escalate_to_human'],
-    'support': ['lookup_subscriber', 'check_subscription',
-                'check_router_status', 'check_live_session',
-                'check_recent_payments',
-                # Phase 2b: full diagnostic chain + renewal links
-                'get_subscriber_router', 'check_general_outage',
-                'infer_customer_type', 'categorise_diagnosis',
-                'create_renewal_payment_link',
-                'send_reply', 'open_ticket', 'escalate_to_human'],
+    # CustomerAgent (unified inbound for non-tech conversations):
+    # enquiry + onboarding + support diagnostics in one tool set.
+    'customer': ['lookup_plans', 'suggest_plan', 'create_lead',
+                 'create_payment_link', 'schedule_followup',
+                 'lookup_subscriber', 'check_subscription',
+                 'check_router_status', 'check_live_session',
+                 'check_recent_payments',
+                 'get_subscriber_router', 'check_general_outage',
+                 'infer_customer_type', 'categorise_diagnosis',
+                 'create_renewal_payment_link',
+                 'conversation_set_state', 'conversation_get_state',
+                 'get_account_summary_for_customer',
+                 'check_reseller_wide_outage', 'check_data_cap_remaining',
+                 'schedule_satisfaction_ping',
+                 'send_reply', 'open_ticket', 'escalate_to_human'],
     # Field-supervisor (propose-only — assign_ticket dropped):
     'field':  ['list_available_techs',
                'send_dispatch_wa', 'add_ticket_comment',

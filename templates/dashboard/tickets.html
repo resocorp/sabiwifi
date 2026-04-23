@@ -8,7 +8,14 @@
         <h1 class="text-2xl font-headline font-bold">Tickets</h1>
         <p class="text-sm text-on-surface-variant">Open work items + AI-suggested assignments. Click a row to view details and assign.</p>
     </div>
+    {% if user|can:"tickets" %}
+    <button id="new-ticket-btn" class="px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-medium shadow-ambient-sm hover:opacity-90">
+        + New Ticket
+    </button>
+    {% endif %}
 </div>
+
+<div id="kpi-strip" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-4"></div>
 
 <div class="flex gap-2 mb-4 text-sm">
     <select id="status-filter" class="rounded border px-2 py-1">
@@ -57,17 +64,13 @@
 
 <script>
 const CAN_ASSIGN = {{ user|can:"assign_ticket"|yesno:"true,false" }};
+const CSRF = '{{ csrf_token }}';
 let activeTicketId = null;
 
 function escapeHTML(s) {
     return (s || '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
-}
-
-function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
 }
 
 async function loadTickets() {
@@ -163,10 +166,17 @@ async function loadTicket(id) {
             </div>
         </div>` : '';
 
+    const chatLink = t.conversation_id
+        ? `<a href="/dashboard/inbox/#${t.conversation_id}" class="text-xs underline text-primary">View chat</a>`
+        : '';
+
     document.getElementById('ticket-detail').innerHTML = `
         <div class="flex items-center justify-between mb-2">
             <div class="font-mono text-sm">#${t.id}</div>
-            <div class="text-xs text-on-surface-variant">${escapeHTML(t.status)} · ${escapeHTML(t.priority)}</div>
+            <div class="text-xs text-on-surface-variant flex items-center gap-2">
+                <span>${escapeHTML(t.status)} · ${escapeHTML(t.priority)}</span>
+                ${chatLink}
+            </div>
         </div>
         <h2 class="font-semibold text-base mb-2">${escapeHTML(t.subject)}</h2>
         ${t.diagnosed_cause ? `<div class="text-xs mb-2">
@@ -204,7 +214,7 @@ async function loadTicket(id) {
 async function quickAssign(ticketId, staffId) {
     const resp = await fetch('/api/tickets/' + ticketId + '/assign/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify({staff_id: staffId}),
     });
     if (resp.ok) loadTicket(ticketId);
@@ -219,6 +229,186 @@ async function assignFromSelect(ticketId) {
 document.getElementById('status-filter').addEventListener('change', loadTickets);
 document.getElementById('type-filter').addEventListener('change', loadTickets);
 document.getElementById('breached-only').addEventListener('change', loadTickets);
-loadTickets();
+
+(async () => {
+    await loadTickets();
+    // Deep-link: /dashboard/tickets/?ticket=42 auto-opens that ticket.
+    const params = new URLSearchParams(window.location.search);
+    const deepId = parseInt(params.get('ticket') || '', 10);
+    if (deepId) {
+        await loadTicket(deepId);
+    }
+})();
+
+// ---------------------------------------------------------------------------
+// KPI cards
+// ---------------------------------------------------------------------------
+
+function fmtDuration(seconds) {
+    if (seconds == null) return '—';
+    const s = Math.max(0, Math.round(seconds));
+    if (s < 90) return s + 's';
+    const m = Math.round(s / 60);
+    if (m < 90) return m + 'm';
+    const h = Math.round(m / 60);
+    if (h < 48) return h + 'h';
+    return Math.round(h / 24) + 'd';
+}
+
+function fmtPct(v) {
+    return (v == null) ? '—' : (Math.round(v * 1000) / 10) + '%';
+}
+
+function sparkline(points) {
+    if (!points || !points.length) return '';
+    const max = Math.max(1, ...points.map(p => p.count));
+    const bars = points.map(p => {
+        const h = Math.max(2, Math.round(24 * p.count / max));
+        return `<div title="${p.date}: ${p.count}" class="w-[3px] bg-primary/70" style="height:${h}px"></div>`;
+    }).join('');
+    return `<div class="flex items-end gap-[1px] h-6">${bars}</div>`;
+}
+
+function renderKpiCard(label, value, sub='') {
+    return `<div class="bg-surface-container-lowest rounded-lg p-2 shadow-ambient-sm">
+        <div class="text-[10px] uppercase text-on-surface-variant tracking-wide">${label}</div>
+        <div class="text-lg font-semibold leading-tight">${value}</div>
+        ${sub ? `<div class="text-[10px] text-on-surface-variant mt-0.5">${sub}</div>` : ''}
+    </div>`;
+}
+
+async function loadKpis() {
+    const resp = await fetch('/api/tickets/kpis/?days=30');
+    if (!resp.ok) return;
+    const k = await resp.json();
+    const strip = document.getElementById('kpi-strip');
+    strip.innerHTML = [
+        renderKpiCard('Open', k.open_count, k.total_in_window + ' in 30d'),
+        renderKpiCard('MTTR (med)', fmtDuration(k.mttr_seconds),
+                      'first response ' + fmtDuration(k.time_to_first_response_seconds)),
+        renderKpiCard('Time to assign', fmtDuration(k.time_to_assign_seconds)),
+        renderKpiCard('SLA breach', fmtPct(k.sla_breach_rate),
+                      'resolution in SLA ' + fmtPct(k.resolution_rate_within_sla)),
+        renderKpiCard('Reopen rate', fmtPct(k.reopen_rate)),
+        renderKpiCard('AI handled', fmtPct(k.ai_handled_share)),
+        renderKpiCard('Per day', sparkline(k.tickets_per_day), 'last ' + k.window_days + ' days'),
+        renderKpiCard('Top cause',
+                      k.top_causes && k.top_causes.length
+                        ? escapeHTML(k.top_causes[0].cause.replace(/_/g, ' '))
+                        : '—',
+                      k.top_causes && k.top_causes.length
+                        ? k.top_causes[0].count + ' tickets'
+                        : ''),
+    ].join('');
+}
+loadKpis();
+
+// ---------------------------------------------------------------------------
+// New Ticket modal
+// ---------------------------------------------------------------------------
+
+const newTicketBtn = document.getElementById('new-ticket-btn');
+if (newTicketBtn) {
+    newTicketBtn.addEventListener('click', openNewTicketModal);
+}
+
+function openNewTicketModal() {
+    const modal = document.createElement('div');
+    modal.id = 'new-ticket-modal';
+    modal.className = 'fixed inset-0 bg-black/40 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-surface-container-lowest rounded-xl shadow-elevation-lg p-5 w-full max-w-md">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold">New ticket</h2>
+                <button id="close-new-ticket" class="text-on-surface-variant hover:text-on-surface">✕</button>
+            </div>
+            <form id="new-ticket-form" class="space-y-3 text-sm">
+                <div>
+                    <label class="block text-xs uppercase text-on-surface-variant mb-1">Type</label>
+                    <select name="type" class="w-full rounded border px-2 py-1.5">
+                        <option value="support" selected>Support</option>
+                        <option value="billing">Billing</option>
+                        <option value="install">Install</option>
+                        <option value="sales_followup">Sales follow-up</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-on-surface-variant mb-1">Priority</label>
+                    <select name="priority" class="w-full rounded border px-2 py-1.5">
+                        <option value="low">Low</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-on-surface-variant mb-1">Subject *</label>
+                    <input name="subject" required maxlength="200"
+                           class="w-full rounded border px-2 py-1.5"
+                           placeholder="Short summary">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-on-surface-variant mb-1">Description</label>
+                    <textarea name="body" rows="4" class="w-full rounded border px-2 py-1.5"
+                              placeholder="What's going on? (optional)"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-on-surface-variant mb-1">Link to subscriber (phone)</label>
+                    <input name="subscriber_phone" class="w-full rounded border px-2 py-1.5"
+                           placeholder="optional — will attach to their account">
+                </div>
+                <div id="new-ticket-error" class="text-sm text-error hidden"></div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" id="cancel-new-ticket"
+                            class="px-3 py-1.5 rounded border text-sm">Cancel</button>
+                    <button type="submit"
+                            class="px-3 py-1.5 rounded bg-primary text-on-primary text-sm">
+                        Create ticket
+                    </button>
+                </div>
+            </form>
+        </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    document.getElementById('close-new-ticket').onclick = close;
+    document.getElementById('cancel-new-ticket').onclick = close;
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    document.getElementById('new-ticket-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const form = ev.target;
+        const data = new FormData(form);
+        const payload = {
+            type: data.get('type'),
+            priority: data.get('priority'),
+            subject: data.get('subject'),
+            body: data.get('body') || '',
+        };
+        const phone = (data.get('subscriber_phone') || '').trim();
+        if (phone) {
+            // Backend resolves by phone and links the subscriber if found.
+            payload.subscriber_phone = phone;
+        }
+        const err = document.getElementById('new-ticket-error');
+        err.classList.add('hidden');
+        const resp = await fetch('/api/tickets/create/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            err.textContent = body.error || ('HTTP ' + resp.status);
+            err.classList.remove('hidden');
+            return;
+        }
+        const t = await resp.json();
+        close();
+        await loadTickets();
+        await loadKpis();
+        loadTicket(t.id);
+    });
+}
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""Seed default prompt overrides for the three AI roles.
+"""Seed default prompt overrides for the AI roles.
 
 Idempotent: skips writing a new AIPromptVersion if the latest body for that
 role on the target config already matches the seed text. Run as:
@@ -13,6 +13,8 @@ import os
 from ai.models import AIPromptVersion, ResellerAIConfig
 
 
+# Split sections preserved below for readability; SEEDS writes the unified
+# CUSTOMER_OVERRIDE under ROLE_CUSTOMER (which covers enquiry + support).
 SALES_OVERRIDE = """\
 SabiWiFi sales playbook (use these on top of the base instructions):
 
@@ -125,10 +127,12 @@ Hard rules:
 """
 
 
+CUSTOMER_OVERRIDE = SALES_OVERRIDE + '\n\n' + SUPPORT_OVERRIDE
+
+
 SEEDS = {
-    AIPromptVersion.ROLE_SALES:   SALES_OVERRIDE,
-    AIPromptVersion.ROLE_SUPPORT: SUPPORT_OVERRIDE,
-    AIPromptVersion.ROLE_FIELD:   FIELD_OVERRIDE,
+    AIPromptVersion.ROLE_CUSTOMER: CUSTOMER_OVERRIDE,
+    AIPromptVersion.ROLE_FIELD:    FIELD_OVERRIDE,
 }
 
 

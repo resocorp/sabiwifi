@@ -39,6 +39,10 @@ class ResellerAIConfig(models.Model):
 
     DEFAULT_CAPABILITIES = {
         'ai_enabled': False,
+        'customer_enabled': False,
+        # sales_enabled / support_enabled kept for back-compat — a reseller
+        # that had either one set before the CustomerAgent merge is treated as
+        # having the customer flow on (see is_agent_enabled).
         'sales_enabled': False,
         'support_enabled': False,
         'field_enabled': False,
@@ -114,17 +118,25 @@ class ResellerAIConfig(models.Model):
             return False
         if not self.cap('ai_enabled'):
             return False
+        if role == 'customer' and 'customer_enabled' not in (self.capabilities or {}):
+            # Back-compat: pre-merge resellers didn't set customer_enabled.
+            # Treat either legacy flag as opting the customer flow in.
+            return bool(self.cap('sales_enabled')) or bool(self.cap('support_enabled'))
         return bool(self.cap(f'{role}_enabled'))
 
 
 class AIPromptVersion(models.Model):
+    # ROLE_SALES / ROLE_SUPPORT kept for historical rows. New prompt overrides
+    # for the customer-facing flow use ROLE_CUSTOMER.
     ROLE_SALES = 'sales'
     ROLE_SUPPORT = 'support'
+    ROLE_CUSTOMER = 'customer'
     ROLE_FIELD = 'field'
     ROLE_FIELD_INBOUND = 'field_inbound'
     ROLE_CHOICES = [
-        (ROLE_SALES, 'Sales'),
-        (ROLE_SUPPORT, 'Support'),
+        (ROLE_CUSTOMER, 'Customer (enquiry + support)'),
+        (ROLE_SALES, 'Sales (legacy)'),
+        (ROLE_SUPPORT, 'Support (legacy)'),
         (ROLE_FIELD, 'Field supervisor'),
         (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
     ]
@@ -149,13 +161,17 @@ class AIPromptVersion(models.Model):
 
 
 class AIAgentRun(models.Model):
+    # ROLE_SALES / ROLE_SUPPORT kept for historical rows. New runs emit
+    # ROLE_CUSTOMER.
     ROLE_SALES = 'sales'
     ROLE_SUPPORT = 'support'
+    ROLE_CUSTOMER = 'customer'
     ROLE_FIELD = 'field'
     ROLE_FIELD_INBOUND = 'field_inbound'
     ROLE_CHOICES = [
-        (ROLE_SALES, 'Sales'),
-        (ROLE_SUPPORT, 'Support'),
+        (ROLE_CUSTOMER, 'Customer (enquiry + support)'),
+        (ROLE_SALES, 'Sales (legacy)'),
+        (ROLE_SUPPORT, 'Support (legacy)'),
         (ROLE_FIELD, 'Field supervisor'),
         (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
     ]

@@ -75,10 +75,10 @@ class SalesAgentDraftModeTest(TestCase):
             attachments=[], external_message_id='WA-1',
             sender_phone='2348011112222',
         )
-        from ai.jobs import run_sales_agent
+        from ai.jobs import run_customer_agent
         with patch('ai.agents.runner.get_provider',
                    return_value=_FakeProvider(canned)):
-            result = run_sales_agent(msg.pk)
+            result = run_customer_agent(msg.pk)
         return msg, result
 
     def test_draft_reply_stored_and_conversation_marked(self):
@@ -101,7 +101,7 @@ class SalesAgentDraftModeTest(TestCase):
         self.assertEqual(convo.state, Conversation.STATE_AI_DRAFTED)
 
         run = AIAgentRun.objects.filter(reseller=self.reseller,
-                                        agent_role=AIAgentRun.ROLE_SALES).first()
+                                        agent_role=AIAgentRun.ROLE_CUSTOMER).first()
         self.assertIsNotNone(run)
         self.assertEqual(run.status, AIAgentRun.STATUS_SUCCESS)
         tool_names = [tc['name'] for tc in (run.tool_calls or [])]
@@ -139,10 +139,10 @@ class SalesAgentPaymentCapTest(TestCase):
             body='pay please', attachments=[], external_message_id='WA-X',
             sender_phone='2348011112222',
         )
-        from ai.jobs import run_sales_agent
+        from ai.jobs import run_customer_agent
         with patch('ai.agents.runner.get_provider',
                    return_value=_FakeProvider(canned)):
-            run_sales_agent(msg.pk)
+            run_customer_agent(msg.pk)
 
         run = AIAgentRun.objects.get(reseller=self.reseller)
         gated_steps = [tc for tc in run.tool_calls if tc.get('gated')]
@@ -160,7 +160,7 @@ class SalesAgentDisabledTest(TestCase):
             body='hi', attachments=[], external_message_id='WA-D',
             sender_phone='2348011112222',
         )
-        from ai.jobs import run_sales_agent
-        result = run_sales_agent(msg.pk)
+        from ai.jobs import run_customer_agent
+        result = run_customer_agent(msg.pk)
         self.assertTrue(result['skipped'])
         self.assertEqual(AIAgentRun.objects.count(), 0)

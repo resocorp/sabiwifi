@@ -134,6 +134,32 @@ class AgentRunner:
                     # needs to do more (e.g. open_ticket after send_reply)
                     # let the next inbound message retrigger it.
                     break
+
+            # Fallback: model emitted text without ever calling send_reply.
+            # Without this, the text would be logged to AIAgentRun.outputs and
+            # silently dropped — the customer gets nothing. Route it through
+            # the same send/draft path as an explicit send_reply call.
+            if (not (reply_sent or reply_drafted) and final_text
+                    and self.conversation is not None):
+                fallback_tc = ToolCall(
+                    id='_fallback_send_reply', name='send_reply',
+                    arguments={'body': final_text},
+                )
+                outcome = self._dispatch_tool(
+                    fallback_tc, ctx, auto_send=auto_send,
+                    auto_quote_cap_ngn=auto_quote_cap_ngn,
+                )
+                tool_trace.append({
+                    'name': 'send_reply',
+                    'arguments': {'body': final_text},
+                    'result': outcome['result'],
+                    'gated': outcome.get('gated', False),
+                    'fallback': True,
+                })
+                if outcome.get('replied'):
+                    reply_sent = True
+                if outcome.get('drafted'):
+                    reply_drafted = True
         except Exception as exc:
             status = AIAgentRun.STATUS_FAILED
             err = f'{type(exc).__name__}: {exc}'[:500]

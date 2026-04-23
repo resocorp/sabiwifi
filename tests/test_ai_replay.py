@@ -83,7 +83,7 @@ class ReplayHarnessTest(TestCase):
         # AIAgentRun audit rows produced.
         self.assertEqual(
             AIAgentRun.objects.filter(reseller=self.reseller,
-                                      agent_role=AIAgentRun.ROLE_SALES).count(),
+                                      agent_role=AIAgentRun.ROLE_CUSTOMER).count(),
             2,
         )
         self.assertIn('drafted=2', out.getvalue())

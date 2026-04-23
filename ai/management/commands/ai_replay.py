@@ -1,9 +1,9 @@
-"""Shadow-mode replay harness: run past inbound messages through Sales AI.
+"""Shadow-mode replay harness: run past inbound messages through the AI.
 
-Used during the shadow week to preview what the Sales agent *would* have
-replied on real conversations without sending anything. Forces draft mode
-regardless of the reseller's `auto_send_replies` cap by temporarily pinning
-the capability off for the duration of the run.
+Used to preview what the CustomerAgent *would* have replied on real
+conversations without sending anything. Forces draft mode regardless of the
+reseller's `auto_send_replies` cap by temporarily pinning the capability
+off for the duration of the run.
 
     manage.py ai_replay --reseller acme --days 7 --limit 20
 
@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from accounts.models import Reseller
-from ai.agents.sales import SalesAgent
+from ai.agents.customer import CustomerAgent
 from ai.models import ResellerAIConfig
 from conversations.models import Conversation, Message
 
@@ -73,7 +73,7 @@ class Command(BaseCommand):
             f'Replaying {len(messages)} inbound message(s) for {reseller.name} (draft mode).'
         ))
 
-        agent = SalesAgent(config)
+        agent = CustomerAgent(config)
         replied = drafted = skipped = errored = 0
         for msg in messages:
             label = f'msg#{msg.pk} [{msg.conversation.channel}] "{msg.body[:48]}"'

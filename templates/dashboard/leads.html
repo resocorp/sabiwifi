@@ -68,10 +68,7 @@
 </div>
 
 <script>
-function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
-}
+const CSRF = '{{ csrf_token }}';
 
 async function loadLeads() {
     const status = document.getElementById('status-filter').value;
@@ -112,7 +109,7 @@ async function createLead() {
     if (!body.phone) { alert('Phone required'); return; }
     const resp = await fetch('/api/leads/create/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify(body),
     });
     if (resp.ok) { closeNewLead(); loadLeads(); }
@@ -124,7 +121,7 @@ async function quoteLead(id) {
     if (!amount) return;
     const resp = await fetch('/api/leads/' + id + '/quote/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify({amount}),
     });
     const data = await resp.json();

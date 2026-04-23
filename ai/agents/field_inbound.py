@@ -18,7 +18,7 @@ the side effects.
 from __future__ import annotations
 
 from ai.agents.runner import AgentResult, AgentRunner
-from ai.agents.sales import _latest_override, normalised_history
+from ai.agents._helpers import _latest_override, normalised_history
 from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from conversations.models import Conversation, Message
 from staff.models import StaffMember

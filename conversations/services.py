@@ -117,13 +117,13 @@ def record_inbound_message(
         created_at=ts,
     )
 
-    # Fire AI sales agent as an RQ job (noop if reseller hasn't opted in).
+    # Fire the inbound router as an RQ job (noop if reseller hasn't opted in).
     # Wrapped in try/except + late-import so a broken ai/ config can never
     # block the inbound write path.
     try:
         if conversation.ai_enabled and hasattr(reseller, 'ai_config'):
-            from ai.jobs import enqueue_sales_agent
-            transaction.on_commit(lambda mid=msg.pk: enqueue_sales_agent(mid))
+            from ai.jobs import enqueue_inbound_router
+            transaction.on_commit(lambda mid=msg.pk: enqueue_inbound_router(mid))
     except Exception:
         pass
 

@@ -29,7 +29,7 @@ from tickets.services import create_ticket
 
 # Pull seed bodies straight from the script so this test asserts against the
 # same overrides that production loads — keeps prompts and tests in sync.
-from scripts.seed_ai_prompts import SALES_OVERRIDE, FIELD_OVERRIDE
+from scripts.seed_ai_prompts import CUSTOMER_OVERRIDE, FIELD_OVERRIDE
 
 
 def _seed_reseller(slug='nedu-test'):
@@ -60,8 +60,8 @@ def _seed_reseller(slug='nedu-test'):
     )
     cfg.text_api_key = 'sk-test'
     cfg.save()
-    AIPromptVersion.objects.create(config=cfg, agent_role='sales',
-                                   body=SALES_OVERRIDE)
+    AIPromptVersion.objects.create(config=cfg, agent_role='customer',
+                                   body=CUSTOMER_OVERRIDE)
     AIPromptVersion.objects.create(config=cfg, agent_role='field',
                                    body=FIELD_OVERRIDE)
     return r, cfg
@@ -117,9 +117,9 @@ class SalesWorkflowE2ETest(TestCase):
         )
 
         provider = _ScriptedProvider(canned)
-        from ai.jobs import run_sales_agent
+        from ai.jobs import run_customer_agent
         with patch('ai.agents.runner.get_provider', return_value=provider):
-            result = run_sales_agent(msg.pk)
+            result = run_customer_agent(msg.pk)
 
         self.assertFalse(result['skipped'])
         self.assertTrue(result['drafted'])
@@ -148,7 +148,7 @@ class SalesWorkflowE2ETest(TestCase):
         self.assertIn('Home Plus', drafts[0].body)
 
         # Run was logged with the right tool sequence
-        run = AIAgentRun.objects.get(reseller=reseller, agent_role='sales')
+        run = AIAgentRun.objects.get(reseller=reseller, agent_role='customer')
         names = [tc['name'] for tc in (run.tool_calls or [])]
         self.assertEqual(names, ['create_lead', 'suggest_plan', 'send_reply'])
         self.assertEqual(run.status, AIAgentRun.STATUS_SUCCESS)

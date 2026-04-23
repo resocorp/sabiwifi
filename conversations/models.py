@@ -82,6 +82,12 @@ class Conversation(models.Model):
         related_name='assigned_conversations',
     )
 
+    # Support-agent state machine checkpoint. Shape:
+    #   {step, clues: {...}, account_summary, router_id, customer_type,
+    #    awaiting_confirmation_ticket_id, updated_at}
+    # Reset by ai/jobs.py if older than 6h.
+    diagnostic_state = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

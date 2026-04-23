@@ -60,10 +60,7 @@
 </div>
 
 <script>
-function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
-}
+const CSRF = '{{ csrf_token }}';
 async function loadStaff() {
     const resp = await fetch('/api/staff/');
     const data = await resp.json();
@@ -111,7 +108,7 @@ async function createStaff() {
     if (canLogin) body.password = password;
     const resp = await fetch('/api/staff/create/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify(body),
     });
     if (resp.ok) { closeNew(); loadStaff(); }

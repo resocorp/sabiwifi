@@ -13,7 +13,8 @@ from accounts.permissions import (
 )
 from tickets.models import Ticket, TicketEvent
 from tickets.services import (
-    add_comment, assign_ticket, change_status, create_ticket, escalate,
+    add_comment, assign_ticket, change_status, compute_kpis, create_ticket,
+    escalate,
 )
 
 
@@ -115,6 +116,17 @@ def ticket_create(request):
     if data.get('subscriber_id'):
         from accounts.models import Subscriber
         subscriber = get_object_or_404(Subscriber, pk=data['subscriber_id'], reseller=reseller)
+    elif data.get('subscriber_phone'):
+        # Convenience path for manual creation — resolve by phone
+        # (exact match, then last-10-digits fallback for E.164/local variance).
+        from accounts.models import Subscriber
+        phone = str(data['subscriber_phone']).strip()
+        qs = Subscriber.objects.filter(reseller=reseller)
+        subscriber = qs.filter(phone=phone).first()
+        if subscriber is None:
+            digits = ''.join(c for c in phone if c.isdigit())
+            if len(digits) >= 10:
+                subscriber = qs.filter(phone__endswith=digits[-10:]).first()
     if lead and subscriber:
         return Response({'error': 'pick one of lead_id / subscriber_id'}, status=400)
 
@@ -205,3 +217,17 @@ def ticket_escalate(request, pk):
         return Response({'error': 'reason required'}, status=400)
     escalate(ticket, reason, actor=f'human:{request.user.pk}')
     return Response(_serialise_ticket(ticket))
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def ticket_kpis(request):
+    """Return ticket KPIs (open count, MTTR, SLA breach rate, reopen rate,
+    AI-handled share, tickets-per-day, top causes) for this reseller."""
+    _require(request, 'tickets', 'tickets_read', 'reports', 'reports_read')
+    reseller = effective_reseller(request.user)
+    try:
+        days = max(1, min(365, int(request.GET.get('days', 30))))
+    except (TypeError, ValueError):
+        days = 30
+    return Response(compute_kpis(reseller=reseller, days=days))

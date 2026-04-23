@@ -24,7 +24,7 @@ from django.utils import timezone
 from accounts.models import Reseller, Subscriber
 from ai.agents.field import FieldSupervisorAgent
 from ai.agents.field_inbound import FieldInboundAgent
-from ai.agents.support import SupportAgent
+from ai.agents.customer import CustomerAgent
 from ai.models import AIAgentRun, AIPromptVersion, ResellerAIConfig
 from ai.providers.base import ChatResponse, ToolCall
 from conversations.models import Conversation, Message
@@ -120,7 +120,7 @@ class SupportDiagnoseFlowTest(TestCase):
              patch('billing.providers.paystack.PaystackProvider.initialize_payment',
                    return_value={'authorization_url': 'https://paystack.test/X'}), \
              patch('notifications.notify.send_whatsapp', return_value=True):
-            SupportAgent(cfg).handle_inbound_message(
+            CustomerAgent(cfg).handle_inbound_message(
                 conversation=msg.conversation, message=msg)
 
         # Ticket exists, was created by support agent
@@ -155,7 +155,7 @@ class SupportDiagnoseFlowTest(TestCase):
             ChatResponse(text='ok', tool_calls=[], prompt_tokens=5, completion_tokens=2),
         ]
         with patch('ai.agents.runner.get_provider', return_value=_Provider(canned)):
-            SupportAgent(cfg).handle_inbound_message(
+            CustomerAgent(cfg).handle_inbound_message(
                 conversation=msg.conversation, message=msg)
         run = AIAgentRun.objects.get(reseller=r)
         gated = [tc for tc in run.tool_calls if tc.get('gated')]

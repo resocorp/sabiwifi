@@ -90,8 +90,17 @@ class Command(BaseCommand):
             if self._send_ping(t, dry=dry, now=now):
                 sent += 1
 
+        # Pass 2: SLA-breach auto-escalation — bump priority + log event for
+        # any non-terminal ticket that blew its SLA and hasn't been escalated.
+        sla_escalated = self._sla_breach_sweep(now=now, scope=scope, dry=dry)
+        # Pass 3: Auto-close tickets where the satisfaction YES/NO ping
+        # went unanswered for >24h.
+        auto_closed = self._stale_awaiting_sweep(dry=dry)
+
         self.stdout.write(self.style.SUCCESS(
-            f'Done. sent={sent} escalated={escalated} skipped={skipped}'
+            f'Done. sent={sent} escalated={escalated} '
+            f'sla_escalated={sla_escalated} auto_closed={auto_closed} '
+            f'skipped={skipped}'
         ))
 
     # ----- helpers ----------------------------------------------------------
@@ -183,3 +192,75 @@ class Command(BaseCommand):
             f'  escalated #{ticket.pk} (no response after '
             f'{ticket.field_ping_count} pings)'
         ))
+
+    # ----- SLA-breach auto-escalation ---------------------------------------
+
+    def _sla_breach_sweep(self, *, now, scope: str, dry: bool) -> int:
+        """Find non-terminal tickets whose SLA has elapsed without an
+        escalation_reason, and escalate them via tickets.services.escalate.
+        Also alerts the reseller's manager role (best-effort)."""
+        from tickets.services import escalate
+        qs = (Ticket.objects
+              .filter(sla_due_at__lt=now, escalation_reason='')
+              .exclude(status__in=Ticket.TERMINAL_STATUSES)
+              .select_related('reseller'))
+        if scope:
+            qs = qs.filter(reseller__slug=scope)
+        count = 0
+        for t in qs:
+            if dry:
+                self.stdout.write(
+                    f'  [dry-run] would SLA-escalate #{t.pk} (due {t.sla_due_at})'
+                )
+                count += 1
+                continue
+            escalate(t, reason='sla_breached', actor='system')
+            self._notify_manager_sla_breach(t)
+            self.stdout.write(self.style.WARNING(
+                f'  SLA-escalated #{t.pk} (due {t.sla_due_at:%Y-%m-%d %H:%M})'
+            ))
+            count += 1
+        return count
+
+    def _notify_manager_sla_breach(self, ticket: Ticket) -> None:
+        """Best-effort WhatsApp ping to any manager-role staff on this reseller.
+        Silent on failure — the KIND_ESCALATED event is the source of truth."""
+        try:
+            from staff.models import StaffMember
+            managers = StaffMember.objects.filter(
+                reseller=ticket.reseller, role=StaffMember.ROLE_MANAGER,
+                active=True,
+            )
+            body = (
+                f'SLA breach on ticket #{ticket.pk}: "{ticket.subject}" '
+                f'(due {ticket.sla_due_at:%Y-%m-%d %H:%M}). Priority bumped.'
+            )
+            for m in managers:
+                target = m.whatsapp or m.phone
+                if target:
+                    send_whatsapp(ticket.reseller.slug, target, body)
+        except Exception:
+            pass
+
+    # ----- stale satisfaction-awaiting sweep --------------------------------
+
+    def _stale_awaiting_sweep(self, *, dry: bool) -> int:
+        """Delegate to the helper in ai/jobs so the logic stays in one place."""
+        if dry:
+            self.stdout.write('  [dry-run] would sweep stale awaiting confirmations')
+            return 0
+        try:
+            from ai.jobs import sweep_stale_awaiting_confirmations
+            res = sweep_stale_awaiting_confirmations(max_age_hours=24)
+            count = int(res.get('closed') or 0)
+            if count:
+                self.stdout.write(self.style.WARNING(
+                    f'  auto-closed {count} ticket(s) '
+                    f'after 24h of no customer reply'
+                ))
+            return count
+        except Exception as exc:  # noqa: BLE001
+            self.stdout.write(self.style.ERROR(
+                f'  stale-awaiting sweep failed: {exc}'
+            ))
+            return 0
