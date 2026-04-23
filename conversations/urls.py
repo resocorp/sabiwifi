@@ -13,6 +13,8 @@ urlpatterns = [
     path('<int:pk>/', views.conversation_detail, name='detail'),
     path('<int:pk>/reply/', views.conversation_reply, name='reply'),
     path('<int:pk>/resolve/', views.conversation_resolve, name='resolve'),
+    path('<int:pk>/reopen/', views.conversation_reopen, name='reopen'),
+    path('<int:pk>/delete/', views.conversation_delete, name='delete'),
     path('<int:pk>/toggle-ai/', views.conversation_toggle_ai, name='toggle-ai'),
     path('<int:pk>/drafts/<int:message_id>/send/',
          views.conversation_send_draft, name='send-draft'),

@@ -17,7 +17,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import Reseller
-from accounts.permissions import scope_queryset, effective_reseller, effective_role, ROLE_FIELD_TECH
+from accounts.permissions import scope_queryset, effective_reseller, effective_role, can, ROLE_FIELD_TECH
 from conversations.models import Conversation, Message
 from conversations.services import record_inbound_message, record_outbound_message
 
@@ -136,6 +136,16 @@ def conversation_list(request):
     state = request.GET.get('state')
     if state:
         qs = qs.filter(state=state)
+    else:
+        # Inbox vs. Archived split. `archived=1` shows only resolved
+        # threads; anything else (including omitted) shows everything
+        # except resolved. The explicit `state=` param above still wins
+        # for advanced filters.
+        archived = request.GET.get('archived')
+        if archived == '1':
+            qs = qs.filter(state=Conversation.STATE_RESOLVED)
+        else:
+            qs = qs.exclude(state=Conversation.STATE_RESOLVED)
     kind = request.GET.get('kind')
     if kind:
         qs = qs.filter(kind=kind)
@@ -226,6 +236,42 @@ def conversation_resolve(request, pk):
     reseller = effective_reseller(request.user)
     convo = get_object_or_404(_convos_for_user(request), pk=pk)
     convo.state = Conversation.STATE_RESOLVED
+    convo.save(update_fields=['state'])
+    return Response({'ok': True})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def conversation_delete(request, pk):
+    """Hard-delete an archived conversation. Owner-only, and only allowed
+    from the Archived folder (state=resolved) to prevent foot-gunning a
+    live thread.
+
+    Cascade behaviour:
+      - Messages: deleted (FK CASCADE).
+      - Tickets:  kept, FK nulled (SET_NULL).
+      - AIAgentRun: kept, FK nulled (SET_NULL) — cost/audit trail preserved.
+    """
+    if not can(request.user, 'conversations_delete'):
+        return Response({'error': 'Forbidden'}, status=403)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
+    if convo.state != Conversation.STATE_RESOLVED:
+        return Response(
+            {'error': 'Only archived (resolved) conversations can be deleted.'},
+            status=400,
+        )
+    convo.delete()
+    return Response({'ok': True})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def conversation_reopen(request, pk):
+    """Move an archived (resolved) thread back to the Inbox. Mirror of
+    conversation_resolve. Used by the Archived tab's "Move to Inbox" button."""
+    reseller = effective_reseller(request.user)
+    convo = get_object_or_404(_convos_for_user(request), pk=pk)
+    convo.state = Conversation.STATE_OPEN
     convo.save(update_fields=['state'])
     return Response({'ok': True})
 

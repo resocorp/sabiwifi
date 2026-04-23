@@ -1,4 +1,5 @@
 {% extends "dashboard/base.html" %}
+{% load permissions_tags %}
 {% block title %}Inbox — SabiWiFi{% endblock %}
 
 {% block content %}
@@ -8,18 +9,15 @@
         <p class="text-sm text-on-surface-variant">Customer conversations across WhatsApp, SMS and email — including AI drafts awaiting your approval.</p>
     </div>
     <div class="flex items-center gap-2">
+        <div id="folder-tabs" class="inline-flex rounded-lg border bg-surface-container-low p-0.5 text-xs">
+            <button data-folder="inbox" class="folder-tab px-2 py-1 rounded font-medium">Inbox</button>
+            <button data-folder="archived" class="folder-tab px-2 py-1 rounded">Archived</button>
+        </div>
         <div id="kind-tabs" class="inline-flex rounded-lg border bg-surface-container-low p-0.5 text-xs">
             <button data-kind="" class="kind-tab px-2 py-1 rounded font-medium">All</button>
             <button data-kind="customer" class="kind-tab px-2 py-1 rounded">Customer</button>
             <button data-kind="tech" class="kind-tab px-2 py-1 rounded">Field</button>
         </div>
-        <select id="state-filter" class="rounded border px-2 py-1 text-sm">
-            <option value="">All states</option>
-            <option value="open">Open</option>
-            <option value="ai_drafted">AI drafted</option>
-            <option value="pending_human">Pending human</option>
-            <option value="resolved">Resolved</option>
-        </select>
         <button id="refresh-btn" class="text-xs px-2 py-1 rounded border" title="Refresh">↻</button>
     </div>
 </div>
@@ -37,19 +35,17 @@
 
 <script>
 const POLL_MS = 5000;
+const CSRF = '{{ csrf_token }}';
+const CAN_DELETE_CONVO = {{ user|can:"conversations_delete"|yesno:"true,false" }};
 let activeConvoId = null;
 let activeKind = '';
+let activeFolder = 'inbox';  // 'inbox' | 'archived'
 let pollTimer = null;
 
 function escapeHTML(s) {
     return (s || '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
-}
-
-function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
 }
 
 function stateBadge(state) {
@@ -95,9 +91,8 @@ function authorMeta(m) {
 }
 
 async function loadConversations() {
-    const state = document.getElementById('state-filter').value;
     const params = new URLSearchParams();
-    if (state) params.set('state', state);
+    params.set('archived', activeFolder === 'archived' ? '1' : '0');
     if (activeKind) params.set('kind', activeKind);
     const qs = params.toString();
     const url = '/api/conversations/' + (qs ? '?' + qs : '');
@@ -106,7 +101,10 @@ async function loadConversations() {
     const data = await resp.json();
     const list = document.getElementById('conversation-list');
     if (!data.length) {
-        list.innerHTML = '<li class="p-4 text-sm text-on-surface-variant text-center">No conversations yet.<br><span class="text-xs">Inbound WhatsApp messages will appear here.</span></li>';
+        const empty = activeFolder === 'archived'
+            ? 'No archived conversations.<br><span class="text-xs">Closed chats land here.</span>'
+            : 'No conversations yet.<br><span class="text-xs">Inbound WhatsApp messages will appear here.</span>';
+        list.innerHTML = '<li class="p-4 text-sm text-on-surface-variant text-center">' + empty + '</li>';
         return;
     }
     list.innerHTML = data.map(c => {
@@ -192,7 +190,7 @@ async function loadConversation(id) {
             <div class="text-on-surface-variant mb-1 font-semibold uppercase tracking-wide">Linked tickets</div>
             ${(data.tickets || []).map(t => `
                 <div class="flex items-center gap-2 py-0.5">
-                    <a href="/dashboard/tickets/" class="font-mono">#${t.id}</a>
+                    <a href="/dashboard/tickets/?ticket=${t.id}" class="font-mono underline hover:text-primary">🎫 #${t.id}</a>
                     <span>${escapeHTML(t.type)}</span>
                     <span class="text-on-surface-variant">·</span>
                     <span>${escapeHTML(t.status)}</span>
@@ -217,8 +215,18 @@ async function loadConversation(id) {
             </div>
             <div class="flex items-center gap-2">
                 ${aiToggle}
-                <button onclick="resolveConvo(${id})" title="Closes this chat thread (housekeeping). Does not resolve any linked ticket."
-                        class="text-xs px-2 py-1 rounded border">Close chat</button>
+                ${c.state === 'resolved' ? `
+                    <button onclick="reopenConvo(${id})" title="Move this conversation back to the Inbox."
+                            class="text-xs px-2 py-1 rounded bg-primary text-on-primary">Move to Inbox</button>
+                    ${CAN_DELETE_CONVO ? `
+                        <button onclick="deleteConvo(${id})"
+                                title="Permanently delete this archived chat and all its messages. Linked tickets are kept."
+                                class="text-xs px-2 py-1 rounded border border-error text-error hover:bg-error hover:text-on-error">Delete</button>
+                    ` : ''}
+                ` : `
+                    <button onclick="resolveConvo(${id})" title="Closes this chat thread (housekeeping). Does not resolve any linked ticket."
+                            class="text-xs px-2 py-1 rounded border">Close chat</button>
+                `}
             </div>
         </div>
         ${ticketBlock}
@@ -240,7 +248,7 @@ async function sendReply(id) {
     if (!body) return;
     const resp = await fetch('/api/conversations/' + id + '/reply/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify({body}),
     });
     if (resp.ok) { ta.value = ''; loadConversation(id); }
@@ -249,7 +257,7 @@ async function sendReply(id) {
 async function sendDraft(convoId, msgId) {
     const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/send/`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify({}),
     });
     if (resp.ok) loadConversation(convoId);
@@ -260,7 +268,7 @@ async function editDraft(convoId, msgId, currentBody) {
     if (next === null) return;
     const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/send/`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
         body: JSON.stringify({body: next}),
     });
     if (resp.ok) loadConversation(convoId);
@@ -270,7 +278,7 @@ async function discardDraft(convoId, msgId) {
     if (!confirm('Discard this AI draft?')) return;
     const resp = await fetch(`/api/conversations/${convoId}/drafts/${msgId}/discard/`, {
         method: 'POST',
-        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'X-CSRFToken': CSRF},
     });
     if (resp.ok) loadConversation(convoId);
 }
@@ -278,7 +286,7 @@ async function discardDraft(convoId, msgId) {
 async function toggleAI(id) {
     await fetch('/api/conversations/' + id + '/toggle-ai/', {
         method: 'POST',
-        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'X-CSRFToken': CSRF},
     });
     loadConversation(id);
 }
@@ -286,10 +294,33 @@ async function toggleAI(id) {
 async function resolveConvo(id) {
     await fetch('/api/conversations/' + id + '/resolve/', {
         method: 'POST',
-        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        headers: {'X-CSRFToken': CSRF},
     });
     loadConversations();
     if (activeConvoId === id) loadConversation(id);
+}
+
+async function reopenConvo(id) {
+    await fetch('/api/conversations/' + id + '/reopen/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF},
+    });
+    loadConversations();
+    if (activeConvoId === id) loadConversation(id);
+}
+
+async function deleteConvo(id) {
+    if (!confirm('Permanently delete this archived chat and its messages?\n\nLinked tickets will be kept but unlinked.\nThis cannot be undone.')) return;
+    const resp = await fetch('/api/conversations/' + id + '/delete/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF},
+    });
+    if (resp.ok) {
+        clearDetailPane();
+        loadConversations();
+    } else {
+        alert('Delete failed: HTTP ' + resp.status);
+    }
 }
 
 function startPolling() {
@@ -300,10 +331,28 @@ function startPolling() {
     }, POLL_MS);
 }
 
-document.getElementById('state-filter').addEventListener('change', loadConversations);
 document.getElementById('refresh-btn').addEventListener('click', () => {
     loadConversations();
     if (activeConvoId) loadConversation(activeConvoId);
+});
+
+function clearDetailPane() {
+    activeConvoId = null;
+    document.getElementById('conversation-detail').innerHTML =
+        '<p class="text-sm text-on-surface-variant">Pick a conversation on the left.</p>';
+}
+
+document.querySelectorAll('.folder-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        activeFolder = btn.dataset.folder;
+        document.querySelectorAll('.folder-tab').forEach(b => {
+            const on = b.dataset.folder === activeFolder;
+            b.classList.toggle('bg-primary', on);
+            b.classList.toggle('text-on-primary', on);
+        });
+        clearDetailPane();
+        loadConversations();
+    });
 });
 
 document.querySelectorAll('.kind-tab').forEach(btn => {
@@ -313,15 +362,12 @@ document.querySelectorAll('.kind-tab').forEach(btn => {
             b.classList.toggle('bg-primary', b.dataset.kind === activeKind);
             b.classList.toggle('text-on-primary', b.dataset.kind === activeKind);
         });
-        // Switching tabs clears the selected detail to avoid showing a
-        // conversation that no longer matches the filter.
-        activeConvoId = null;
-        document.getElementById('conversation-detail').innerHTML =
-            '<p class="text-sm text-on-surface-variant">Pick a conversation on the left.</p>';
+        clearDetailPane();
         loadConversations();
     });
 });
-// Default-select "All"
+// Default-select "Inbox" folder + "All" kind.
+document.querySelector('.folder-tab[data-folder="inbox"]').classList.add('bg-primary', 'text-on-primary');
 document.querySelector('.kind-tab[data-kind=""]').classList.add('bg-primary', 'text-on-primary');
 
 loadConversations();

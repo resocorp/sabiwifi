@@ -49,6 +49,7 @@ ALL_CAPS = {
     'profile_own',
     # Action-level
     'assign_ticket',
+    'conversations_delete',
 }
 
 ROLE_CAPS = {

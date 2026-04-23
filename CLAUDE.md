@@ -160,6 +160,7 @@ Three themes in `templates/portal/{modern,bold,minimal}/`. Each has `login.html`
 
 ```bash
 systemctl restart sabiwifi.service           # Django/Gunicorn
+systemctl restart sabiwifi-rqworker.service  # RQ worker (AI router, ticket jobs)
 systemctl restart sabiwifi-whatsapp.service  # Node WA sidecar
 systemctl restart nginx
 systemctl restart redis-server
@@ -171,9 +172,19 @@ cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python 
 
 # Tail logs
 journalctl -u sabiwifi.service -f
+journalctl -u sabiwifi-rqworker.service -f
 journalctl -u sabiwifi-whatsapp.service -f
 tail -f /var/log/sabiwifi-cron.log
 ```
+
+**Deploy:** `systemctl restart sabiwifi.service` is enough. A systemd drop-in at
+`/etc/systemd/system/sabiwifi.service.d/propagate-worker-restart.conf` runs
+`systemctl try-restart sabiwifi-rqworker.service` via `ExecStartPost=+-…` on
+every web restart, so the worker stays in lockstep with pulled code. Before
+that drop-in existed, workers held stale imports from `ai/`, `conversations/`,
+or `tickets/` after `git pull` and jobs crashed silently with `ImportError` /
+`AttributeError`. The `+` prefix is required because the web service runs as
+`User=www-data`, which cannot drive system units on its own.
 
 ---
 
@@ -195,3 +206,42 @@ tail -f /var/log/sabiwifi-cron.log
 - No CI/CD — deploy = `git pull` on server + `systemctl restart sabiwifi.service`
 - Static files: `venv/bin/python manage.py collectstatic --noinput`
 - Migrations: `venv/bin/python manage.py migrate` (never touch `radius/` app migrations)
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. The
+skill has multi-step workflows, checklists, and quality gates that produce better
+results than an ad-hoc answer. When in doubt, invoke the skill. A false positive is
+cheaper than a false negative.
+
+Skills are namespaced — invoke via `/gstack-<name>`. Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke /gstack-office-hours
+- Strategy, scope, "think bigger" → invoke /gstack-plan-ceo-review
+- Architecture, "does this design make sense" → invoke /gstack-plan-eng-review
+- Design system, brand, "how should this look" → invoke /gstack-design-consultation
+- Design review of a plan → invoke /gstack-plan-design-review
+- Developer experience of a plan → invoke /gstack-plan-devex-review
+- "Review everything", full review pipeline → invoke /gstack-autoplan
+- Bugs, errors, "why is this broken", "this doesn't work" → invoke /gstack-investigate
+- Code review, check the diff, "look at my changes" → invoke /gstack-review
+- Developer experience audit → invoke /gstack-devex-review
+- Ship, deploy, create a PR, "send it" → invoke /gstack-ship
+- Merge + deploy + verify → invoke /gstack-land-and-deploy
+- Configure deployment → invoke /gstack-setup-deploy
+- Update docs after shipping → invoke /gstack-document-release
+- Weekly retro → invoke /gstack-retro
+- Second opinion, codex review → invoke /gstack-codex
+- Safety mode, careful mode → invoke /gstack-careful or /gstack-guard
+- Restrict edits to a directory → invoke /gstack-freeze or /gstack-unfreeze
+- Upgrade gstack → invoke /gstack-upgrade
+- Save progress, "save my work" → invoke /gstack-context-save
+- Resume, restore, "where was I" → invoke /gstack-context-restore
+- Security audit, OWASP, "is this secure" → invoke /gstack-cso
+- Make a PDF, document, publication → invoke /gstack-make-pdf
+- Performance regression, page speed → invoke /gstack-benchmark
+- Review what gstack has learned → invoke /gstack-learn
+- Code quality dashboard → invoke /gstack-health
+
+Browser-based skills (/gstack-qa, /gstack-browse, /gstack-design-review, /gstack-canary,
+/gstack-open-gstack-browser, /gstack-setup-browser-cookies) are non-functional on this
+headless server (Playwright Chromium deps missing). Do not invoke them.
