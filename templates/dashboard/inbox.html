@@ -132,6 +132,22 @@ async function loadConversations() {
 
 async function loadConversation(id) {
     activeConvoId = id;
+
+    // Preserve composer state across poll re-renders. Without this the
+    // 5s poll wipes whatever the user is typing because the detail pane
+    // is rebuilt via innerHTML below.
+    const prevTa = document.getElementById('reply-body');
+    const preservedBody = prevTa ? prevTa.value : '';
+    const hadFocus = prevTa && document.activeElement === prevTa;
+    const selStart = prevTa ? prevTa.selectionStart : 0;
+    const selEnd   = prevTa ? prevTa.selectionEnd   : 0;
+    // If the user is actively typing, skip the poll-driven re-render
+    // entirely. Manual actions (sendReply, toggleAI, etc.) clear the
+    // textarea first so preservedBody is '' and this guard passes.
+    if (hadFocus && preservedBody) {
+        return;
+    }
+
     await loadConversations();  // re-render highlight
     const resp = await fetch('/api/conversations/' + id + '/');
     if (!resp.ok) return;
@@ -240,6 +256,16 @@ async function loadConversation(id) {
     // Scroll to bottom
     const pane = document.getElementById('messages-pane');
     if (pane) pane.scrollTop = pane.scrollHeight;
+
+    // Restore composer state (value + caret + focus) from before the re-render.
+    const newTa = document.getElementById('reply-body');
+    if (newTa && preservedBody) {
+        newTa.value = preservedBody;
+        if (hadFocus) {
+            newTa.focus();
+            try { newTa.setSelectionRange(selStart, selEnd); } catch (_) {}
+        }
+    }
 }
 
 async function sendReply(id) {
