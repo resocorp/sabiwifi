@@ -1,4 +1,8 @@
-<!-- SabiWiFi Design Tokens — "The Digital Veranda" (Light / Dark / System) -->
+<!-- SabiWiFi Design Tokens — Refined Fintech -->
+<!-- Source of truth: DESIGN.md at repo root. -->
+<!-- Material You token names preserved for template compatibility; hex values -->
+<!-- repointed to the Refined Fintech palette. Legacy utilities (glassmorphism, -->
+<!-- text-gradient) remain for now; Phase E will remove per-template usage. -->
 
 <!-- Prevent flash of wrong theme — must run before any rendering -->
 <script>
@@ -10,9 +14,15 @@
 </script>
 
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+
+<!-- Fraunces (display serif), General Sans (body/UI), Geist (data/tabular), JetBrains Mono (code) -->
+<link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.bunny.net/css?family=geist:400,500,600&display=swap" rel="stylesheet">
+<link href="https://fonts.bunny.net/css?family=jetbrains-mono:400,500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 
 <script>
@@ -21,6 +31,7 @@ tailwind.config = {
     theme: {
         extend: {
             colors: {
+                /* Material You token names preserved for template compatibility */
                 "primary":                     "rgb(var(--c-primary) / <alpha-value>)",
                 "primary-dim":                 "rgb(var(--c-primary-dim) / <alpha-value>)",
                 "primary-container":           "rgb(var(--c-primary-container) / <alpha-value>)",
@@ -72,23 +83,75 @@ tailwind.config = {
                 "inverse-surface":             "rgb(var(--c-inverse-surface) / <alpha-value>)",
                 "inverse-on-surface":          "rgb(var(--c-inverse-on-surface) / <alpha-value>)",
                 "inverse-primary":             "rgb(var(--c-inverse-primary) / <alpha-value>)",
+
+                /* DESIGN.md direct tokens — prefer these in new templates */
+                "ink":                         "rgb(var(--c-ink) / <alpha-value>)",
+                "ink-muted":                   "rgb(var(--c-ink-muted) / <alpha-value>)",
+                "ink-subtle":                  "rgb(var(--c-ink-subtle) / <alpha-value>)",
+                "brand":                       "rgb(var(--c-brand) / <alpha-value>)",
+                "brand-ink":                   "rgb(var(--c-brand-ink) / <alpha-value>)",
+                "success":                     "rgb(var(--c-success) / <alpha-value>)",
+                "success-soft":                "rgb(var(--c-success-soft) / <alpha-value>)",
+                "warning":                     "rgb(var(--c-warning) / <alpha-value>)",
+                "warning-soft":                "rgb(var(--c-warning-soft) / <alpha-value>)",
+                "danger":                      "rgb(var(--c-danger) / <alpha-value>)",
+                "danger-soft":                 "rgb(var(--c-danger-soft) / <alpha-value>)",
+                "info":                        "rgb(var(--c-info) / <alpha-value>)",
+                "info-soft":                   "rgb(var(--c-info-soft) / <alpha-value>)",
+                "hairline":                    "rgb(var(--c-hairline) / <alpha-value>)",
             },
             fontFamily: {
-                "headline": ['"Plus Jakarta Sans"', 'sans-serif'],
-                "body":     ['"Be Vietnam Pro"', 'sans-serif'],
-                "label":    ['"Be Vietnam Pro"', 'sans-serif'],
-                "mono":     ['"JetBrains Mono"', 'monospace'],
+                /* Legacy aliases (preserved for template compatibility) */
+                "headline": ['"Fraunces"', 'ui-serif', 'Georgia', 'serif'],
+                "body":     ['"General Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                "label":    ['"General Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                "mono":     ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+                /* DESIGN.md named families */
+                "display":  ['"Fraunces"', 'ui-serif', 'Georgia', 'serif'],
+                "sans":     ['"General Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                "data":     ['"Geist"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                "code":     ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+            },
+            fontSize: {
+                /* DESIGN.md modular scale (1.25 from 16) */
+                "xs":    ["0.75rem",   { lineHeight: "1rem" }],     /* 12 */
+                "sm":    ["0.875rem",  { lineHeight: "1.25rem" }],  /* 14 */
+                "base":  ["1rem",      { lineHeight: "1.5rem" }],   /* 16 */
+                "lg":    ["1.125rem",  { lineHeight: "1.625rem" }], /* 18 */
+                "xl":    ["1.3125rem", { lineHeight: "1.75rem" }],  /* 21 */
+                "2xl":   ["1.75rem",   { lineHeight: "2.125rem" }], /* 28 */
+                "3xl":   ["2.25rem",   { lineHeight: "2.5rem" }],   /* 36 */
+                "4xl":   ["3rem",      { lineHeight: "3.25rem" }],  /* 48 */
+                "5xl":   ["4rem",      { lineHeight: "4.25rem" }],  /* 64 */
             },
             borderRadius: {
+                /* DESIGN.md radius scale */
+                "sm":      "0.25rem",  /* 4  — inputs, small buttons, badges */
                 "DEFAULT": "0.25rem",
-                "lg": "1rem",
-                "xl": "1.5rem",
-                "full": "9999px",
+                "md":      "0.5rem",   /* 8  — cards, modals, large buttons */
+                "lg":      "0.75rem",  /* 12 — prominent marketing cards only */
+                "xl":      "1rem",     /* 16 — reserved for marketing surfaces */
+                "2xl":     "1.25rem",
+                "full":    "9999px",   /* avatars, status pills only */
             },
             boxShadow: {
+                /* Subtler than legacy; reserved for floating surfaces */
                 "ambient":    "var(--shadow-ambient)",
                 "ambient-sm": "var(--shadow-ambient-sm)",
                 "ambient-up": "var(--shadow-ambient-up)",
+            },
+            transitionTimingFunction: {
+                /* DESIGN.md motion easing */
+                "enter": "cubic-bezier(0.16, 1, 0.3, 1)",
+                "exit":  "cubic-bezier(0.7, 0, 0.84, 0)",
+                "move":  "cubic-bezier(0.45, 0, 0.55, 1)",
+            },
+            transitionDuration: {
+                /* DESIGN.md motion durations */
+                "micro":  "120ms",
+                "short":  "200ms",
+                "medium": "300ms",
+                "long":   "500ms",
             },
         },
     },
@@ -100,183 +163,228 @@ tailwind.config = {
 :root {
     color-scheme: light;
 
-    /* Primary (Growth Green) */
-    --c-primary: 0 106 54;
-    --c-primary-dim: 0 92 46;
-    --c-primary-container: 113 246 157;
-    --c-on-primary: 205 255 213;
-    --c-on-primary-container: 0 91 45;
-    --c-primary-fixed: 113 246 157;
-    --c-primary-fixed-dim: 98 232 145;
-    --c-on-primary-fixed: 0 70 33;
-    --c-on-primary-fixed-variant: 0 102 51;
+    /* ─── Primary: Deep Forest #0E3B2E ─── */
+    --c-primary:                   14 59 46;        /* #0E3B2E */
+    --c-primary-dim:               10 43 33;        /* #0A2B21 */
+    --c-primary-container:         215 229 220;     /* #D7E5DC — soft forest tint for container surfaces */
+    --c-on-primary:                245 245 244;     /* #F5F5F4 — warm white on forest */
+    --c-on-primary-container:      10 43 33;        /* #0A2B21 */
+    --c-primary-fixed:             215 229 220;
+    --c-primary-fixed-dim:         184 206 193;     /* #B8CEC1 */
+    --c-on-primary-fixed:          10 43 33;
+    --c-on-primary-fixed-variant:  14 59 46;
 
-    /* Secondary (Earnest Gold) */
-    --c-secondary: 123 84 0;
-    --c-secondary-dim: 107 73 0;
-    --c-secondary-container: 255 201 111;
-    --c-on-secondary: 255 241 223;
-    --c-on-secondary-container: 97 65 0;
-    --c-secondary-fixed: 255 201 111;
-    --c-secondary-fixed-dim: 255 182 35;
-    --c-on-secondary-fixed: 72 48 0;
-    --c-on-secondary-fixed-variant: 108 74 0;
+    /* ─── Secondary: mapped to warning-gold (amber) ─── */
+    --c-secondary:                 184 90 0;        /* #B85A00 */
+    --c-secondary-dim:             153 74 0;
+    --c-secondary-container:       251 235 216;     /* #FBEBD8 */
+    --c-on-secondary:              255 241 223;
+    --c-on-secondary-container:    91 45 0;
+    --c-secondary-fixed:           251 235 216;
+    --c-secondary-fixed-dim:       232 205 165;
+    --c-on-secondary-fixed:        91 45 0;
+    --c-on-secondary-fixed-variant: 153 74 0;
 
-    /* Tertiary (Trust Blue) */
-    --c-tertiary: 0 94 159;
-    --c-tertiary-dim: 0 82 139;
-    --c-tertiary-container: 112 181 255;
-    --c-on-tertiary: 237 243 255;
-    --c-on-tertiary-container: 0 50 88;
-    --c-tertiary-fixed: 112 181 255;
-    --c-tertiary-fixed-dim: 76 168 255;
-    --c-on-tertiary-fixed: 0 25 48;
-    --c-on-tertiary-fixed-variant: 0 59 103;
+    /* ─── Tertiary: mapped to info-blue ─── */
+    --c-tertiary:                  24 73 169;       /* #1849A9 */
+    --c-tertiary-dim:              19 59 135;
+    --c-tertiary-container:        230 238 250;     /* #E6EEFA */
+    --c-on-tertiary:               255 255 255;
+    --c-on-tertiary-container:     14 42 97;
+    --c-tertiary-fixed:            230 238 250;
+    --c-tertiary-fixed-dim:        187 207 237;
+    --c-on-tertiary-fixed:         14 42 97;
+    --c-on-tertiary-fixed-variant: 19 59 135;
 
-    /* Error */
-    --c-error: 179 27 37;
-    --c-error-dim: 159 5 25;
-    --c-error-container: 251 81 81;
-    --c-on-error: 255 239 238;
-    --c-on-error-container: 87 0 8;
+    /* ─── Error: danger-red ─── */
+    --c-error:                     180 35 24;       /* #B42318 */
+    --c-error-dim:                 150 27 20;
+    --c-error-container:           251 233 230;     /* #FBE9E6 */
+    --c-on-error:                  255 255 255;
+    --c-on-error-container:        130 20 14;
 
-    /* Surfaces */
-    --c-surface: 244 247 245;
-    --c-surface-dim: 208 214 211;
-    --c-surface-bright: 244 247 245;
-    --c-surface-container-lowest: 255 255 255;
-    --c-surface-container-low: 238 242 239;
-    --c-surface-container: 229 233 231;
-    --c-surface-container-high: 223 228 225;
-    --c-surface-container-highest: 216 222 220;
-    --c-surface-variant: 216 222 220;
-    --c-surface-tint: 0 106 54;
-    --c-on-surface: 43 47 46;
-    --c-on-surface-variant: 88 92 91;
-    --c-background: 244 247 245;
-    --c-on-background: 43 47 46;
+    /* ─── Surfaces: warm near-whites ─── */
+    --c-surface:                   250 250 249;     /* #FAFAF9 — primary canvas */
+    --c-surface-dim:               240 240 239;
+    --c-surface-bright:            255 255 255;
+    --c-surface-container-lowest:  255 255 255;     /* #FFFFFF */
+    --c-surface-container-low:     250 250 249;     /* #FAFAF9 */
+    --c-surface-container:         245 245 244;     /* #F5F5F4 */
+    --c-surface-container-high:    240 240 239;     /* #F0F0EF */
+    --c-surface-container-highest: 231 229 228;     /* #E7E5E4 */
+    --c-surface-variant:           231 229 228;
+    --c-surface-tint:              14 59 46;
+    --c-on-surface:                10 10 11;        /* #0A0A0B — warm near-black */
+    --c-on-surface-variant:        107 107 111;     /* #6B6B6F — muted */
+    --c-background:                250 250 249;
+    --c-on-background:             10 10 11;
 
-    /* Outline */
-    --c-outline: 116 120 118;
-    --c-outline-variant: 170 174 172;
+    /* ─── Outlines: hairline dividers ─── */
+    --c-outline:                   214 211 209;     /* #D6D3D1 */
+    --c-outline-variant:           231 229 228;     /* #E7E5E4 — default hairline */
 
-    /* Inverse */
-    --c-inverse-surface: 11 15 14;
-    --c-inverse-on-surface: 154 158 156;
-    --c-inverse-primary: 113 246 157;
+    /* ─── Inverse (for dark-over-light surfaces like toasts) ─── */
+    --c-inverse-surface:           10 10 11;
+    --c-inverse-on-surface:        245 245 244;
+    --c-inverse-primary:           184 206 193;
 
-    /* Shadows */
-    --shadow-ambient:    0px 20px 40px rgba(43, 47, 46, 0.06);
-    --shadow-ambient-sm: 0px 8px 20px rgba(43, 47, 46, 0.04);
-    --shadow-ambient-up: 0px -4px 20px rgba(43, 47, 46, 0.06);
+    /* ─── DESIGN.md direct tokens ─── */
+    --c-ink:           10 10 11;          /* #0A0A0B */
+    --c-ink-muted:     107 107 111;       /* #6B6B6F */
+    --c-ink-subtle:    154 154 159;       /* #9A9A9F */
+    --c-brand:         14 59 46;          /* #0E3B2E — Deep Forest */
+    --c-brand-ink:     245 245 244;       /* on-brand text */
+    --c-hairline:      231 229 228;       /* #E7E5E4 */
+    --c-success:       21 127 76;         /* #157F4C */
+    --c-success-soft:  231 244 237;       /* #E7F4ED */
+    --c-warning:       184 90 0;          /* #B85A00 */
+    --c-warning-soft:  251 235 216;       /* #FBEBD8 */
+    --c-danger:        180 35 24;         /* #B42318 */
+    --c-danger-soft:   251 233 230;       /* #FBE9E6 */
+    --c-info:          24 73 169;         /* #1849A9 */
+    --c-info-soft:     230 238 250;       /* #E6EEFA */
+
+    /* ─── Shadows: subtle, reserved for floating surfaces ─── */
+    --shadow-ambient:    0 1px 3px rgba(10, 10, 11, 0.04), 0 1px 2px rgba(10, 10, 11, 0.02);
+    --shadow-ambient-sm: 0 1px 2px rgba(10, 10, 11, 0.03);
+    --shadow-ambient-up: 0 -1px 3px rgba(10, 10, 11, 0.04);
 }
 
 /* ═══════════ Dark Mode ═══════════ */
 .dark {
     color-scheme: dark;
 
-    /* Primary — brighter green for dark backgrounds */
-    --c-primary: 113 246 157;
-    --c-primary-dim: 98 232 145;
-    --c-primary-container: 0 80 38;
-    --c-on-primary: 0 57 27;
-    --c-on-primary-container: 141 255 180;
-    --c-primary-fixed: 113 246 157;
-    --c-primary-fixed-dim: 98 232 145;
-    --c-on-primary-fixed: 0 70 33;
-    --c-on-primary-fixed-variant: 0 102 51;
+    /* ─── Primary: lightened sage for dark bg ─── */
+    --c-primary:                   139 194 169;     /* softer sage */
+    --c-primary-dim:               115 176 149;
+    --c-primary-container:         14 59 46;        /* forest becomes the container */
+    --c-on-primary:                3 28 19;
+    --c-on-primary-container:      215 229 220;
+    --c-primary-fixed:             215 229 220;
+    --c-primary-fixed-dim:         184 206 193;
+    --c-on-primary-fixed:          10 43 33;
+    --c-on-primary-fixed-variant:  14 59 46;
 
-    /* Secondary — brighter gold */
-    --c-secondary: 255 193 80;
-    --c-secondary-dim: 255 182 35;
-    --c-secondary-container: 92 62 0;
-    --c-on-secondary: 66 44 0;
-    --c-on-secondary-container: 255 221 161;
-    --c-secondary-fixed: 255 201 111;
-    --c-secondary-fixed-dim: 255 182 35;
-    --c-on-secondary-fixed: 72 48 0;
-    --c-on-secondary-fixed-variant: 108 74 0;
+    /* ─── Secondary: softer amber ─── */
+    --c-secondary:                 232 205 165;
+    --c-secondary-dim:             205 179 141;
+    --c-secondary-container:       91 45 0;
+    --c-on-secondary:              66 32 0;
+    --c-on-secondary-container:    251 235 216;
+    --c-secondary-fixed:           251 235 216;
+    --c-secondary-fixed-dim:       232 205 165;
+    --c-on-secondary-fixed:        91 45 0;
+    --c-on-secondary-fixed-variant: 153 74 0;
 
-    /* Tertiary — brighter blue */
-    --c-tertiary: 156 202 255;
-    --c-tertiary-dim: 76 168 255;
-    --c-tertiary-container: 0 71 120;
-    --c-on-tertiary: 0 49 85;
-    --c-on-tertiary-container: 200 226 255;
-    --c-tertiary-fixed: 112 181 255;
-    --c-tertiary-fixed-dim: 76 168 255;
-    --c-on-tertiary-fixed: 0 25 48;
-    --c-on-tertiary-fixed-variant: 0 59 103;
+    /* ─── Tertiary: softer blue ─── */
+    --c-tertiary:                  187 207 237;
+    --c-tertiary-dim:              158 181 217;
+    --c-tertiary-container:        14 42 97;
+    --c-on-tertiary:               10 30 70;
+    --c-on-tertiary-container:     230 238 250;
+    --c-tertiary-fixed:            230 238 250;
+    --c-tertiary-fixed-dim:        187 207 237;
+    --c-on-tertiary-fixed:         14 42 97;
+    --c-on-tertiary-fixed-variant: 19 59 135;
 
-    /* Error — softer red */
-    --c-error: 255 180 171;
-    --c-error-dim: 251 81 81;
-    --c-error-container: 147 0 16;
-    --c-on-error: 104 0 10;
-    --c-on-error-container: 255 218 214;
+    /* ─── Error: softer red ─── */
+    --c-error:                     240 168 161;
+    --c-error-dim:                 215 140 133;
+    --c-error-container:           130 20 14;
+    --c-on-error:                  87 13 9;
+    --c-on-error-container:        251 233 230;
 
-    /* Surfaces — dark with green tint */
-    --c-surface: 18 22 20;
-    --c-surface-dim: 18 22 20;
-    --c-surface-bright: 54 58 56;
-    --c-surface-container-lowest: 11 15 14;
-    --c-surface-container-low: 26 30 28;
-    --c-surface-container: 34 38 36;
-    --c-surface-container-high: 44 48 46;
-    --c-surface-container-highest: 54 58 56;
-    --c-surface-variant: 66 70 68;
-    --c-surface-tint: 113 246 157;
-    --c-on-surface: 224 228 225;
-    --c-on-surface-variant: 192 196 194;
-    --c-background: 18 22 20;
-    --c-on-background: 224 228 225;
+    /* ─── Surfaces: warm blacks ─── */
+    --c-surface:                   10 10 11;        /* #0A0A0B */
+    --c-surface-dim:               10 10 11;
+    --c-surface-bright:            42 42 43;
+    --c-surface-container-lowest:  0 0 0;
+    --c-surface-container-low:     20 20 21;
+    --c-surface-container:         26 26 27;        /* #1A1A1B */
+    --c-surface-container-high:    34 34 35;
+    --c-surface-container-highest: 42 42 43;        /* #2A2A2B */
+    --c-surface-variant:           52 52 53;
+    --c-surface-tint:              139 194 169;
+    --c-on-surface:                245 245 244;     /* #F5F5F4 */
+    --c-on-surface-variant:        168 166 163;
+    --c-background:                10 10 11;
+    --c-on-background:             245 245 244;
 
-    /* Outline */
-    --c-outline: 142 146 143;
-    --c-outline-variant: 66 70 68;
+    /* ─── Outlines ─── */
+    --c-outline:                   115 113 111;
+    --c-outline-variant:           42 42 43;        /* #2A2A2B — dark hairline */
 
-    /* Inverse */
-    --c-inverse-surface: 224 228 225;
-    --c-inverse-on-surface: 43 47 46;
-    --c-inverse-primary: 0 106 54;
+    /* ─── Inverse ─── */
+    --c-inverse-surface:           245 245 244;
+    --c-inverse-on-surface:        10 10 11;
+    --c-inverse-primary:           14 59 46;
 
-    /* Shadows — stronger for dark backgrounds */
-    --shadow-ambient:    0px 20px 40px rgba(0, 0, 0, 0.35);
-    --shadow-ambient-sm: 0px 8px 20px rgba(0, 0, 0, 0.25);
-    --shadow-ambient-up: 0px -4px 20px rgba(0, 0, 0, 0.35);
+    /* ─── DESIGN.md direct tokens (dark) ─── */
+    --c-ink:           245 245 244;
+    --c-ink-muted:     168 166 163;
+    --c-ink-subtle:    115 113 111;
+    --c-brand:         139 194 169;
+    --c-brand-ink:     3 28 19;
+    --c-hairline:      42 42 43;
+    --c-success:       79 169 122;
+    --c-success-soft:  21 127 76;
+    --c-warning:       232 165 70;
+    --c-warning-soft:  91 45 0;
+    --c-danger:        240 128 117;
+    --c-danger-soft:   130 20 14;
+    --c-info:          150 180 230;
+    --c-info-soft:     14 42 97;
+
+    /* ─── Shadows: stronger for dark backgrounds ─── */
+    --shadow-ambient:    0 1px 3px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.20);
+    --shadow-ambient-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+    --shadow-ambient-up: 0 -1px 3px rgba(0, 0, 0, 0.40);
 }
 
 /* ═══════════ Base Styles ═══════════ */
 body {
-    font-family: 'Be Vietnam Pro', sans-serif;
+    font-family: "General Sans", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
 }
 h1, h2, h3, h4, h5, h6 {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.01em;
 }
 .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     vertical-align: middle;
 }
 
-/* Glassmorphism */
+/* Tabular numerics for money + data cells */
+.tabular-nums,
+.font-data {
+    font-variant-numeric: tabular-nums;
+}
+.font-data {
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Legacy utilities (slated for Phase E removal) ─── */
+/* Glassmorphism: used in a few dashboard surfaces; anti-pattern per DESIGN.md but
+   kept to avoid breaking existing templates. Phase E will remove usages and then
+   delete this rule. */
 .glass-card {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(24px);
 }
 .dark .glass-card {
-    background: rgba(30, 34, 32, 0.7);
+    background: rgba(26, 26, 27, 0.7);
 }
-
-/* Text gradient */
+/* Text gradient: used on a handful of logos/headlines. Phase E will remove. */
 .text-gradient {
     background: linear-gradient(135deg, rgb(var(--c-primary)), rgb(var(--c-primary-dim)));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
-
-/* Ghost border */
+/* Ghost border: thin translucent border utility, still useful, kept. */
 .ghost-border {
-    border: 1px solid rgb(var(--c-outline-variant) / 0.15);
+    border: 1px solid rgb(var(--c-outline-variant) / 0.5);
 }
 </style>
 
