@@ -34,6 +34,17 @@ def _link_existing_contact(conversation):
     """
     Best-effort link conversation.contact_phone to an existing Subscriber
     (if any). Does NOT create anything — just associates.
+
+    On a successful match, also preloads an account summary snapshot into
+    `conversation.diagnostic_state` so the agent's first turn can greet the
+    customer with their plan / expiry without an extra tool roundtrip. The
+    `phone_matches_account` flag records whether the inbound SIM matches the
+    subscriber's on-file phone (dual-SIM users legitimately text from a
+    different number — observed for now, not gated).
+
+    Runs inside the `select_for_update()` lock held by `record_inbound_message`
+    — the conversation row is write-locked for the duration of this call, so
+    two near-simultaneous inbounds cannot race the preload.
     """
     if conversation.subscriber_id or not conversation.contact_phone:
         return
@@ -41,8 +52,30 @@ def _link_existing_contact(conversation):
     subscriber = Subscriber.objects.filter(
         reseller=conversation.reseller, phone=conversation.contact_phone,
     ).first()
-    if subscriber:
-        conversation.subscriber = subscriber
+    if not subscriber:
+        return
+    conversation.subscriber = subscriber
+    _preload_account_into_state(conversation, subscriber)
+
+
+def _preload_account_into_state(conversation, subscriber):
+    """Stash account summary + phone-match flag into diagnostic_state.
+
+    Wrapped in try/except so a failure in the summary builder (unexpected
+    schema, dead dependency) never blocks the inbound write path — the agent
+    will fall back to calling the tool itself.
+    """
+    try:
+        from ai.tools import build_account_summary
+        summary = build_account_summary(subscriber)
+    except Exception:
+        return
+    state = dict(conversation.diagnostic_state or {})
+    state['_preloaded_account'] = summary
+    state['phone_matches_account'] = bool(
+        conversation.contact_phone and conversation.contact_phone == subscriber.phone
+    )
+    conversation.diagnostic_state = state
 
 
 @transaction.atomic

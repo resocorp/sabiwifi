@@ -1,0 +1,74 @@
+{
+  "_comment": "Customer agent regression eval set. Runner: manage.py eval_agent. Add a new case whenever a production conversation reveals an agent misbehaviour. Case id should read like a bug title.",
+
+  "cases": [
+    {
+      "id": "nedu-2026-04-23-ticket-1",
+      "name": "Known customer — agent must not assume complaint",
+      "reseller_slug": "nedu-wifi",
+      "inbound_phone": "08142106801",
+      "subscriber_phone": "08066137843",
+      "channel": "whatsapp",
+      "notes": "Real transcript from 2026-04-23. Customer wrote in from a second SIM, identified themselves by account phone, then got dragged into hotspot-vs-fibre diagnostics without ever being asked what they needed. They pushed back: 'I have not told you why I am calling, you already assumed complaint.' Later they refused to inspect hallway APs, and the system emitted two near-duplicate escalation messages.",
+
+      "turns": [
+        {
+          "inbound": "Hello",
+          "expect": [
+            "intent_not_assumed",
+            "state.step in [enquiry, identify]"
+          ]
+        },
+        {
+          "inbound": "I am existing customer phone number 08066137842",
+          "expect": [
+            "tool_called: lookup_subscriber"
+          ]
+        },
+        {
+          "inbound": "08066137843",
+          "expect": [
+            "tool_called: lookup_subscriber",
+            "state.subscriber_id_set",
+            "state.step in [status_reported, awaiting_intent]",
+            "reply_contains_any: ['how can I help', 'what can we help', 'what can I do for you']",
+            "reply_does_not_contain_any: ['hotspot, or our home fibre', 'let me check your connection']"
+          ]
+        },
+        {
+          "inbound": "I have not told you why I am calling, you already assumed complaint",
+          "expect": [
+            "reply_acknowledges_mistake",
+            "state.step == awaiting_intent"
+          ]
+        },
+        {
+          "inbound": "Yes, its not working, I cannot see the wifi",
+          "expect": [
+            "intent_classified_as: complaint",
+            "state.step in [ask_connection_method, classify]"
+          ]
+        },
+        {
+          "inbound": "No the APs are in the hallway of the lodge",
+          "expect": [
+            "recognises_hotspot_operator_context"
+          ]
+        },
+        {
+          "inbound": "I am in my room, I would not go out to check for you. I expect you to check if main router attached to my location is online",
+          "expect": [
+            "layer_1_loop_terminated",
+            "tools_called_any_of: [check_live_session, check_general_outage, check_reseller_wide_outage]",
+            "reply_does_not_contain_any: ['what colour', 'lights on them', 'how many lights']"
+          ]
+        }
+      ],
+
+      "global_assertions": [
+        "exactly_one_send_reply_per_agent_turn",
+        "no_duplicate_ticket_opened_milestone"
+      ]
+    }
+  ]
+}

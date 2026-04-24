@@ -62,13 +62,20 @@ def create_ticket(*, reseller, type, subject, body='', lead=None, subscriber=Non
 
     # Customer milestone: ticket opened. Goes back into the customer's chat
     # (or falls back to a templated transactional ping).
-    try:
-        from ai.jobs import notify_customer_ticket_milestone
-        transaction.on_commit(
-            lambda tid=ticket.pk: notify_customer_ticket_milestone(tid, 'opened'),
-        )
-    except Exception:
-        pass
+    #
+    # Suppressed when the customer agent opens the ticket mid-conversation
+    # (actor='ai_customer'): the agent is already composing its own send_reply
+    # in the same turn, so firing the milestone produces two near-identical
+    # messages to the customer. Other actors (human operator, field agent,
+    # system scripts) still get the notification.
+    if actor != 'ai_customer':
+        try:
+            from ai.jobs import notify_customer_ticket_milestone
+            transaction.on_commit(
+                lambda tid=ticket.pk: notify_customer_ticket_milestone(tid, 'opened'),
+            )
+        except Exception:
+            pass
 
     return ticket
 

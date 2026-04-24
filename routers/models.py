@@ -112,6 +112,56 @@ class Router(models.Model):
             return f'{label} ({self.reseller.name})'
         return f'{label} (unassigned)'
 
+    @classmethod
+    def router_name_map(cls, reseller, nas_ips):
+        """Resolve a set of RADIUS `nasipaddress` values to router display
+        names, scoped to one reseller.
+
+        Used by the dashboard reports (session, traffic) to label rows by
+        router instead of by tunnel IP. Returns a dict keyed on the string
+        IP that appears in `radacct.nasipaddress`.
+
+        Orphan NAS IPs (router deleted but radacct rows linger) map to
+        'Unknown router' so the report never renders an empty cell.
+
+        When two routers on the same reseller share a `location_name`
+        (allowed — resellers legitimately run "Hall A" on two floors), the
+        helper appends the last 4 chars of each router's serial so the
+        reseller can still tell them apart in the report.
+        """
+        if not nas_ips:
+            return {}
+        rows = list(cls.objects.filter(
+            reseller=reseller, wg_tunnel_ip__in=nas_ips,
+        ).values('wg_tunnel_ip', 'location_name', 'serial_number'))
+
+        # Count name collisions across the lookup set so we only suffix when
+        # a name is genuinely ambiguous. A router with no `location_name`
+        # always shows its serial, so those are never ambiguous.
+        name_counts = {}
+        for r in rows:
+            label = r['location_name'] or r['serial_number']
+            name_counts[label] = name_counts.get(label, 0) + 1
+
+        out = {}
+        for r in rows:
+            ip = r['wg_tunnel_ip']
+            name = r['location_name']
+            serial = r['serial_number'] or ''
+            if not name:
+                out[ip] = serial or 'Unknown router'
+                continue
+            if name_counts.get(name, 0) > 1 and serial:
+                out[ip] = f'{name} · {serial[-4:]}'
+            else:
+                out[ip] = name
+
+        # Any NAS IP the caller asked about that didn't resolve is an orphan.
+        for ip in nas_ips:
+            if ip and ip not in out:
+                out[ip] = 'Unknown router'
+        return out
+
     @property
     def is_online(self):
         return self.status == 'online'

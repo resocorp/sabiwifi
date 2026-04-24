@@ -1,6 +1,7 @@
 """Reseller dashboard server-rendered views."""
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from accounts.permissions import require_cap
 from django.contrib import messages
 from django.utils import timezone
@@ -604,6 +605,52 @@ def router_add(request):
 
 
 @require_cap('routers')
+@require_POST
+def router_edit(request, pk):
+    """Edit the human-readable name (`location_name`) of a router the
+    reseller owns. Only the name is editable here — serial / WG tunnel IP /
+    NAS secret are operator-owned and must not be hand-editable.
+
+    Re-syncs FreeRADIUS `nas.description` so the name the reseller typed
+    shows up in RADIUS-side tools (freeradius logs, radclient dumps).
+    """
+    reseller = request.effective_reseller
+    if not reseller:
+        return redirect('login')
+
+    router = get_object_or_404(Router, pk=pk, reseller=reseller)
+
+    name = (request.POST.get('location_name') or '').strip()
+    if len(name) > 200:
+        messages.error(request, 'Name too long (max 200 chars).')
+        return redirect('dashboard-routers')
+
+    router.location_name = name
+    router.save(update_fields=['location_name', 'updated_at'])
+
+    if router.wg_tunnel_ip:
+        from radius.utils import upsert_nas_and_reload
+        try:
+            upsert_nas_and_reload(
+                nasname=router.wg_tunnel_ip,
+                shortname=router.serial_number,
+                secret=router.nas_secret,
+                description=name or f'SabiWiFi router {router.serial_number}',
+            )
+        except Exception:
+            # Don't fail the whole edit if the RADIUS reload hiccups — the
+            # router heartbeat will resync at most 2 minutes later.
+            messages.warning(
+                request,
+                f'Name saved. RADIUS sync is pending — it will refresh shortly.',
+            )
+            return redirect('dashboard-routers')
+
+    messages.success(request, 'Router name updated.')
+    return redirect('dashboard-routers')
+
+
+@require_cap('routers')
 def router_remove(request, pk):
     """
     Remove a router from the reseller's account.
@@ -682,6 +729,9 @@ def _handle_mikrotik_add(request, reseller, errors, logger):
     wg_private_key = _generate_credentials(router)
     router.reseller = reseller
     router.status = 'pending_provision'
+    location_name = (request.POST.get('location_name') or '').strip()[:200]
+    if location_name:
+        router.location_name = location_name
     router.save()
 
     from radius.utils import upsert_nas_and_reload
@@ -689,7 +739,7 @@ def _handle_mikrotik_add(request, reseller, errors, logger):
         nasname=router.wg_tunnel_ip,
         shortname=router.serial_number,
         secret=router.nas_secret,
-        description=f'SabiWiFi router {router.serial_number}',
+        description=location_name or f'SabiWiFi router {router.serial_number}',
     )
 
     if router.wg_public_key:
@@ -755,6 +805,9 @@ def _handle_openwrt_add(request, reseller, errors, logger):
     router.nas_secret = secrets_mod.token_urlsafe(24)
     router.reseller = reseller
     router.status = 'pending_provision'
+    location_name = (request.POST.get('location_name') or '').strip()[:200]
+    if location_name:
+        router.location_name = location_name
     router.save()
 
     # FreeRADIUS NAS entry + reload
@@ -763,7 +816,7 @@ def _handle_openwrt_add(request, reseller, errors, logger):
         nasname=router.wg_tunnel_ip,
         shortname=mac,
         secret=router.nas_secret,
-        description=f'SabiWiFi OpenWrt {mac}',
+        description=location_name or f'SabiWiFi OpenWrt {mac}',
     )
 
     # Add WireGuard peer (pubkey saved by heartbeat)
@@ -1223,15 +1276,11 @@ def online_users(request):
         columns = [col[0] for col in cursor.description]
         sessions = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    # Map NAS IPs to router names
-    router_map = {}
-    if sessions:
-        nas_ips = {s['nasipaddress'] for s in sessions}
-        routers = Router.objects.filter(wg_tunnel_ip__in=nas_ips).values('wg_tunnel_ip', 'location_name', 'serial_number')
-        router_map = {r['wg_tunnel_ip']: r['location_name'] or r['serial_number'] for r in routers}
+    # Map NAS IPs to router names (shared helper — handles orphans + duplicate-name suffix).
+    router_map = Router.router_name_map(reseller, {s['nasipaddress'] for s in sessions})
 
     for s in sessions:
-        s['router_name'] = router_map.get(s['nasipaddress'], s['nasipaddress'])
+        s['router_name'] = router_map.get(s['nasipaddress']) or s['nasipaddress']
         # Format data for display
         dl = s.get('acctoutputoctets') or 0
         ul = s.get('acctinputoctets') or 0
@@ -1285,6 +1334,7 @@ def traffic_report(request):
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT ra.username,
+                   ra.nasipaddress,
                    SUM(ra.acctoutputoctets) as total_download,
                    SUM(ra.acctinputoctets) as total_upload,
                    SUM(ra.acctsessiontime) as total_time,
@@ -1292,14 +1342,17 @@ def traffic_report(request):
             FROM radacct ra
             JOIN accounts_subscriber s ON s.phone = ra.username
             WHERE s.reseller_id = %s AND ra.acctstarttime >= %s
-            GROUP BY ra.username
+            GROUP BY ra.username, ra.nasipaddress
             ORDER BY total_download DESC
-            LIMIT 100
+            LIMIT 200
         """, [reseller.pk, since])
         columns = [col[0] for col in cursor.description]
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+    router_map = Router.router_name_map(reseller, {r['nasipaddress'] for r in rows})
+
     for r in rows:
+        r['router_name'] = router_map.get(r['nasipaddress']) or r['nasipaddress'] or '—'
         dl = r.get('total_download') or 0
         ul = r.get('total_upload') or 0
         total_mb = (dl + ul) / (1024 * 1024)
@@ -1353,14 +1406,10 @@ def session_report(request):
         columns = [col[0] for col in cursor.description]
         sessions = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
-    router_map = {}
-    if sessions:
-        nas_ips = {s['nasipaddress'] for s in sessions}
-        routers_qs = Router.objects.filter(wg_tunnel_ip__in=nas_ips).values('wg_tunnel_ip', 'location_name', 'serial_number')
-        router_map = {r['wg_tunnel_ip']: r['location_name'] or r['serial_number'] for r in routers_qs}
+    router_map = Router.router_name_map(reseller, {s['nasipaddress'] for s in sessions})
 
     for s in sessions:
-        s['router_name'] = router_map.get(s['nasipaddress'], s['nasipaddress'] or '—')
+        s['router_name'] = router_map.get(s['nasipaddress']) or s['nasipaddress'] or '—'
         dl = s.get('acctoutputoctets') or 0
         ul = s.get('acctinputoctets') or 0
         total_mb = (dl + ul) / (1024 * 1024)
@@ -1443,6 +1492,7 @@ def report_csv_export(request, report_type):
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT ra.username,
+                       ra.nasipaddress,
                        SUM(ra.acctoutputoctets) as download_bytes,
                        SUM(ra.acctinputoctets) as upload_bytes,
                        SUM(ra.acctsessiontime) as online_seconds,
@@ -1450,15 +1500,18 @@ def report_csv_export(request, report_type):
                 FROM radacct ra
                 JOIN accounts_subscriber s ON s.phone = ra.username
                 WHERE s.reseller_id = %s AND ra.acctstarttime >= %s
-                GROUP BY ra.username
+                GROUP BY ra.username, ra.nasipaddress
                 ORDER BY download_bytes DESC
             """, [reseller.pk, since])
             rows = cursor.fetchall()
 
+        router_map = Router.router_name_map(reseller, {row[1] for row in rows})
+
         def generate():
-            yield 'username;download_bytes;upload_bytes;online_seconds;sessions\n'
+            yield 'username;router;download_bytes;upload_bytes;online_seconds;sessions\n'
             for row in rows:
-                yield f'{row[0]};{row[1]};{row[2]};{row[3]};{row[4]}\n'
+                router_name = (router_map.get(row[1]) or row[1] or '').replace(';', ',')
+                yield f'{row[0]};{router_name};{row[2]};{row[3]};{row[4]};{row[5]}\n'
 
         response = StreamingHttpResponse(generate(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="traffic-report-{days}d.csv"'

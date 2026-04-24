@@ -32,6 +32,7 @@ urlpatterns = [
     path('payments/', views.payments_list, name='dashboard-payments'),
     path('routers/', views.routers_list, name='dashboard-routers'),
     path('routers/add/', views.router_add, name='dashboard-router-add'),
+    path('routers/<int:pk>/edit/', views.router_edit, name='dashboard-router-edit'),
     path('routers/<int:pk>/remove/', views.router_remove, name='dashboard-router-remove'),
     path('settings/', views.settings_page, name='dashboard-settings'),
     path('broadcasts/', views.broadcasts_page, name='dashboard-broadcasts'),

@@ -179,6 +179,7 @@ def tool_open_ticket(ctx: ToolContext, args: dict) -> dict:
         conversation=ctx.conversation,
         lead=ctx.lead,
         priority=args.get('priority', Ticket.PRIORITY_NORMAL),
+        actor='ai_customer',
     )
     return {'ticket_id': t.pk, 'sla_due_at': t.sla_due_at.isoformat() if t.sla_due_at else None}
 
@@ -611,21 +612,19 @@ def tool_conversation_get_state(ctx: ToolContext, args: dict) -> dict:
     return {'state': dict(ctx.conversation.diagnostic_state or {})}
 
 
-def tool_get_account_summary_for_customer(ctx: ToolContext, args: dict) -> dict:
+def build_account_summary(subscriber) -> dict:
     """Build a friendly one-liner the agent can narrate back to the customer.
-    Keeps the LLM from inventing plan names / expiry dates.
+
+    Pure function — takes a Subscriber object, returns a summary dict. Safe to
+    call from anywhere (tool handler, webhook preload, tests) because it does
+    not depend on a ToolContext. Keeps the LLM from inventing plan names /
+    expiry dates by feeding it pre-computed, source-of-truth data.
     """
-    from accounts.models import Subscriber
     from plans.models import Subscription
     from billing.models import Payment
-    sub_id = args.get('subscriber_id')
-    try:
-        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
-    except Subscriber.DoesNotExist:
-        return {'error': 'subscriber not found'}
-    active = (Subscription.objects.filter(subscriber=sub, status='active')
+    active = (Subscription.objects.filter(subscriber=subscriber, status='active')
               .order_by('-expiry_date').first())
-    latest = (Subscription.objects.filter(subscriber=sub)
+    latest = (Subscription.objects.filter(subscriber=subscriber)
               .order_by('-expiry_date').first())
     now = timezone.now()
     parts: list[str] = []
@@ -651,7 +650,7 @@ def tool_get_account_summary_for_customer(ctx: ToolContext, args: dict) -> dict:
     else:
         parts.append('no active subscription on file')
 
-    last_pay = (Payment.objects.filter(reseller=ctx.reseller, subscriber=sub,
+    last_pay = (Payment.objects.filter(reseller=subscriber.reseller, subscriber=subscriber,
                                        paystack_status='success')
                 .order_by('-created_at').first())
     if last_pay is not None:
@@ -665,6 +664,19 @@ def tool_get_account_summary_for_customer(ctx: ToolContext, args: dict) -> dict:
         'plan_name': active.plan.name if active and active.plan_id else '',
         'expiry_iso': active.expiry_date.isoformat() if active and active.expiry_date else '',
     }
+
+
+def tool_get_account_summary_for_customer(ctx: ToolContext, args: dict) -> dict:
+    """Tool wrapper for build_account_summary. Looks up the subscriber under
+    the current reseller scope, then delegates to the helper.
+    """
+    from accounts.models import Subscriber
+    sub_id = args.get('subscriber_id')
+    try:
+        sub = Subscriber.objects.get(pk=sub_id, reseller=ctx.reseller)
+    except Subscriber.DoesNotExist:
+        return {'error': 'subscriber not found'}
+    return build_account_summary(sub)
 
 
 def tool_check_reseller_wide_outage(ctx: ToolContext, args: dict) -> dict:
