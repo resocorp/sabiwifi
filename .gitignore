@@ -37,3 +37,6 @@ Thumbs.db
 
 # Static files (collected)
 /staticfiles/
+
+# Claude Code local settings
+.claude/

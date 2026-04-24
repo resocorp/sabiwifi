@@ -156,6 +156,17 @@ Three themes in `templates/portal/{modern,bold,minimal}/`. Each has `login.html`
 
 ---
 
+## Design System
+
+Always read `DESIGN.md` before making any visual or UI decisions. All font choices,
+colors, spacing, radius, motion, and aesthetic direction are defined there. Do not
+deviate without explicit user approval. In QA and design-review mode, flag any code
+that doesn't match `DESIGN.md`. `docs/UXUI_DESIGN.md` remains the implementation
+reference (long-form patterns, page-by-page notes); `DESIGN.md` is the enforcement
+source of truth.
+
+---
+
 ## Service Management
 
 ```bash
