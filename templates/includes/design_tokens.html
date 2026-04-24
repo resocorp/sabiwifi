@@ -2,7 +2,7 @@
 <!-- Source of truth: DESIGN.md at repo root. -->
 <!-- Material You token names preserved for template compatibility; hex values -->
 <!-- repointed to the Refined Fintech palette. Legacy utilities (glassmorphism, -->
-<!-- text-gradient) remain for now; Phase E will remove per-template usage. -->
+<!-- Phase E removed unused .glass-card and .text-gradient utility rules. -->
 
 <!-- Prevent flash of wrong theme — must run before any rendering -->
 <script>
@@ -365,24 +365,7 @@ h1, h2, h3, h4, h5, h6 {
     font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
 }
 
-/* ─── Legacy utilities (slated for Phase E removal) ─── */
-/* Glassmorphism: used in a few dashboard surfaces; anti-pattern per DESIGN.md but
-   kept to avoid breaking existing templates. Phase E will remove usages and then
-   delete this rule. */
-.glass-card {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(24px);
-}
-.dark .glass-card {
-    background: rgba(26, 26, 27, 0.7);
-}
-/* Text gradient: used on a handful of logos/headlines. Phase E will remove. */
-.text-gradient {
-    background: linear-gradient(135deg, rgb(var(--c-primary)), rgb(var(--c-primary-dim)));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-/* Ghost border: thin translucent border utility, still useful, kept. */
+/* Ghost border: thin translucent border utility. */
 .ghost-border {
     border: 1px solid rgb(var(--c-outline-variant) / 0.5);
 }
