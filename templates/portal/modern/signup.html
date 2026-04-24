@@ -6,43 +6,43 @@
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Sign Up for WiFi{% endif %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin><link rel="preconnect" href="https://api.fontshare.com" crossorigin><link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700&display=swap" rel="stylesheet"><link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: {{ branding.primary_color|default:"#006a36" }};
-            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
-            --surface: #f4f7f5;
-            --surface-container-low: #eef2ef;
-            --surface-container: #e5e9e7;
-            --surface-container-highest: #d8dedc;
+            --primary: {{ branding.primary_color|default:"#0e3b2e" }};
+            --primary-dim: {{ branding.primary_color|default:"#0a2b21" }};
+            --surface: #fafaf9;
+            --surface-container-low: #f5f5f4;
+            --surface-container: #e7e5e4;
+            --surface-container-highest: #d6d3d1;
             --surface-container-lowest: #ffffff;
-            --on-surface: #2b2f2e;
-            --on-surface-variant: #585c5b;
-            --error: #b31b25;
+            --on-surface: #0a0a0b;
+            --on-surface-variant: #6b6b6f;
+            --error: #b42318;
             --secondary-container: #ffc96f;
             --on-secondary-container: #614100;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        body { font-family: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
         .container { width: 100%; max-width: 400px; }
         .card { background: var(--surface-container-lowest); border-radius: 16px; padding: 32px 24px; box-shadow: 0px 20px 40px rgba(43,47,46,0.06); }
         .logo { text-align: center; margin-bottom: 16px; }
         .logo img { max-width: 120px; max-height: 60px; }
-        h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; color: var(--on-surface); }
+        h1 { font-family: 'Fraunces', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; color: var(--on-surface); }
         .subtitle { font-size: 14px; color: var(--on-surface-variant); text-align: center; margin-bottom: 24px; }
         label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--on-surface); }
-        input, select { width: 100%; padding: 10px 12px; border: none; border-radius: 1rem; font-size: 14px; outline: none; margin-bottom: 16px; background: var(--surface-container-highest); color: var(--on-surface); font-family: 'Be Vietnam Pro', sans-serif; }
+        input, select { width: 100%; padding: 10px 12px; border: none; border-radius: 1rem; font-size: 14px; outline: none; margin-bottom: 16px; background: var(--surface-container-highest); color: var(--on-surface); font-family: 'General Sans', sans-serif; }
         input:focus, select:focus { box-shadow: 0 0 0 2px rgba(0,106,54,0.25); }
         .phone-row { display: flex; gap: 8px; margin-bottom: 16px; }
         .phone-row select { width: auto; min-width: 110px; flex-shrink: 0; margin-bottom: 0; }
         .phone-row input { flex: 1; margin-bottom: 0; }
         .otp-input { font-size: 18px; text-align: center; letter-spacing: 8px; }
         .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
-        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; font-family: 'Be Vietnam Pro', sans-serif; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; font-family: 'General Sans', sans-serif; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-outline { background: var(--surface-container-low); color: var(--on-surface); margin-top: 8px; }
-        .btn-link { background: none; border: none; color: var(--primary); font-size: 13px; cursor: pointer; padding: 8px 0; font-family: 'Be Vietnam Pro', sans-serif; }
+        .btn-link { background: none; border: none; color: var(--primary); font-size: 13px; cursor: pointer; padding: 8px 0; font-family: 'General Sans', sans-serif; }
         .btn-link:disabled { color: var(--on-surface-variant); cursor: not-allowed; }
         .error { background: rgba(179,27,37,0.08); color: var(--error); padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 16px; display: none; }
         .success { background: rgba(0,106,54,0.08); color: var(--primary); padding: 8px 12px; border-radius: 1rem; font-size: 13px; margin-bottom: 16px; display: none; }
@@ -66,7 +66,7 @@
         .plan-card.selected { background: rgba(0,106,54,0.06); box-shadow: 0 0 0 2px var(--primary); }
         .plan-card input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
         .plan-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .plan-name { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px; font-weight: 700; color: var(--on-surface); }
+        .plan-name { font-family: 'Fraunces', sans-serif; font-size: 15px; font-weight: 700; color: var(--on-surface); }
         .plan-price { font-size: 16px; font-weight: 700; color: var(--primary); }
         .plan-free-badge { font-size: 12px; font-weight: 700; color: var(--on-secondary-container); background: var(--secondary-container); padding: 2px 8px; border-radius: 99px; }
         .plan-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }

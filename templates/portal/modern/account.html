@@ -5,45 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account — {% if branding.portal_title %}{{ branding.portal_title }}{% else %}SabiWiFi{% endif %}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap');
+        @import url('https://fonts.bunny.net/css?family=fraunces:400,500,600,700&display=swap');@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
 
         :root {
-            --primary: {{ branding.primary_color|default:"#006a36" }};
-            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
-            --surface: #f4f7f5;
-            --surface-container-low: #eef2ef;
-            --surface-container: #e5e9e7;
-            --surface-container-highest: #d8dedc;
+            --primary: {{ branding.primary_color|default:"#0e3b2e" }};
+            --primary-dim: {{ branding.primary_color|default:"#0a2b21" }};
+            --surface: #fafaf9;
+            --surface-container-low: #f5f5f4;
+            --surface-container: #e7e5e4;
+            --surface-container-highest: #d6d3d1;
             --surface-container-lowest: #ffffff;
-            --on-surface: #2b2f2e;
-            --on-surface-variant: #585c5b;
-            --error: #b31b25;
+            --on-surface: #0a0a0b;
+            --on-surface-variant: #6b6b6f;
+            --error: #b42318;
             --secondary-container: #ffc96f;
             --on-secondary-container: #614100;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; padding: 16px; }
+        body { font-family: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--surface); color: var(--on-surface); min-height: 100vh; padding: 16px; }
         .container { max-width: 400px; margin: 0 auto; }
         .card { background: var(--surface-container-lowest); border-radius: 16px; padding: 24px; box-shadow: 0px 20px 40px rgba(43,47,46,0.06); margin-bottom: 16px; }
         .logo { text-align: center; margin-bottom: 12px; }
         .logo img { max-width: 100px; max-height: 50px; }
-        h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 16px; color: var(--on-surface); }
-        h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--on-surface); }
+        h1 { font-family: 'Fraunces', sans-serif; font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 16px; color: var(--on-surface); }
+        h2 { font-family: 'Fraunces', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--on-surface); }
         .info-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
         .info-label { color: var(--on-surface-variant); }
         .info-value { font-weight: 500; text-align: right; color: var(--on-surface); }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
         .badge-active { background: var(--primary); color: #fff; }
         .badge-expired { background: var(--error); color: #fff; }
-        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; margin-top: 8px; }
+        .btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 1rem; font-family: 'General Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; margin-top: 8px; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-outline { background: var(--surface-container-low); color: var(--on-surface); }
         .btn-danger { background: var(--surface-container-low); color: var(--error); }
         .btn-sm { padding: 8px 16px; font-size: 13px; display: inline-block; width: auto; }
         label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; color: var(--on-surface); }
-        input { width: 100%; padding: 10px 12px; background: var(--surface-container-highest); border: none; border-radius: 1rem; font-family: 'Be Vietnam Pro', sans-serif; font-size: 14px; outline: none; color: var(--on-surface); }
+        input { width: 100%; padding: 10px 12px; background: var(--surface-container-highest); border: none; border-radius: 1rem; font-family: 'General Sans', sans-serif; font-size: 14px; outline: none; color: var(--on-surface); }
         input:focus { box-shadow: 0 0 0 2px var(--primary)40; }
         input[type="checkbox"] { width: 18px; height: 18px; padding: 0; margin: 0; accent-color: var(--primary); flex-shrink: 0; cursor: pointer; }
         .pin-input { font-size: 18px; text-align: center; letter-spacing: 4px; }
@@ -52,7 +52,7 @@
         .plan-card { background: var(--surface-container-low); border-radius: 12px; padding: 16px; margin-bottom: 8px; cursor: pointer; transition: box-shadow 0.2s; }
         .plan-card:hover { box-shadow: 0 0 0 2px var(--primary)40; }
         .plan-card.current { background: var(--surface-container); }
-        .plan-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 15px; color: var(--on-surface); }
+        .plan-name { font-family: 'Fraunces', sans-serif; font-weight: 600; font-size: 15px; color: var(--on-surface); }
         .plan-details { font-size: 13px; color: var(--on-surface-variant); margin-top: 4px; }
         .plan-price { font-size: 18px; font-weight: 700; color: var(--primary); margin-top: 4px; }
         .section { display: none; }
@@ -79,8 +79,8 @@
 
                 <!-- Login tabs -->
                 <div style="display:flex;gap:4px;background:var(--surface-container);border-radius:12px;padding:3px;margin-bottom:16px;">
-                    <button type="button" onclick="switchLoginTab('phone')" id="ltab-phone" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;background:var(--surface-container-lowest);color:var(--on-surface);transition:all 0.2s;">Phone &amp; PIN</button>
-                    <button type="button" onclick="switchLoginTab('voucher')" id="ltab-voucher" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'Be Vietnam Pro',sans-serif;cursor:pointer;background:transparent;color:var(--on-surface-variant);transition:all 0.2s;">Voucher Code</button>
+                    <button type="button" onclick="switchLoginTab('phone')" id="ltab-phone" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'General Sans',sans-serif;cursor:pointer;background:var(--surface-container-lowest);color:var(--on-surface);transition:all 0.2s;">Phone &amp; PIN</button>
+                    <button type="button" onclick="switchLoginTab('voucher')" id="ltab-voucher" class="tab-btn" style="flex:1;padding:8px;border:none;border-radius:10px;font-size:13px;font-weight:600;font-family:'General Sans',sans-serif;cursor:pointer;background:transparent;color:var(--on-surface-variant);transition:all 0.2s;">Voucher Code</button>
                 </div>
 
                 <!-- Phone + PIN login -->

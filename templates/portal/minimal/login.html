@@ -6,30 +6,30 @@
     <title>{% if branding.portal_title %}{{ branding.portal_title }}{% else %}Connect to WiFi{% endif %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.bunny.net" crossorigin><link rel="preconnect" href="https://api.fontshare.com" crossorigin><link href="https://fonts.bunny.net/css?family=fraunces:400,500,600,700&display=swap" rel="stylesheet"><link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: {{ branding.primary_color|default:"#006a36" }};
-            --primary-dim: {{ branding.primary_color|default:"#005c2e" }};
-            --surface: #f4f7f5;
-            --surface-container-low: #eef2ef;
-            --surface-container: #e5e9e7;
-            --surface-container-highest: #d8dedc;
+            --primary: {{ branding.primary_color|default:"#0e3b2e" }};
+            --primary-dim: {{ branding.primary_color|default:"#0a2b21" }};
+            --surface: #fafaf9;
+            --surface-container-low: #f5f5f4;
+            --surface-container: #e7e5e4;
+            --surface-container-highest: #d6d3d1;
             --surface-container-lowest: #ffffff;
-            --on-surface: #2b2f2e;
-            --on-surface-variant: #585c5b;
-            --error: #b31b25;
+            --on-surface: #0a0a0b;
+            --on-surface-variant: #6b6b6f;
+            --error: #b42318;
         }
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Be Vietnam Pro',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--surface);color:var(--on-surface);min-height:100vh;padding:40px 24px}
+        body{font-family:'General Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--surface);color:var(--on-surface);min-height:100vh;padding:40px 24px}
         .container{max-width:360px;margin:0 auto;background:var(--surface-container-lowest);border-radius:1.25rem;padding:32px 28px;box-shadow:0 2px 16px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.02)}
-        h1{font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:22px;font-weight:700;margin-bottom:4px;color:var(--on-surface)}
+        h1{font-family:'Fraunces','General Sans',sans-serif;font-size:22px;font-weight:700;margin-bottom:4px;color:var(--on-surface)}
         .subtitle{font-size:13px;color:var(--on-surface-variant);margin-bottom:28px}
-        label{display:block;font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--on-surface-variant);margin-bottom:6px;margin-top:20px}
-        input[type="tel"],input[type="password"]{width:100%;padding:12px 16px;background:var(--surface-container-highest);font-size:16px;outline:none;color:var(--on-surface);border:none;border-radius:1rem;font-family:'Be Vietnam Pro',sans-serif;transition:box-shadow .2s}
+        label{display:block;font-family:'Fraunces','General Sans',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--on-surface-variant);margin-bottom:6px;margin-top:20px}
+        input[type="tel"],input[type="password"]{width:100%;padding:12px 16px;background:var(--surface-container-highest);font-size:16px;outline:none;color:var(--on-surface);border:none;border-radius:1rem;font-family:'General Sans',sans-serif;transition:box-shadow .2s}
         input::placeholder{color:var(--surface-container)}
         input:focus{box-shadow:0 0 0 2px rgba(0,106,54,.25)}
-        .btn{display:block;width:100%;padding:14px;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;margin-top:28px;background:var(--primary);color:#fff;border:none;border-radius:1rem;font-family:'Plus Jakarta Sans','Be Vietnam Pro',sans-serif;transition:background .15s}
+        .btn{display:block;width:100%;padding:14px;font-size:14px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;margin-top:28px;background:var(--primary);color:#fff;border:none;border-radius:1rem;font-family:'Fraunces','General Sans',sans-serif;transition:background .15s}
         .btn:hover{background:var(--primary-dim)}
         .btn-outline{background:var(--surface-container-low);color:var(--on-surface);margin-top:10px}
         .btn-outline:hover{background:var(--surface-container)}
