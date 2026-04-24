@@ -188,27 +188,27 @@
 <!-- Stats Cards -->
 <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">₦{{ monthly_revenue|floatformat:0|default:"0" }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-on-surface">₦{{ monthly_revenue|floatformat:0|default:"0" }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Revenue this mo.</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ active_subs }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-on-surface">{{ active_subs }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Active subs</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ routers_online }}/{{ routers_total }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-on-surface">{{ routers_online }}/{{ routers_total }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Routers online</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-primary">₦{{ monthly_earnings|floatformat:0|default:"0" }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-primary">₦{{ monthly_earnings|floatformat:0|default:"0" }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Your earnings</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">₦{{ today_payments|floatformat:0|default:"0" }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-on-surface">₦{{ today_payments|floatformat:0|default:"0" }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Payments today</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-xl md:text-2xl text-on-surface">{{ today_signups }}</p>
+        <p class="font-display font-semibold text-2xl md:text-3xl tabular-nums text-on-surface">{{ today_signups }}</p>
         <p class="text-on-surface-variant text-xs mt-1">New signups today</p>
     </div>
 </div>
@@ -226,7 +226,7 @@
                 <span class="ml-2 font-mono text-xs text-on-surface">{{ payment.subscriber.phone }}</span>
                 <span class="ml-2 text-on-surface">→ {{ payment.plan.name|default:"—" }}</span>
             </div>
-            <div class="font-mono font-medium {% if payment.paystack_status == 'success' %}text-primary{% elif payment.paystack_status == 'failed' %}text-error{% else %}text-on-surface-variant{% endif %}">
+            <div class="font-data font-medium tabular-nums {% if payment.paystack_status == 'success' %}text-primary{% elif payment.paystack_status == 'failed' %}text-error{% else %}text-on-surface-variant{% endif %}">
                 {% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% endif %}
             </div>
         </div>

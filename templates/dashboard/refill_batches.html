@@ -23,7 +23,7 @@
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
         <div class="flex items-start justify-between mb-2">
             <h3 class="font-headline font-semibold">{{ batch.name }}</h3>
-            <span class="font-mono font-bold text-lg">₦{{ batch.value_ngn|floatformat:0 }}</span>
+            <span class="font-data font-semibold text-lg tabular-nums">₦{{ batch.value_ngn|floatformat:0 }}</span>
         </div>
         <div class="flex items-center gap-4 text-sm text-on-surface-variant">
             <span>{{ batch.total }} total</span>

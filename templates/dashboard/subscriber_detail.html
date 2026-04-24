@@ -41,7 +41,7 @@
                 <span class="ml-2">{{ payment.plan.name|default:"—" }}</span>
             </div>
             <div class="flex items-center gap-2">
-                <span class="font-mono font-medium">{% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% else %}Free{% endif %}</span>
+                <span class="font-data font-medium tabular-nums">{% if payment.amount_ngn %}₦{{ payment.amount_ngn|floatformat:0 }}{% else %}Free{% endif %}</span>
                 {% if payment.paystack_status == 'success' %}
                 <span class="text-primary text-xs">✓ Paid</span>
                 {% elif payment.paystack_status == 'failed' %}

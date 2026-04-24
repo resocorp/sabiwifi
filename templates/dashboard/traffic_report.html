@@ -44,11 +44,11 @@
                 {% for r in rows %}
                 <tr class="hover:bg-surface-container-low/50">
                     <td class="px-4 py-3 font-medium">{{ r.username }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ r.dl_display }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ r.ul_display }}</td>
-                    <td class="px-4 py-3 font-medium">{{ r.data_display }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ r.time_display }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ r.total_sessions }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ r.dl_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ r.ul_display }}</td>
+                    <td class="px-4 py-3 font-medium font-data tabular-nums">{{ r.data_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ r.time_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ r.total_sessions }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

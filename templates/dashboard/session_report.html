@@ -48,9 +48,9 @@
                 <tr class="hover:bg-surface-container-low/50">
                     <td class="px-4 py-3 font-medium">{{ s.username }}</td>
                     <td class="px-4 py-3 text-on-surface-variant">{{ s.router_name }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant text-xs">{{ s.acctstarttime|date:"M j H:i" }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ s.time_display }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ s.data_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant text-xs tabular-nums">{{ s.acctstarttime|date:"M j H:i" }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ s.time_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ s.data_display }}</td>
                     <td class="px-4 py-3 text-xs text-on-surface-variant">{{ s.acctterminatecause|default:"—" }}</td>
                 </tr>
                 {% endfor %}

@@ -25,7 +25,7 @@
         <p class="text-sm text-on-surface-variant">{{ plan.duration_display }} · {{ plan.data_cap_display }}</p>
         <div class="flex items-center justify-between mt-3">
             <div class="flex items-center gap-4">
-                <span class="font-mono font-bold text-lg">{% if plan.is_free %}Free{% else %}₦{{ plan.price_ngn|floatformat:0 }}{% endif %}</span>
+                <span class="font-data font-semibold text-lg tabular-nums">{% if plan.is_free %}Free{% else %}₦{{ plan.price_ngn|floatformat:0 }}{% endif %}</span>
                 <span class="text-xs text-on-surface-variant">{{ plan.max_devices }} device{{ plan.max_devices|pluralize }}</span>
             </div>
             <span class="text-xs text-on-surface-variant">{{ plan.active_subscribers }} active subscriber{{ plan.active_subscribers|pluralize }}</span>

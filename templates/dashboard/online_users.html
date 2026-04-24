@@ -33,9 +33,9 @@
                 <tr class="hover:bg-surface-container-low/50">
                     <td class="px-4 py-3 font-medium">{{ s.username }}</td>
                     <td class="px-4 py-3 text-on-surface-variant">{{ s.router_name }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ s.time_display }}</td>
-                    <td class="px-4 py-3 text-on-surface-variant">{{ s.data_display }}</td>
-                    <td class="px-4 py-3 font-mono text-xs text-on-surface-variant">{{ s.framedipaddress|default:"—" }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ s.time_display }}</td>
+                    <td class="px-4 py-3 text-on-surface-variant font-data tabular-nums">{{ s.data_display }}</td>
+                    <td class="px-4 py-3 font-mono text-xs text-on-surface-variant tabular-nums">{{ s.framedipaddress|default:"—" }}</td>
                     <td class="px-4 py-3">
                         {% if s.subscriber_id %}
                         <form method="post" action="{% url 'dashboard-disconnect-user' s.subscriber_id %}" class="inline"

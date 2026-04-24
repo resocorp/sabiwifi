@@ -9,15 +9,15 @@
 <!-- Monthly Summary Cards -->
 <div class="grid grid-cols-3 gap-3 mb-6">
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-lg md:text-xl">₦{{ monthly_revenue|floatformat:0 }}</p>
+        <p class="font-display font-semibold text-xl md:text-2xl tabular-nums">₦{{ monthly_revenue|floatformat:0 }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Total revenue</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-lg md:text-xl">₦{{ monthly_platform_fee|floatformat:0 }}</p>
+        <p class="font-display font-semibold text-xl md:text-2xl tabular-nums">₦{{ monthly_platform_fee|floatformat:0 }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Platform fee (15%)</p>
     </div>
     <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4">
-        <p class="font-mono font-bold text-lg md:text-xl text-primary">₦{{ monthly_earnings|floatformat:0 }}</p>
+        <p class="font-display font-semibold text-xl md:text-2xl tabular-nums text-primary">₦{{ monthly_earnings|floatformat:0 }}</p>
         <p class="text-on-surface-variant text-xs mt-1">Your earnings</p>
     </div>
 </div>
@@ -45,7 +45,7 @@
                     {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="font-mono font-medium">₦{{ payment.amount_ngn|floatformat:0 }}</span>
+                    <span class="font-data font-medium tabular-nums">₦{{ payment.amount_ngn|floatformat:0 }}</span>
                     {% if payment.paystack_status == 'success' %}
                     <span class="text-primary text-xs">✓ {{ payment.payment_method }}</span>
                     {% elif payment.paystack_status == 'failed' %}
@@ -56,7 +56,7 @@
                 </div>
             </div>
             {% if payment.paystack_status == 'success' and payment.reseller_amount_ngn %}
-            <p class="text-xs text-on-surface-variant mt-1 ml-12">You earned: ₦{{ payment.reseller_amount_ngn|floatformat:0 }}</p>
+            <p class="text-xs text-on-surface-variant mt-1 ml-12 tabular-nums">You earned: ₦{{ payment.reseller_amount_ngn|floatformat:0 }}</p>
             {% endif %}
         </div>
         {% empty %}

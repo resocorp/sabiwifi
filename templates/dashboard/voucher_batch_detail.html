@@ -9,7 +9,7 @@
     <div class="flex items-center justify-between mt-2">
         <div>
             <h1 class="text-xl font-headline font-bold">{{ batch.name }}</h1>
-            <p class="text-sm text-on-surface-variant">{{ batch.plan.name }} &middot; {{ batch.plan.duration_display }} &middot; {% if batch.plan.is_free %}Free{% else %}₦{{ batch.plan.price_ngn|floatformat:0 }}{% endif %}</p>
+            <p class="text-sm text-on-surface-variant tabular-nums">{{ batch.plan.name }} &middot; {{ batch.plan.duration_display }} &middot; {% if batch.plan.is_free %}Free{% else %}₦{{ batch.plan.price_ngn|floatformat:0 }}{% endif %}</p>
         </div>
         <div class="flex items-center gap-2">
             <a href="{% url 'dashboard-voucher-batch-csv' batch.pk %}"
