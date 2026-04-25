@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'leads',
     'tickets',
     'ai',
+    'voice',
     'django_rq',
 ]
 
@@ -153,6 +154,11 @@ TERMII_SENDER_ID = config('TERMII_SENDER_ID', default='SabiWiFi')
 WA_SERVICE_URL = config('WA_SERVICE_URL', default='http://127.0.0.1:3001')
 WA_API_KEY = config('WA_API_KEY', default='')
 OPENWISP_WEBHOOK_SECRET = config('OPENWISP_WEBHOOK_SECRET', default='')
+
+# Voice droplet (Asterisk + AVR). Lives on a separate host, reached over
+# HTTPS. Shared-secret header auth mirrors the WA sidecar pattern.
+VOICE_SERVICE_URL = config('VOICE_SERVICE_URL', default='http://127.0.0.1:8088')
+VOICE_API_KEY = config('VOICE_API_KEY', default='')
 
 # Server infrastructure
 SERVER_IP = config('SERVER_IP', default='127.0.0.1')

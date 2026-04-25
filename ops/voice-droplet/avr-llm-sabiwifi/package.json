@@ -1,0 +1,16 @@
+{
+  "name": "avr-llm-sabiwifi",
+  "version": "0.1.0",
+  "description": "AVR LLM bridge that forwards calls to SabiWiFi Django /api/ai/voice-turn/",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

@@ -98,6 +98,15 @@ def _route_inbound_message(message_id: int) -> dict:
     if msg.direction != Message.DIRECTION_IN:
         return {'skipped': True, 'reason': 'not inbound'}
 
+    # Voice messages are handled synchronously by voice.views.voice_turn (the
+    # bridge container calls it per utterance and blocks for the reply).
+    # They must NOT re-enter the text agent router — CustomerAgent's
+    # send_reply tool would try to post the voice transcript back over
+    # WhatsApp, which is wrong. Any Message created with channel=voice is
+    # already fully handled; short-circuit here defensively.
+    if convo.channel == Conversation.CHANNEL_VOICE:
+        return {'skipped': True, 'reason': 'voice channel — handled by voice.views.voice_turn'}
+
     # Pre-router: if the conversation is awaiting a satisfaction YES/NO
     # reply, handle that BEFORE any agent runs. Fires regardless of
     # ai_enabled — closing or reopening a ticket is a deterministic

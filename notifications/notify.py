@@ -168,6 +168,21 @@ def _dispatch(reseller, phone, body, channel, event_type,
             from notifications.email import send_email
             ok = send_email(email, subject or event_type, body)
             _mark_sent(log) if ok else _mark_failed(log, 'Email send failed')
+        elif ch == 'voice':
+            # Voice is dispatched by the voice droplet asynchronously.
+            # send_voice_call returns True on "accepted" — actual delivery
+            # outcome arrives via /api/voice/webhook/ (call.completed) and
+            # updates VoiceCall.status there, not here.
+            try:
+                from voice.services import send_voice_call
+            except Exception as exc:
+                _mark_failed(log, f'voice app unavailable: {exc}')
+                continue
+            ok = send_voice_call(
+                tenant_slug=reseller.slug, to_phone=phone,
+                body=body, purpose='tts',
+            )
+            _mark_sent(log) if ok else _mark_failed(log, 'Voice droplet error')
         else:  # sms
             ok = sms_svc.send_sms(phone, body)
             _mark_sent(log) if ok else _mark_failed(log, 'SMS send failed')

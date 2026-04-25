@@ -133,12 +133,18 @@ class AIPromptVersion(models.Model):
     ROLE_CUSTOMER = 'customer'
     ROLE_FIELD = 'field'
     ROLE_FIELD_INBOUND = 'field_inbound'
+    ROLE_VOICE_CUSTOMER = 'voice_customer'
+    ROLE_VOICE_FIELD = 'voice_field'
+    ROLE_VOICE_RESELLER = 'voice_reseller'
     ROLE_CHOICES = [
         (ROLE_CUSTOMER, 'Customer (enquiry + support)'),
         (ROLE_SALES, 'Sales (legacy)'),
         (ROLE_SUPPORT, 'Support (legacy)'),
         (ROLE_FIELD, 'Field supervisor'),
         (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
+        (ROLE_VOICE_CUSTOMER, 'Voice — subscriber hotline'),
+        (ROLE_VOICE_FIELD, 'Voice — field-tech callback'),
+        (ROLE_VOICE_RESELLER, 'Voice — reseller ops support'),
     ]
 
     config = models.ForeignKey(ResellerAIConfig, on_delete=models.CASCADE,
@@ -168,12 +174,18 @@ class AIAgentRun(models.Model):
     ROLE_CUSTOMER = 'customer'
     ROLE_FIELD = 'field'
     ROLE_FIELD_INBOUND = 'field_inbound'
+    ROLE_VOICE_CUSTOMER = 'voice_customer'
+    ROLE_VOICE_FIELD = 'voice_field'
+    ROLE_VOICE_RESELLER = 'voice_reseller'
     ROLE_CHOICES = [
         (ROLE_CUSTOMER, 'Customer (enquiry + support)'),
         (ROLE_SALES, 'Sales (legacy)'),
         (ROLE_SUPPORT, 'Support (legacy)'),
         (ROLE_FIELD, 'Field supervisor'),
         (ROLE_FIELD_INBOUND, 'Field inbound (tech replies)'),
+        (ROLE_VOICE_CUSTOMER, 'Voice — subscriber hotline'),
+        (ROLE_VOICE_FIELD, 'Voice — field-tech callback'),
+        (ROLE_VOICE_RESELLER, 'Voice — reseller ops support'),
     ]
 
     STATUS_SUCCESS = 'success'

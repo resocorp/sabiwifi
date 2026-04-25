@@ -227,6 +227,7 @@ class NotificationLog(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('sms', 'SMS'),
         ('email', 'Email'),
+        ('voice', 'Voice call'),
     ]
     STATUS_CHOICES = [
         ('queued', 'Queued'),

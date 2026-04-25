@@ -1,0 +1,174 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Voice — SabiWiFi{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl">
+    <div class="mb-4">
+        <h1 class="text-2xl font-headline font-bold">Voice hotline</h1>
+        <p class="text-sm text-on-surface-variant">
+            Configure the AI voice line customers call for support. Calls flow
+            through our voice droplet (Asterisk + AVR) and use your existing AI
+            provider configured under <a class="underline" href="{% url 'dashboard-ai-config' %}">AI</a>.
+        </p>
+    </div>
+
+    {% if messages %}
+    <div class="space-y-2 mb-4">
+        {% for m in messages %}
+        <div class="rounded-xl px-3 py-2 text-sm {% if m.tags == 'success' %}bg-primary-container/30 text-on-surface{% elif m.tags == 'error' %}bg-error-container/30 text-on-error-container{% else %}bg-surface-container-low text-on-surface-variant{% endif %}">
+            {{ m }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Tenant settings -->
+    <form method="post" action="{% url 'dashboard-voice-config-save' %}"
+          class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6 space-y-4">
+        {% csrf_token %}
+        <h2 class="font-semibold">Settings</h2>
+
+        <label class="flex items-center gap-3 text-sm">
+            <input type="checkbox" name="voice_enabled" {% if tenant.voice_enabled %}checked{% endif %}>
+            <span><strong>Voice enabled</strong> — turn the hotline on or off for your tenants.</span>
+        </label>
+
+        <label class="block text-sm">
+            <span class="block font-medium mb-1">Greeting text</span>
+            <input type="text" name="greeting_text" value="{{ tenant.greeting_text }}"
+                   maxlength="500"
+                   class="w-full px-3 py-2 rounded border border-outline-variant bg-surface-container-low"
+                   placeholder="e.g. Welcome to {{ reseller.name }} support. How can I help?">
+            <span class="block text-xs text-on-surface-variant mt-1">Spoken before the AI engages. Keep it under 2 sentences.</span>
+        </label>
+
+        <label class="block text-sm">
+            <span class="block font-medium mb-1">TTS voice id</span>
+            <input type="text" name="tts_voice_id" value="{{ tenant.tts_voice_id }}"
+                   maxlength="64"
+                   class="w-full px-3 py-2 rounded border border-outline-variant bg-surface-container-low"
+                   placeholder="Leave blank for the platform default voice">
+            <span class="block text-xs text-on-surface-variant mt-1">Provider-specific id (Cartesia voice_id, ElevenLabs voice name).</span>
+        </label>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="block text-sm">
+                <span class="block font-medium mb-1">Concurrent-call cap</span>
+                <input type="number" name="concurrent_call_cap" min="0" max="100"
+                       value="{{ tenant.concurrent_call_cap }}"
+                       class="w-full px-3 py-2 rounded border border-outline-variant bg-surface-container-low">
+                <span class="block text-xs text-on-surface-variant mt-1">0 = no cap. Prevents one tenant saturating the trunk.</span>
+            </label>
+            <label class="block text-sm">
+                <span class="block font-medium mb-1">Recording retention (days)</span>
+                <input type="number" name="recording_retention_days" min="1" max="365"
+                       value="{{ tenant.recording_retention_days }}"
+                       class="w-full px-3 py-2 rounded border border-outline-variant bg-surface-container-low">
+            </label>
+        </div>
+
+        <label class="flex items-center gap-3 text-sm">
+            <input type="checkbox" name="recording_enabled" {% if tenant.recording_enabled %}checked{% endif %}>
+            <span><strong>Record calls</strong> — caller hears an NDPR disclosure before the agent greeting.</span>
+        </label>
+
+        <div class="pt-2">
+            <h3 class="text-sm font-medium mb-2">Feature flags</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="flag_hotline" {% if flags.hotline %}checked{% endif %}>
+                    <span>Inbound AI support hotline</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="flag_otp_fallback" {% if flags.otp_fallback %}checked{% endif %}>
+                    <span>Voice OTP fallback</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="flag_outbound_renewal" {% if flags.outbound_renewal %}checked{% endif %}>
+                    <span>Outbound renewal calls (Phase 3)</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="flag_broadcast" {% if flags.broadcast %}checked{% endif %}>
+                    <span>Voice broadcasts (Phase 5)</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="pt-2">
+            <button class="px-4 py-2 rounded bg-primary text-on-primary text-sm font-medium">Save settings</button>
+        </div>
+    </form>
+
+    <!-- Prompt editor -->
+    <form method="post" action="{% url 'dashboard-voice-prompt-save' %}"
+          class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6">
+        {% csrf_token %}
+        <div class="mb-3">
+            <h2 class="font-semibold">Voice prompt override</h2>
+            <p class="text-xs text-on-surface-variant">
+                Extra guidance the AI follows on voice calls — brand voice, escalation rules, things
+                to avoid saying. Leave blank to use the platform default. Each save creates a new
+                audit-logged version.
+            </p>
+        </div>
+        <textarea name="voice_prompt" rows="8"
+                  class="w-full px-3 py-2 rounded border border-outline-variant bg-surface-container-low font-mono text-sm"
+                  placeholder="e.g. Always mention payment plans are available. Transfer to human for any legal question.">{{ voice_prompt }}</textarea>
+        <div class="mt-3">
+            <button class="px-4 py-2 rounded bg-primary text-on-primary text-sm font-medium">Save voice prompt</button>
+        </div>
+    </form>
+
+    <!-- Routing rules (DIDs) -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6 mb-6">
+        <h2 class="font-semibold mb-3">Your phone numbers (DIDs)</h2>
+        {% if routing_rules %}
+        <ul class="text-sm space-y-1">
+            {% for r in routing_rules %}
+            <li class="flex justify-between items-center">
+                <span class="font-mono">{{ r.did_e164 }}</span>
+                <span class="text-xs text-on-surface-variant">{{ r.get_agent_role_display }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-on-surface-variant">
+            No DIDs provisioned yet. Contact platform support to acquire a Nigerian number and bind it to your hotline.
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- Recent calls -->
+    <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-4 md:p-6">
+        <h2 class="font-semibold mb-3">Recent calls</h2>
+        {% if recent_calls %}
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-on-surface-variant text-xs uppercase">
+                    <th class="py-1">Time</th>
+                    <th class="py-1">From</th>
+                    <th class="py-1">Direction</th>
+                    <th class="py-1">Status</th>
+                    <th class="py-1 text-right">Duration</th>
+                    <th class="py-1 text-right">Cost (₦)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in recent_calls %}
+                <tr class="border-t border-outline-variant/30">
+                    <td class="py-1">{{ c.started_at|date:'Y-m-d H:i' }}</td>
+                    <td class="py-1 font-mono">{{ c.from_e164|default:'—' }}</td>
+                    <td class="py-1">{{ c.get_direction_display }}</td>
+                    <td class="py-1">{{ c.get_status_display }}</td>
+                    <td class="py-1 text-right">{{ c.duration_seconds|default:'—' }}s</td>
+                    <td class="py-1 text-right">{{ c.cost_ngn }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-sm text-on-surface-variant">No calls yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

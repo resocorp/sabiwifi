@@ -6,6 +6,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
 
+from voice import views as voice_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -42,6 +44,12 @@ urlpatterns = [
 
     # Notifications (WA webhook + reseller config + broadcasts)
     path('api/notifications/', include('notifications.urls')),
+
+    # Voice (AVR webhook + reseller voice config)
+    path('api/voice/', include('voice.urls')),
+    # Bridge-container contract — kept under /api/ai/ since it's the LLM
+    # bridge, not a tenant API. Header-auth'd same as /api/voice/webhook/.
+    path('api/ai/voice-turn/', voice_views.voice_turn, name='voice-turn-bridge'),
 
     # Shop (public storefront)
     path('shop/', include('shop.urls')),

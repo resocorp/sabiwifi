@@ -3,6 +3,7 @@ from django.urls import path
 from dashboard import views
 from dashboard import crm_views
 from dashboard import ai_views
+from dashboard import voice_views
 
 urlpatterns = [
     # CRM shells (data via /api/* endpoints)
@@ -18,6 +19,11 @@ urlpatterns = [
     path('ai/pause/', ai_views.ai_pause, name='dashboard-ai-pause'),
     path('ai/resume/', ai_views.ai_resume, name='dashboard-ai-resume'),
     path('ai/test-whatsapp/', ai_views.ai_test_whatsapp, name='dashboard-ai-test-whatsapp'),
+
+    # Voice (AVR hotline) configuration
+    path('voice/', voice_views.voice_config, name='dashboard-voice-config'),
+    path('voice/save/', voice_views.voice_config_save, name='dashboard-voice-config-save'),
+    path('voice/prompt/', voice_views.voice_prompt_save, name='dashboard-voice-prompt-save'),
 
     path('', views.overview, name='dashboard-overview'),
     path('plans/', views.plans_list, name='dashboard-plans'),
