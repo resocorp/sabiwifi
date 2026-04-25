@@ -790,9 +790,11 @@ def router_outages(request, pk):
         days = 30
     since = now - timedelta(days=days)
 
-    # Walk chronologically. Only count notified (non-blip) offline rows
-    # so the UI matches what the reseller was notified about. Blips that
-    # were suppressed remain present but visually tagged "(brief)".
+    # Walk chronologically. Brief offline/online pairs (under BRIEF_THRESHOLD)
+    # are the same "blips" that check_routers suppresses from notifications —
+    # they happen when WG handshake stalls between heartbeats and would clutter
+    # the UI with rows the reseller was never told about. Drop them entirely
+    # so the dashboard list matches what we actually paged on.
     logs = list(
         RouterHealthLog.objects.filter(router=router, created_at__gte=since)
         .order_by('created_at')
@@ -807,16 +809,17 @@ def router_outages(request, pk):
             open_offline = ts
         elif event == 'online' and open_offline is not None:
             duration = (ts - open_offline).total_seconds()
-            outages.append({
-                'started': open_offline.isoformat(),
-                'ended': ts.isoformat(),
-                'started_display': open_offline.strftime('%d %b %H:%M'),
-                'ended_display': ts.strftime('%H:%M'),
-                'duration_seconds': int(duration),
-                'duration_display': _format_duration(duration),
-                'brief': duration < BRIEF_THRESHOLD,
-                'ongoing': False,
-            })
+            if duration >= BRIEF_THRESHOLD:
+                outages.append({
+                    'started': open_offline.isoformat(),
+                    'ended': ts.isoformat(),
+                    'started_display': open_offline.strftime('%d %b %H:%M'),
+                    'ended_display': ts.strftime('%H:%M'),
+                    'duration_seconds': int(duration),
+                    'duration_display': _format_duration(duration),
+                    'brief': False,
+                    'ongoing': False,
+                })
             open_offline = None
 
     if open_offline is not None:
