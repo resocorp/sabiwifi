@@ -211,10 +211,21 @@ def voice_turn(request):
     except Reseller.DoesNotExist:
         return Response({'error': 'unknown tenant'}, status=404)
 
-    try:
-        call = VoiceCall.objects.get(call_id=call_id)
-    except VoiceCall.DoesNotExist:
-        return Response({'error': 'unknown call'}, status=404)
+    # Phase 2 MVP: the droplet doesn't yet send a call.started webhook, so
+    # the first /voice-turn/ for a given call_id has no VoiceCall row.
+    # Lazy-create here so smoke tests (and self-served softphone calls)
+    # don't 404. Phase 2.5 adds proper webhook lifecycle (call.started /
+    # call.answered / call.completed) and this branch becomes a no-op.
+    call, _created = VoiceCall.objects.get_or_create(
+        call_id=call_id,
+        defaults={
+            'reseller': reseller,
+            'direction': VoiceCall.DIRECTION_IN,
+            'from_e164': caller_phone,
+            'to_e164': '',
+            'status': VoiceCall.STATUS_IN_PROGRESS,
+        },
+    )
     if call.reseller_id != reseller.pk:
         return Response({'error': 'tenant mismatch'}, status=403)
 

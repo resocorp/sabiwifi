@@ -62,14 +62,17 @@ app.post('/prompt-stream', async (req, res) => {
   const latest = messages.length ? messages[messages.length - 1] : null;
   const transcript = latest && latest.role === 'user' ? (latest.content || '') : '';
 
-  // SSE headers for AVR Core streaming compatibility.
+  // AVR Core's parser expects raw JSON per chunk (no `data: ` SSE prefix,
+  // no end marker — connection close = end-of-stream). Confirmed by reading
+  // avr-llm-openai source: it sets text/event-stream Content-Type but writes
+  // bare JSON.stringify(obj) per delta. Following the same wire format.
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  const sendSSE = (obj) => {
-    res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const sendChunk = (obj) => {
+    res.write(JSON.stringify(obj));
   };
 
   const controller = new AbortController();
@@ -96,29 +99,27 @@ app.post('/prompt-stream', async (req, res) => {
     if (!djangoResp.ok) {
       const errBody = await djangoResp.text();
       console.error(`[bridge] django ${djangoResp.status}: ${errBody.slice(0, 300)}`);
-      sendSSE({
+      sendChunk({
         type: 'text',
         content: "I'm having trouble right now. Please try again in a moment.",
       });
-      sendSSE({ type: 'end' });
       res.end();
       return;
     }
 
     const data = await djangoResp.json();
     const text = (data && data.text) || '';
-    // Phase 2 MVP: single SSE event with the full reply. Phase 2.5 makes
-    // Django stream tokens over SSE so the first-byte is << total latency.
-    sendSSE({ type: 'text', content: text });
-    sendSSE({ type: 'end' });
+    // Phase 2 MVP: single chunk with the full reply. Phase 2.5 makes Django
+    // stream tokens so the first-byte is << total latency. Connection close
+    // signals end-of-stream to avr-core.
+    sendChunk({ type: 'text', content: text });
   } catch (err) {
     clearTimeout(timer);
     console.error('[bridge] upstream error:', err && err.message);
-    sendSSE({
+    sendChunk({
       type: 'text',
       content: "I'm sorry, I lost the connection. Let me transfer you to our team.",
     });
-    sendSSE({ type: 'end' });
   } finally {
     res.end();
   }

@@ -1,0 +1,74 @@
+services:
+  avr-core:
+    image: agentvoiceresponse/avr-core
+    platform: linux/x86_64
+    container_name: avr-core
+    restart: always
+    environment:
+      - PORT=5001
+      - ASR_URL=http://avr-asr-deepgram:6010/speech-to-text-stream
+      - LLM_URL=http://avr-llm-sabiwifi:6002/prompt-stream
+      - TTS_URL=http://avr-tts-elevenlabs:6007/text-to-speech-stream
+      - INTERRUPT_LISTENING=true
+      - SYSTEM_MESSAGE=Hello, you've reached SabiWiFi support. How can I help you today?
+    ports:
+      - "5001:5001"
+    networks:
+      - avr
+    depends_on:
+      - avr-asr-deepgram
+      - avr-llm-sabiwifi
+      - avr-tts-elevenlabs
+
+  avr-asr-deepgram:
+    image: agentvoiceresponse/avr-asr-deepgram
+    platform: linux/x86_64
+    container_name: avr-asr-deepgram
+    restart: always
+    environment:
+      - PORT=6010
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - SPEECH_RECOGNITION_LANGUAGE=en-US
+      - SPEECH_RECOGNITION_MODEL=nova-2-phonecall
+    networks:
+      - avr
+
+  avr-llm-sabiwifi:
+    image: avr-llm-sabiwifi:latest
+    container_name: avr-llm-sabiwifi
+    restart: always
+    environment:
+      - PORT=6002
+      - DJANGO_URL=https://app.sabiwifi.com
+      - VOICE_API_KEY=${VOICE_API_KEY}
+      - DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG:-nedu-wifi}
+      - REQUEST_TIMEOUT_MS=15000
+    networks:
+      - avr
+
+  avr-tts-elevenlabs:
+    image: agentvoiceresponse/avr-tts-elevenlabs
+    platform: linux/x86_64
+    container_name: avr-tts-elevenlabs
+    restart: always
+    # The upstream image uses elevenlabs SDK v1.59 which gets 402 from the
+    # ElevenLabs API even when direct fetch with the same key works. Mount
+    # our patched index.js (uses direct fetch) over the SDK version.
+    volumes:
+      - ./tts-elevenlabs-patch.js:/usr/src/app/index.js:ro
+    environment:
+      - PORT=6007
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      # Free tier blocks library/professional voices (Ngozi, Hale) via API —
+      # use a premade voice (Brittney) until the account is upgraded.
+      # Flip back to ${ELEVENLABS_VOICE_ID} once on Starter plan or higher.
+      - ELEVENLABS_VOICE_ID=Xb7hH8MSUJpSbSDYk0k2
+      # Override .env's scribe_v1 (STT) — chained TTS needs a TTS model.
+      - ELEVENLABS_MODEL_ID=eleven_turbo_v2_5
+    networks:
+      - avr
+
+networks:
+  avr:
+    name: avr
+    external: true
