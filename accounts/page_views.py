@@ -18,18 +18,36 @@ def _has_dashboard_access(user) -> bool:
     return bool(staff and staff.active and staff.can_log_in)
 
 
-def landing_page(request):
-    """Public landing page — sales page for potential resellers."""
-    if _has_dashboard_access(request.user):
-        return redirect('dashboard-overview')
+def _wa_number():
     from operator_panel.models import PlatformSettings
     settings_obj = PlatformSettings.load()
-    # Use first phone in notification_phones as WA contact (stripped of non-digits)
-    wa_number = ''
     phones = settings_obj.notification_phones or []
     if phones:
-        wa_number = re.sub(r'[^\d]', '', str(phones[0]))
-    return render(request, 'public/landing.html', {'wa_number': wa_number})
+        return re.sub(r'[^\d]', '', str(phones[0]))
+    return ''
+
+
+def landing_page(request):
+    """Public landing page — consumer-facing ISP brand. Recharge entry point."""
+    if _has_dashboard_access(request.user):
+        return redirect('dashboard-overview')
+    return render(request, 'public/landing.html', {'wa_number': _wa_number()})
+
+
+def partners_page(request):
+    """Operator-facing acquisition page (B2B). Linked discreetly from main footer."""
+    if _has_dashboard_access(request.user):
+        return redirect('dashboard-overview')
+    return render(request, 'public/partners.html', {'wa_number': _wa_number()})
+
+
+def recharge_page(request):
+    """Public recharge widget page on sabiwifi.com. End-to-end SabiWiFi-branded."""
+    prefilled_phone = request.GET.get('phone', '').strip()
+    return render(request, 'public/recharge.html', {
+        'prefilled_phone': prefilled_phone,
+        'wa_number': _wa_number(),
+    })
 
 
 def signup_page(request):

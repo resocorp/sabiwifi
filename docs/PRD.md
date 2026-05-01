@@ -8,7 +8,9 @@
 
 ## 1. Product Overview
 
-SabiWiFi is a multi-tenant WiFi reseller management platform. It enables individuals and small businesses (resellers) to deploy, manage, and monetise WiFi hotspots using MikroTik hardware without requiring technical expertise. The platform handles the full lifecycle: router provisioning, subscriber access control, payment processing, and customer communication.
+> **Positioning note**: See `docs/POSITIONING.md` for how SabiWiFi presents itself publicly. In short — SabiWiFi the **ISP brand** is the public face (consumer-facing `sabiwifi.com`); SabiWiFi the **platform** is the white-label multi-tenant backend that powers partners on any backbone. Partners are invisible to consumers; they run under their own brand.
+
+SabiWiFi is a consumer ISP brand backed by a multi-tenant operator platform. The public face (`sabiwifi.com`) presents as a standalone ISP serving end customers; the underlying platform enables partner operators to deploy, manage, and monetise their own WiFi hotspots using MikroTik (and other) hardware without requiring technical expertise. The platform handles the full lifecycle: router provisioning, subscriber access control, payment processing, and customer communication.
 
 ### 1.1 Problem Statement
 
@@ -53,9 +55,10 @@ A SaaS platform where:
 - Receives operational alerts (new subscribers, payments, router health)
 
 ### 2.3 Subscriber
-- End user connecting to a reseller's WiFi hotspot
-- Interacts only through the captive portal (no account on the main platform)
-- Phone number is the primary identifier (per reseller)
+- End user connecting to a partner's WiFi hotspot (and, on partners running under the SabiWiFi brand, a SabiWiFi customer)
+- Interacts through the partner-branded captive portal when connecting
+- Can also recharge via the public `sabiwifi.com` landing widget — that flow renders SabiWiFi-branded end-to-end; the partner stays invisible to the customer (split-payment routing is unchanged)
+- Phone number is the primary identifier (unique per partner). Cross-partner lookup is disambiguated at the API layer when needed.
 - Manages their account at `/account/` from any device
 - Opts into notification categories (alerts, promos, marketing)
 

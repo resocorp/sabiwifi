@@ -32,6 +32,9 @@ urlpatterns = [
     # API — Portal (subscriber-facing)
     path('api/portal/', include('portal.api_urls')),
 
+    # API — Public recharge (sabiwifi.com widget)
+    path('api/recharge/', include('portal.recharge_urls')),
+
     # API — Banks
     path('api/banks/', include('billing.bank_urls')),
 
