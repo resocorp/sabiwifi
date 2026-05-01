@@ -204,8 +204,21 @@ def lead_intake(request):
     settings_obj = PlatformSettings.load()
     reseller = settings_obj.platform_reseller
 
+    # Resolve chosen pricing plan if supplied
+    chosen_plan = None
+    chosen_plan_id = data.get('chosen_plan_id')
+    if chosen_plan_id:
+        from leads.models import PricingPlan
+        try:
+            chosen_plan = PricingPlan.objects.get(
+                pk=int(chosen_plan_id), is_active=True, category=intent,
+            )
+        except (PricingPlan.DoesNotExist, ValueError, TypeError):
+            chosen_plan = None  # silently ignore mismatched/inactive plans
+
     lead = Lead.objects.create(
         reseller=reseller,
+        chosen_plan=chosen_plan,
         phone=phone,
         name=name,
         email=email,

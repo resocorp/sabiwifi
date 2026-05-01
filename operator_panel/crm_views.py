@@ -123,7 +123,10 @@ def operator_send_quote(request, lead_id):
             'error': 'This lead has no partner assigned. Assign a partner before quoting (the Paystack split needs a verified subaccount).',
         }, status=400)
 
+    # Auto-fill from chosen_plan if amount not supplied + lead picked a plan
     raw_amount = data.get('amount_ngn') or lead.quoted_amount_ngn
+    if not raw_amount and lead.chosen_plan_id:
+        raw_amount = lead.chosen_plan.effective_upfront_price_ngn
     if not raw_amount:
         return JsonResponse({'error': 'amount_ngn required'}, status=400)
     try:

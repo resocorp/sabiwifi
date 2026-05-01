@@ -51,90 +51,136 @@
 </header>
 <script>document.querySelector('#theme-toggle span').textContent = SabiTheme.icon();</script>
 
-<!-- ═══════════════ HERO + LEAD FORM ═══════════════ -->
-<section class="max-w-4xl mx-auto px-4 pt-10 pb-12">
-    <div class="grid md:grid-cols-2 gap-8 items-start">
-        <div class="text-center md:text-left">
-            <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-4 text-on-surface">
-                Reliable internet for your <span class="text-primary">home, business, or building.</span>
-            </h1>
-            <p class="text-on-surface-variant text-base md:text-lg mb-6 leading-relaxed">
-                Now installing in Awka. Benin coming soon.<br>
-                Tell us where you are — we'll WhatsApp you a quote within 4 hours.
-            </p>
-            <ul class="hidden md:block space-y-2 text-sm text-on-surface-variant">
-                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> No installation deposits before site survey</li>
-                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> Pay-as-you-go and monthly plans</li>
-                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> Real human support, not bots</li>
-            </ul>
-        </div>
+<!-- ═══════════════ HERO ═══════════════ -->
+<section class="max-w-4xl mx-auto px-4 pt-10 pb-6 text-center">
+    <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-4 text-on-surface">
+        Reliable internet for your <span class="text-primary">home, business, or building.</span>
+    </h1>
+    <p class="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+        Now installing in Awka. Benin coming soon. Pick a plan below — we'll WhatsApp you a quote within 4 hours.
+    </p>
+</section>
 
-        <!-- Lead form card -->
-        <div id="lead-form-card" class="bg-surface-container-lowest rounded-2xl shadow-ambient p-6">
-            <h2 class="font-headline font-bold text-xl text-on-surface mb-4">Get a quote</h2>
+<!-- ═══════════════ PRICING CARDS ═══════════════ -->
+<section id="plans" class="max-w-5xl mx-auto px-4 pb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% for plan in pricing_plans %}
+        <div class="plan-card bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-5 flex flex-col border-2 border-transparent hover:border-primary/40 transition cursor-pointer"
+             data-plan-id="{{ plan.pk }}"
+             data-category="{{ plan.category }}"
+             data-name="{{ plan.name }}"
+             data-upfront="{{ plan.effective_upfront_price_ngn }}"
+             tabindex="0" role="button"
+             aria-label="Select {{ plan.name }}">
 
-            <form id="lead-form" class="space-y-4">
-                {% csrf_token %}
-                <div class="space-y-2">
-                    <label class="text-xs uppercase tracking-wide text-on-surface-variant font-semibold">What are you looking for?</label>
-                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
-                        <input type="radio" name="intent" value="home" class="mt-0.5 accent-primary" required>
-                        <span class="text-sm text-on-surface">I want WiFi for my <strong>home or home-office</strong></span>
-                    </label>
-                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
-                        <input type="radio" name="intent" value="sme" class="mt-0.5 accent-primary">
-                        <span class="text-sm text-on-surface">I want WiFi for my <strong>SME</strong> (hotel, small factory, business)</span>
-                    </label>
-                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
-                        <input type="radio" name="intent" value="cluster" class="mt-0.5 accent-primary">
-                        <span class="text-sm text-on-surface">I want a <strong>hotspot for my building</strong> (50+ residents)</span>
-                    </label>
-                </div>
-
-                <input type="text" name="name" placeholder="Your name" required autocomplete="name"
-                       class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
-
-                <input type="tel" name="phone" placeholder="Phone number" required autocomplete="tel" inputmode="tel"
-                       class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
-
-                <div>
-                    <input type="text" name="address" placeholder="Your address" required autocomplete="street-address"
-                           class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
-                    <button type="button" id="pin-location" class="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[16px]">my_location</span>
-                        <span id="pin-label">Pin my exact location (optional)</span>
-                    </button>
-                    <input type="hidden" name="latitude">
-                    <input type="hidden" name="longitude">
-                </div>
-
-                <!-- Hidden attribution fields -->
-                <input type="hidden" name="utm_source" value="{{ utm.utm_source }}">
-                <input type="hidden" name="utm_medium" value="{{ utm.utm_medium }}">
-                <input type="hidden" name="utm_campaign" value="{{ utm.utm_campaign }}">
-                <input type="hidden" name="utm_term" value="{{ utm.utm_term }}">
-                <input type="hidden" name="utm_content" value="{{ utm.utm_content }}">
-                <input type="hidden" name="click_id" value="{{ click_id }}">
-                <input type="hidden" name="landing_url" value="{{ landing_url }}">
-
-                <button type="submit" id="lead-submit"
-                        class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-bold hover:bg-primary-dim transition disabled:opacity-50">
-                    Get my quote →
-                </button>
-                <p id="lead-error" class="text-sm text-error hidden"></p>
-                <p class="text-xs text-on-surface-variant text-center">Already a customer? <a href="/recharge/" class="text-primary hover:underline">Recharge here</a></p>
-            </form>
-        </div>
-
-        <!-- Confirmation state (replaces form on success) -->
-        <div id="lead-success" class="hidden bg-primary-container rounded-2xl shadow-ambient p-8 text-center">
-            <span class="material-symbols-outlined text-5xl text-primary mb-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-            <h2 class="font-headline font-bold text-xl text-on-primary-container mb-2">Got it!</h2>
-            <p id="lead-success-msg" class="text-on-primary-container text-sm mb-4"></p>
-            {% if wa_number %}
-            <a href="https://wa.me/{{ wa_number }}" class="inline-block text-sm text-primary font-semibold hover:underline">Message us on WhatsApp →</a>
+            {% if plan.has_discount %}
+            <div class="self-start mb-2 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase tracking-wide">
+                {{ plan.discount_pct }}% off
+            </div>
             {% endif %}
+
+            <h3 class="font-headline font-bold text-lg text-on-surface mb-1">{{ plan.name }}</h3>
+            {% if plan.tagline %}
+            <p class="text-on-surface-variant text-xs mb-4">{{ plan.tagline }}</p>
+            {% endif %}
+
+            <div class="mb-3">
+                <div class="text-xs text-on-surface-variant uppercase tracking-wide">{{ plan.upfront_label }}</div>
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    {% if plan.has_discount %}
+                        <span class="font-headline font-extrabold text-2xl text-primary">₦{{ plan.upfront_discount_price_ngn|floatformat:0 }}</span>
+                        <span class="text-on-surface-variant text-sm line-through">₦{{ plan.upfront_price_ngn|floatformat:0 }}</span>
+                    {% else %}
+                        <span class="font-headline font-extrabold text-2xl text-primary">₦{{ plan.upfront_price_ngn|floatformat:0 }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mb-4 pb-4 border-b border-surface-container">
+                <div class="text-xs text-on-surface-variant uppercase tracking-wide">Then per month</div>
+                <div class="flex items-baseline gap-1">
+                    <span class="font-headline font-bold text-xl text-on-surface">₦{{ plan.monthly_price_ngn|floatformat:0 }}</span>
+                    <span class="text-on-surface-variant text-xs">/ month</span>
+                </div>
+            </div>
+
+            <ul class="space-y-1.5 text-sm text-on-surface flex-1">
+                {% for feat in plan.feature_list %}
+                <li class="flex items-start gap-1.5">
+                    <span class="material-symbols-outlined text-primary text-[16px] mt-0.5">check_circle</span>
+                    <span class="text-xs">{{ feat }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+
+            <button type="button" class="plan-pick-btn mt-4 w-full bg-primary text-on-primary px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition">
+                Choose {{ plan.name }} →
+            </button>
         </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- ═══════════════ LEAD FORM ═══════════════ -->
+<section id="form-section" class="max-w-md mx-auto px-4 pb-12">
+
+    <div id="lead-form-card" class="bg-surface-container-lowest rounded-2xl shadow-ambient p-6">
+        <div id="form-selected-plan" class="hidden mb-4 p-3 rounded-lg bg-primary-container/40 text-sm">
+            <div class="text-xs text-on-surface-variant">You selected</div>
+            <div class="font-bold text-on-surface" id="form-selected-name"></div>
+            <div class="text-xs text-on-surface-variant" id="form-selected-price"></div>
+            <button type="button" id="change-plan-btn" class="text-xs text-primary hover:underline mt-1">Change plan ↑</button>
+        </div>
+
+        <h2 class="font-headline font-bold text-xl text-on-surface mb-4">Tell us where to install</h2>
+
+        <form id="lead-form" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="intent" id="form-intent">
+            <input type="hidden" name="chosen_plan_id" id="form-chosen-plan-id">
+
+            <input type="text" name="name" placeholder="Your name" required autocomplete="name"
+                   class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+
+            <input type="tel" name="phone" placeholder="Phone number" required autocomplete="tel" inputmode="tel"
+                   class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+
+            <div>
+                <input type="text" name="address" placeholder="Your address" required autocomplete="street-address"
+                       class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+                <button type="button" id="pin-location" class="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">my_location</span>
+                    <span id="pin-label">Pin my exact location (optional)</span>
+                </button>
+                <input type="hidden" name="latitude">
+                <input type="hidden" name="longitude">
+            </div>
+
+            <input type="hidden" name="utm_source" value="{{ utm.utm_source }}">
+            <input type="hidden" name="utm_medium" value="{{ utm.utm_medium }}">
+            <input type="hidden" name="utm_campaign" value="{{ utm.utm_campaign }}">
+            <input type="hidden" name="utm_term" value="{{ utm.utm_term }}">
+            <input type="hidden" name="utm_content" value="{{ utm.utm_content }}">
+            <input type="hidden" name="click_id" value="{{ click_id }}">
+            <input type="hidden" name="landing_url" value="{{ landing_url }}">
+
+            <button type="submit" id="lead-submit"
+                    class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-bold hover:bg-primary-dim transition disabled:opacity-50">
+                Get my quote →
+            </button>
+            <p id="lead-error" class="text-sm text-error hidden"></p>
+            <p class="text-xs text-on-surface-variant text-center">Already a customer? <a href="/recharge/" class="text-primary hover:underline">Recharge here</a></p>
+        </form>
+    </div>
+
+    <!-- Confirmation state -->
+    <div id="lead-success" class="hidden bg-primary-container rounded-2xl shadow-ambient p-8 text-center">
+        <span class="material-symbols-outlined text-5xl text-primary mb-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        <h2 class="font-headline font-bold text-xl text-on-primary-container mb-2">Got it!</h2>
+        <p id="lead-success-msg" class="text-on-primary-container text-sm mb-4"></p>
+        {% if wa_number %}
+        <a href="https://wa.me/{{ wa_number }}" class="inline-block text-sm text-primary font-semibold hover:underline">Message us on WhatsApp →</a>
+        {% endif %}
     </div>
 </section>
 
@@ -230,6 +276,34 @@ const errEl = document.getElementById('lead-error');
 const cardEl = document.getElementById('lead-form-card');
 const successEl = document.getElementById('lead-success');
 const successMsgEl = document.getElementById('lead-success-msg');
+const intentInput = document.getElementById('form-intent');
+const chosenPlanInput = document.getElementById('form-chosen-plan-id');
+const selectedBox = document.getElementById('form-selected-plan');
+const selectedName = document.getElementById('form-selected-name');
+const selectedPrice = document.getElementById('form-selected-price');
+
+// ─── Plan card selection ───
+function pickPlan(card) {
+    document.querySelectorAll('.plan-card').forEach(c => {
+        c.classList.remove('border-primary', 'ring-2', 'ring-primary');
+    });
+    card.classList.add('border-primary', 'ring-2', 'ring-primary');
+    intentInput.value = card.dataset.category;
+    chosenPlanInput.value = card.dataset.planId;
+    selectedName.textContent = card.dataset.name;
+    selectedPrice.textContent = '₦' + parseFloat(card.dataset.upfront).toLocaleString() + ' upfront';
+    selectedBox.classList.remove('hidden');
+    document.getElementById('form-section').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+document.querySelectorAll('.plan-card').forEach(card => {
+    card.addEventListener('click', () => pickPlan(card));
+    card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickPlan(card); }
+    });
+});
+document.getElementById('change-plan-btn').addEventListener('click', () => {
+    document.getElementById('plans').scrollIntoView({behavior: 'smooth', block: 'start'});
+});
 
 const pinBtn = document.getElementById('pin-location');
 const pinLabel = document.getElementById('pin-label');
@@ -255,6 +329,11 @@ function hideError() { errEl.classList.add('hidden'); }
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideError();
+    if (!intentInput.value) {
+        showError('Pick a plan above before submitting.');
+        document.getElementById('plans').scrollIntoView({behavior: 'smooth'});
+        return;
+    }
     submitBtn.disabled = true;
     const orig = submitBtn.textContent;
     submitBtn.textContent = 'Sending…';

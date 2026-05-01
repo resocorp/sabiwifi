@@ -32,6 +32,7 @@ def landing_page(request):
     if _has_dashboard_access(request.user):
         return redirect('dashboard-overview')
     from django.conf import settings as dj_settings
+    from leads.models import PricingPlan
 
     utm = {f: request.GET.get(f, '') for f in (
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
@@ -44,12 +45,17 @@ def landing_page(request):
     )
     landing_url = request.build_absolute_uri()
 
+    plans = list(
+        PricingPlan.objects.filter(is_active=True).order_by('sort_order', 'pk')
+    )
+
     return render(request, 'public/landing.html', {
         'wa_number': _wa_number(),
         'utm': utm,
         'click_id': click_id,
         'landing_url': landing_url,
         'tiktok_pixel_id': getattr(dj_settings, 'TIKTOK_PIXEL_ID', ''),
+        'pricing_plans': plans,
     })
 
 

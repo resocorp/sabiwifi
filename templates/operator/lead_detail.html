@@ -61,6 +61,17 @@
                     <div class="text-xs text-on-surface-variant">Partner</div>
                     <div>{{ lead.reseller.name|default:"⚠ Unassigned" }}</div>
                 </div>
+                {% if lead.chosen_plan %}
+                <div class="pt-2 border-t border-surface-container">
+                    <div class="text-xs text-on-surface-variant">Picked on landing</div>
+                    <div class="font-semibold text-on-surface">{{ lead.chosen_plan.name }}</div>
+                    <div class="text-xs text-on-surface-variant">
+                        {{ lead.chosen_plan.upfront_label }} ₦{{ lead.chosen_plan.effective_upfront_price_ngn|floatformat:0 }}
+                        {% if lead.chosen_plan.has_discount %}<span class="line-through ml-1">₦{{ lead.chosen_plan.upfront_price_ngn|floatformat:0 }}</span>{% endif %}
+                        · ₦{{ lead.chosen_plan.monthly_price_ngn|floatformat:0 }}/mo
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </aside>
 
@@ -91,11 +102,12 @@
                 <form id="quote-form" class="space-y-3">
                     {% csrf_token %}
                     <input type="number" min="1" step="100" name="amount_ngn"
-                           value="{{ lead.quoted_amount_ngn|default_if_none:'' }}"
+                           value="{% if lead.quoted_amount_ngn %}{{ lead.quoted_amount_ngn|floatformat:0 }}{% elif lead.chosen_plan %}{{ lead.chosen_plan.effective_upfront_price_ngn|floatformat:0 }}{% endif %}"
                            placeholder="Amount (₦)" required
                            class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
                     <input type="text" name="description"
                            placeholder="Description (e.g. Installation fee)"
+                           value="{% if lead.chosen_plan %}{{ lead.chosen_plan.upfront_label }} fee for {{ lead.chosen_plan.name }}{% endif %}"
                            class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
                     <button type="submit" id="quote-submit"
                             class="bg-primary text-on-primary px-4 py-2 rounded text-sm font-semibold hover:bg-primary-dim transition disabled:opacity-50">

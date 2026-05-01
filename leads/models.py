@@ -27,6 +27,103 @@ def _normalise_phone(raw):
     return raw
 
 
+class PricingPlan(models.Model):
+    """
+    Public pricing tier shown on sabiwifi.com. One row per category × variant.
+    Edited in Django admin (/admin/leads/pricingplan/) so non-engineers can
+    manage prices and discounts. Active rows render as cards on the landing
+    page; the customer's pick is stored on Lead.chosen_plan.
+    """
+    CATEGORY_HOME = 'home'
+    CATEGORY_SME = 'sme'
+    CATEGORY_CLUSTER = 'cluster'
+    CATEGORY_CHOICES = [
+        (CATEGORY_HOME, 'Home / home-office'),
+        (CATEGORY_SME, 'SME (hotel, factory, business)'),
+        (CATEGORY_CLUSTER, 'Building hotspot (50+ residents)'),
+    ]
+
+    category = models.CharField(
+        max_length=10, choices=CATEGORY_CHOICES, db_index=True,
+        help_text='Maps to Lead.intent for routing.',
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text='Display name on the public card, e.g. "Home Internet".',
+    )
+    tagline = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text='Short pitch under the name, e.g. "Reliable WiFi for your home".',
+    )
+
+    # Upfront fee — installation for home/SME, account opening for hotspot.
+    upfront_label = models.CharField(
+        max_length=50, default='Installation',
+        help_text='Label for the upfront fee, e.g. "Installation" or "Account opening".',
+    )
+    upfront_price_ngn = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text='Sticker / "from" price for the upfront fee (NGN).',
+    )
+    upfront_discount_price_ngn = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text='Optional promo price. When set, the sticker price is shown struck-through and a % off badge appears.',
+    )
+
+    monthly_price_ngn = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text='Recurring monthly subscription price (NGN).',
+    )
+
+    features = models.TextField(
+        blank=True, default='',
+        help_text='One feature per line. Rendered as a checkmark list on the card.',
+    )
+
+    is_active = models.BooleanField(
+        default=True, db_index=True,
+        help_text='Inactive plans are hidden from the public site.',
+    )
+    sort_order = models.PositiveIntegerField(
+        default=100,
+        help_text='Lower numbers render first on the landing page.',
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort_order', 'category', 'pk']
+        indexes = [
+            models.Index(fields=['is_active', 'sort_order']),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.get_category_display()})'
+
+    @property
+    def has_discount(self):
+        return (
+            self.upfront_discount_price_ngn is not None
+            and self.upfront_discount_price_ngn < self.upfront_price_ngn
+        )
+
+    @property
+    def discount_pct(self):
+        if not self.has_discount or self.upfront_price_ngn <= 0:
+            return 0
+        diff = self.upfront_price_ngn - self.upfront_discount_price_ngn
+        return int(round((diff / self.upfront_price_ngn) * 100))
+
+    @property
+    def effective_upfront_price_ngn(self):
+        return self.upfront_discount_price_ngn if self.has_discount else self.upfront_price_ngn
+
+    @property
+    def feature_list(self):
+        return [line.strip() for line in (self.features or '').splitlines() if line.strip()]
+
+
 class Lead(models.Model):
     SOURCE_WA = 'whatsapp'
     SOURCE_SMS = 'sms'
@@ -132,6 +229,13 @@ class Lead(models.Model):
     )
     converted_at = models.DateTimeField(null=True, blank=True)
     lost_reason = models.CharField(max_length=200, blank=True, default='')
+
+    # Pricing plan the customer picked on the public landing form, if any.
+    # Used by the operator inbox to pre-fill the Paystack quote amount.
+    chosen_plan = models.ForeignKey(
+        'leads.PricingPlan', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='leads',
+    )
 
     notes = models.TextField(blank=True, default='')
 

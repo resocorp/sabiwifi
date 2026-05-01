@@ -70,6 +70,16 @@
                         <div class="text-on-surface font-mono">₦{{ lead.quoted_amount_ngn|floatformat:0 }}</div>
                     </div>
                     {% endif %}
+                    {% if lead.chosen_plan %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Picked on landing</div>
+                        <div class="text-on-surface text-sm">{{ lead.chosen_plan.name }}</div>
+                        <div class="text-xs text-on-surface-variant">
+                            {{ lead.chosen_plan.upfront_label }} ₦{{ lead.chosen_plan.effective_upfront_price_ngn|floatformat:0 }} ·
+                            ₦{{ lead.chosen_plan.monthly_price_ngn|floatformat:0 }}/mo
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="pt-3 border-t border-surface-container">
                         <a href="{% url 'operator-lead-detail' lead.pk %}" class="text-sm text-primary hover:underline">View full lead →</a>
                     </div>
@@ -96,11 +106,12 @@
                     <form id="quote-form" class="space-y-2">
                         {% csrf_token %}
                         <input type="number" min="1" step="100" name="amount_ngn"
-                               value="{{ lead.quoted_amount_ngn|default_if_none:'' }}"
+                               value="{% if lead.quoted_amount_ngn %}{{ lead.quoted_amount_ngn|floatformat:0 }}{% elif lead.chosen_plan %}{{ lead.chosen_plan.effective_upfront_price_ngn|floatformat:0 }}{% endif %}"
                                placeholder="Amount (₦)"
                                class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
                         <input type="text" name="description"
                                placeholder="Description (optional)"
+                               value="{% if lead.chosen_plan %}{{ lead.chosen_plan.upfront_label }} fee for {{ lead.chosen_plan.name }}{% endif %}"
                                class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
                         <button type="submit" id="quote-submit"
                                 class="w-full bg-primary text-on-primary px-3 py-2 rounded text-sm font-semibold hover:bg-primary-dim transition disabled:opacity-50">
