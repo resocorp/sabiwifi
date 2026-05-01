@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Lead {{ lead.name|default:lead.phone }} — Operator{% endblock %}
+
+{% block body %}
+<div class="max-w-4xl mx-auto px-4 py-5">
+    <a href="{% url 'operator-conversations' %}" class="text-sm text-primary hover:underline">← All conversations</a>
+
+    <div class="mt-3 grid md:grid-cols-3 gap-5">
+
+        <!-- Left: Lead summary -->
+        <aside class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+            <h1 class="font-headline font-bold text-lg text-on-surface mb-3">{{ lead.name|default:"(no name)" }}</h1>
+
+            <div class="space-y-3 text-sm">
+                <div>
+                    <div class="text-xs text-on-surface-variant">Phone</div>
+                    <a href="https://wa.me/{{ lead.phone }}" target="_blank" class="font-mono text-primary hover:underline">{{ lead.phone }}</a>
+                </div>
+                {% if lead.email %}
+                <div>
+                    <div class="text-xs text-on-surface-variant">Email</div>
+                    <div>{{ lead.email }}</div>
+                </div>
+                {% endif %}
+                <div>
+                    <div class="text-xs text-on-surface-variant">Intent</div>
+                    <div>{{ lead.get_intent_display }}</div>
+                </div>
+                <div>
+                    <div class="text-xs text-on-surface-variant">Address</div>
+                    <div>{{ lead.address|default:"—" }}</div>
+                </div>
+                {% if lead.latitude and lead.longitude %}
+                <div>
+                    <div class="text-xs text-on-surface-variant">GPS</div>
+                    <a href="https://maps.google.com/?q={{ lead.latitude }},{{ lead.longitude }}" target="_blank" class="text-primary hover:underline">{{ lead.latitude }}, {{ lead.longitude }} (map)</a>
+                </div>
+                {% endif %}
+                {% if lead.utm_source or lead.utm_campaign %}
+                <div class="pt-2 border-t border-surface-container">
+                    <div class="text-xs text-on-surface-variant mb-1">Attribution</div>
+                    <div class="text-xs space-y-0.5">
+                        {% if lead.utm_source %}<div>Source: <span class="font-mono">{{ lead.utm_source }}</span></div>{% endif %}
+                        {% if lead.utm_campaign %}<div>Campaign: <span class="font-mono">{{ lead.utm_campaign }}</span></div>{% endif %}
+                        {% if lead.utm_medium %}<div>Medium: <span class="font-mono">{{ lead.utm_medium }}</span></div>{% endif %}
+                        {% if lead.click_id %}<div>Click ID: <span class="font-mono text-on-surface-variant">{{ lead.click_id|truncatechars:20 }}</span></div>{% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="pt-2 border-t border-surface-container">
+                    <div class="text-xs text-on-surface-variant">Status</div>
+                    <span class="inline-block mt-1 px-2 py-0.5 rounded text-xs
+                        {% if lead.status == 'new' %}bg-primary-container text-on-primary-container
+                        {% elif lead.status == 'quoted' %}bg-secondary-container text-on-secondary-container
+                        {% elif lead.status == 'paid' or lead.status == 'installed' %}bg-tertiary-container text-on-tertiary-container
+                        {% else %}bg-surface-container text-on-surface-variant{% endif %}">
+                        {{ lead.get_status_display }}
+                    </span>
+                </div>
+                <div>
+                    <div class="text-xs text-on-surface-variant">Partner</div>
+                    <div>{{ lead.reseller.name|default:"⚠ Unassigned" }}</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right: Linked conversations + actions -->
+        <section class="md:col-span-2 space-y-4">
+
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+                <h2 class="font-headline font-bold text-base mb-3">Conversations</h2>
+                {% if conversations %}
+                    <ul class="divide-y divide-surface-container">
+                        {% for c in conversations %}
+                            <li class="py-2 flex justify-between items-center">
+                                <a href="{% url 'operator-conversation-detail' c.pk %}" class="text-primary hover:underline">
+                                    {{ c.get_channel_display }} · {{ c.display_contact }}
+                                </a>
+                                <span class="text-xs text-on-surface-variant">{{ c.last_message_at|date:'Y-m-d H:i'|default:'—' }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-sm text-on-surface-variant">No conversation yet — sending a Paystack quote will start one.</p>
+                {% endif %}
+            </div>
+
+            {% if lead.reseller %}
+            <div class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+                <h2 class="font-headline font-bold text-base mb-3">Send Paystack quote</h2>
+                <form id="quote-form" class="space-y-3">
+                    {% csrf_token %}
+                    <input type="number" min="1" step="100" name="amount_ngn"
+                           value="{{ lead.quoted_amount_ngn|default_if_none:'' }}"
+                           placeholder="Amount (₦)" required
+                           class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
+                    <input type="text" name="description"
+                           placeholder="Description (e.g. Installation fee)"
+                           class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
+                    <button type="submit" id="quote-submit"
+                            class="bg-primary text-on-primary px-4 py-2 rounded text-sm font-semibold hover:bg-primary-dim transition disabled:opacity-50">
+                        Generate link & send WhatsApp
+                    </button>
+                    <p id="quote-msg" class="text-xs text-on-surface-variant"></p>
+                </form>
+            </div>
+            {% else %}
+            <div class="bg-error-container/30 rounded-xl p-5">
+                <p class="text-sm text-on-error-container">⚠ No partner assigned. Assign a partner before quoting (Paystack split needs a verified subaccount). Edit this lead in the dashboard.</p>
+            </div>
+            {% endif %}
+        </section>
+
+    </div>
+</div>
+
+<script>
+{% if lead.reseller %}
+const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const quoteForm = document.getElementById('quote-form');
+const quoteSubmit = document.getElementById('quote-submit');
+const quoteMsg = document.getElementById('quote-msg');
+quoteForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(quoteForm);
+    quoteSubmit.disabled = true;
+    quoteMsg.textContent = 'Sending…';
+    try {
+        const resp = await fetch(`/operator/leads/{{ lead.pk }}/send-quote/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+            body: JSON.stringify({
+                amount_ngn: parseFloat(fd.get('amount_ngn')),
+                description: fd.get('description') || '',
+            }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            quoteMsg.textContent = data.sent_ok ? 'Sent! Reloading…' : 'Link generated but WA send failed.';
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            quoteMsg.textContent = data.error || 'Failed.';
+            quoteSubmit.disabled = false;
+        }
+    } catch (_) {
+        quoteMsg.textContent = 'Network error.';
+        quoteSubmit.disabled = false;
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,10 +1,13 @@
 from django.urls import path
 
-from leads import views
+from leads import views, public_views
 
 app_name = 'leads'
 
 urlpatterns = [
+    # Public, unauthenticated TikTok funnel intake
+    path('intake/', public_views.lead_intake, name='intake'),
+
     path('', views.lead_list, name='list'),
     path('create/', views.lead_create, name='create'),
     path('<int:pk>/', views.lead_detail, name='detail'),

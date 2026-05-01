@@ -160,6 +160,10 @@ OPENWISP_WEBHOOK_SECRET = config('OPENWISP_WEBHOOK_SECRET', default='')
 VOICE_SERVICE_URL = config('VOICE_SERVICE_URL', default='http://127.0.0.1:8088')
 VOICE_API_KEY = config('VOICE_API_KEY', default='')
 
+# TikTok Pixel — paste your Pixel ID from TikTok Business Center → Events →
+# Web Events Manager. Empty string disables the pixel.
+TIKTOK_PIXEL_ID = config('TIKTOK_PIXEL_ID', default='')
+
 # Server infrastructure
 SERVER_IP = config('SERVER_IP', default='127.0.0.1')
 SERVER_WG_PUBLIC_KEY = config('SERVER_WG_PUBLIC_KEY', default='')

@@ -22,6 +22,9 @@ urlpatterns = [
     # Cross-tenant CRM & KPI (Phase 1 operator oversight)
     path('tickets/', crm_views.operator_tickets, name='operator-tickets'),
     path('conversations/', crm_views.operator_conversations, name='operator-conversations'),
+    path('conversations/<int:conversation_id>/', crm_views.operator_conversation_detail, name='operator-conversation-detail'),
+    path('leads/<int:lead_id>/', crm_views.operator_lead_detail, name='operator-lead-detail'),
+    path('leads/<int:lead_id>/send-quote/', crm_views.operator_send_quote, name='operator-lead-send-quote'),
     path('kpis/', crm_views.operator_kpis, name='operator-kpis'),
     path('api/kpis/', crm_views.operator_kpis_api, name='operator-kpis-api'),
     path('api/queue-health/', crm_views.operator_queue_health, name='operator-queue-health'),

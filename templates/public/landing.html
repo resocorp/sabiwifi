@@ -1,18 +1,38 @@
 {% extends "base.html" %}
-{% block title %}SabiWiFi — Internet that just works{% endblock %}
+{% block title %}SabiWiFi — Reliable internet for your home, business, or building{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="Pay-as-you-go WiFi at your hostel, estate, lodge, café, or workspace. Recharge your account in seconds.">
-<meta property="og:title" content="SabiWiFi — Internet that just works">
-<meta property="og:description" content="Pay-as-you-go WiFi. Recharge your account in seconds.">
+<meta name="description" content="Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges. Get a free quote in under a minute.">
+<meta property="og:title" content="SabiWiFi — Reliable internet for your home, business, or building">
+<meta property="og:description" content="Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges. Get a free quote in under a minute.">
 <meta property="og:type" content="website">
+
+{% if tiktok_pixel_id %}
+<script>
+!function (w, d, t) {
+  w.TiktokAnalyticsObject = t; var ttq = w[t] = w[t] || [];
+  ttq.methods = ["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];
+  ttq.setAndDefer = function (t, e) { t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))); }; };
+  for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]);
+  ttq.instance = function (t) { for (var e = ttq._i[t] || [], n = 0; n < ttq.methods.length; n++) ttq.setAndDefer(e, ttq.methods[n]); return e; };
+  ttq.load = function (e, n) {
+    var i = "https://analytics.tiktok.com/i18n/pixel/events.js";
+    ttq._i = ttq._i || {}; ttq._i[e] = []; ttq._i[e]._u = i; ttq._t = ttq._t || {}; ttq._t[e] = +new Date;
+    ttq._o = ttq._o || {}; ttq._o[e] = n || {};
+    var o = document.createElement("script"); o.type = "text/javascript"; o.async = !0; o.src = i + "?sdkid=" + e + "&lib=" + t;
+    var a = document.getElementsByTagName("script")[0]; a.parentNode.insertBefore(o, a);
+  };
+  ttq.load('{{ tiktok_pixel_id }}'); ttq.page();
+}(window, document, 'ttq');
+</script>
+{% endif %}
 {% endblock %}
 
 {% block body %}
 
 <!-- ═══════════════ STICKY HEADER ═══════════════ -->
 <header class="sticky top-0 z-50 bg-surface-container-lowest/80 backdrop-blur-lg shadow-ambient-sm">
-    <div class="max-w-4xl mx-auto px-4 h-12 flex items-center justify-between">
+    <div class="max-w-4xl mx-auto px-4 h-12 flex items-center justify-between gap-3">
         <a href="{% url 'landing' %}" class="flex items-center gap-1.5 font-headline font-bold text-primary text-lg italic">
             <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">wifi_tethering</span>
             SabiWiFi
@@ -31,109 +51,119 @@
 </header>
 <script>document.querySelector('#theme-toggle span').textContent = SabiTheme.icon();</script>
 
-<!-- ═══════════════ HERO ═══════════════ -->
-<section class="max-w-3xl mx-auto px-4 pt-14 pb-10 text-center">
-    <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-5 text-on-surface">
-        Internet that<br class="md:hidden">
-        <span class="text-primary">just works.</span>
-    </h1>
-    <p class="text-on-surface-variant text-base md:text-lg mb-8 max-w-md mx-auto leading-relaxed">
-        Pay-as-you-go WiFi at your hostel, estate, lodge, café, or workspace. Recharge your account in seconds.
-    </p>
-
-    <a href="/recharge/"
-       class="inline-block bg-primary text-on-primary px-8 py-4 rounded-xl text-base font-bold hover:bg-primary-dim transition shadow-ambient w-full md:w-auto">
-        Recharge Your Account
-    </a>
-    <p class="text-sm text-on-surface-variant mt-4">
-        New here? Connect to a SabiWiFi network and your account is created automatically.
-    </p>
-</section>
-
-<!-- ═══════════════ RECHARGE TEASER ═══════════════ -->
-<section class="bg-surface-container-low py-12">
-    <div class="max-w-md mx-auto px-4">
-        <div class="bg-surface-container-lowest rounded-2xl shadow-ambient-sm p-6 text-center">
-            <span class="material-symbols-outlined text-4xl text-primary mb-2" style="font-variation-settings: 'FILL' 1;">bolt</span>
-            <h2 class="font-headline font-bold text-xl text-on-surface mb-2">Quick Recharge</h2>
-            <p class="text-on-surface-variant text-sm mb-5">
-                Enter your phone number, get a code, top up. Done in under a minute.
+<!-- ═══════════════ HERO + LEAD FORM ═══════════════ -->
+<section class="max-w-4xl mx-auto px-4 pt-10 pb-12">
+    <div class="grid md:grid-cols-2 gap-8 items-start">
+        <div class="text-center md:text-left">
+            <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-4 text-on-surface">
+                Reliable internet for your <span class="text-primary">home, business, or building.</span>
+            </h1>
+            <p class="text-on-surface-variant text-base md:text-lg mb-6 leading-relaxed">
+                Now installing in Awka. Benin coming soon.<br>
+                Tell us where you are — we'll WhatsApp you a quote within 4 hours.
             </p>
-            <form action="/recharge/" method="get" class="space-y-3">
-                <input type="tel" name="phone" placeholder="Your phone number"
-                       inputmode="tel" autocomplete="tel"
-                       class="w-full px-4 py-3 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary">
-                <button type="submit"
-                        class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-semibold hover:bg-primary-dim transition">
-                    Continue →
+            <ul class="hidden md:block space-y-2 text-sm text-on-surface-variant">
+                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> No installation deposits before site survey</li>
+                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> Pay-as-you-go and monthly plans</li>
+                <li class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[18px]">check_circle</span> Real human support, not bots</li>
+            </ul>
+        </div>
+
+        <!-- Lead form card -->
+        <div id="lead-form-card" class="bg-surface-container-lowest rounded-2xl shadow-ambient p-6">
+            <h2 class="font-headline font-bold text-xl text-on-surface mb-4">Get a quote</h2>
+
+            <form id="lead-form" class="space-y-4">
+                {% csrf_token %}
+                <div class="space-y-2">
+                    <label class="text-xs uppercase tracking-wide text-on-surface-variant font-semibold">What are you looking for?</label>
+                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
+                        <input type="radio" name="intent" value="home" class="mt-0.5 accent-primary" required>
+                        <span class="text-sm text-on-surface">I want WiFi for my <strong>home or home-office</strong></span>
+                    </label>
+                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
+                        <input type="radio" name="intent" value="sme" class="mt-0.5 accent-primary">
+                        <span class="text-sm text-on-surface">I want WiFi for my <strong>SME</strong> (hotel, small factory, business)</span>
+                    </label>
+                    <label class="flex items-start gap-2 p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high cursor-pointer transition">
+                        <input type="radio" name="intent" value="cluster" class="mt-0.5 accent-primary">
+                        <span class="text-sm text-on-surface">I want a <strong>hotspot for my building</strong> (50+ residents)</span>
+                    </label>
+                </div>
+
+                <input type="text" name="name" placeholder="Your name" required autocomplete="name"
+                       class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+
+                <input type="tel" name="phone" placeholder="Phone number" required autocomplete="tel" inputmode="tel"
+                       class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+
+                <div>
+                    <input type="text" name="address" placeholder="Your address" required autocomplete="street-address"
+                           class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
+                    <button type="button" id="pin-location" class="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">my_location</span>
+                        <span id="pin-label">Pin my exact location (optional)</span>
+                    </button>
+                    <input type="hidden" name="latitude">
+                    <input type="hidden" name="longitude">
+                </div>
+
+                <!-- Hidden attribution fields -->
+                <input type="hidden" name="utm_source" value="{{ utm.utm_source }}">
+                <input type="hidden" name="utm_medium" value="{{ utm.utm_medium }}">
+                <input type="hidden" name="utm_campaign" value="{{ utm.utm_campaign }}">
+                <input type="hidden" name="utm_term" value="{{ utm.utm_term }}">
+                <input type="hidden" name="utm_content" value="{{ utm.utm_content }}">
+                <input type="hidden" name="click_id" value="{{ click_id }}">
+                <input type="hidden" name="landing_url" value="{{ landing_url }}">
+
+                <button type="submit" id="lead-submit"
+                        class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-bold hover:bg-primary-dim transition disabled:opacity-50">
+                    Get my quote →
                 </button>
+                <p id="lead-error" class="text-sm text-error hidden"></p>
+                <p class="text-xs text-on-surface-variant text-center">Already a customer? <a href="/recharge/" class="text-primary hover:underline">Recharge here</a></p>
             </form>
+        </div>
+
+        <!-- Confirmation state (replaces form on success) -->
+        <div id="lead-success" class="hidden bg-primary-container rounded-2xl shadow-ambient p-8 text-center">
+            <span class="material-symbols-outlined text-5xl text-primary mb-2" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+            <h2 class="font-headline font-bold text-xl text-on-primary-container mb-2">Got it!</h2>
+            <p id="lead-success-msg" class="text-on-primary-container text-sm mb-4"></p>
+            {% if wa_number %}
+            <a href="https://wa.me/{{ wa_number }}" class="inline-block text-sm text-primary font-semibold hover:underline">Message us on WhatsApp →</a>
+            {% endif %}
         </div>
     </div>
 </section>
 
 <!-- ═══════════════ HOW IT WORKS ═══════════════ -->
-<section id="how-it-works" class="py-14 max-w-3xl mx-auto px-4">
-    <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-10 text-on-surface">How it works</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-        <div class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-6">
-            <div class="flex items-center gap-3 mb-3">
-                <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">1</span>
-                <h3 class="font-headline font-bold text-base text-on-surface">Connect</h3>
-            </div>
-            <p class="text-on-surface-variant text-sm leading-relaxed">
-                Connect to the SabiWiFi network at your location. Your account is created from your phone number.
-            </p>
-        </div>
-
-        <div class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-6">
-            <div class="flex items-center gap-3 mb-3">
-                <span class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">2</span>
-                <h3 class="font-headline font-bold text-base text-on-surface">Pick a plan</h3>
-            </div>
-            <p class="text-on-surface-variant text-sm leading-relaxed">
-                Choose a daily, weekly, or monthly plan. Pay with card, transfer, or USSD.
-            </p>
-        </div>
-
-        <div class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-6">
-            <div class="flex items-center gap-3 mb-3">
-                <span class="w-9 h-9 rounded-full bg-secondary-container text-on-secondary-container font-bold text-sm flex items-center justify-center">3</span>
-                <h3 class="font-headline font-bold text-base text-on-surface">Browse</h3>
-            </div>
-            <p class="text-on-surface-variant text-sm leading-relaxed">
-                You're online. Recharge from anywhere when your time runs out — no need to be on the network.
-            </p>
-        </div>
-
-    </div>
-</section>
-
-<!-- ═══════════════ WHY SABI ═══════════════ -->
-<section class="bg-surface-container-low py-14">
+<section id="how-it-works" class="bg-surface-container-low py-12">
     <div class="max-w-3xl mx-auto px-4">
-        <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-10 text-on-surface">Why SabiWiFi</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-            <div class="text-center px-2">
-                <span class="material-symbols-outlined text-3xl text-primary mb-2">flash_on</span>
-                <h3 class="font-headline font-bold text-base text-on-surface mb-1">Fast recharge</h3>
-                <p class="text-on-surface-variant text-sm">No app to download. Phone number, code, plan, paid.</p>
+        <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-8 text-on-surface">How it works</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-surface-container-lowest rounded-lg p-5">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">1</span>
+                    <h3 class="font-headline font-bold text-base text-on-surface">Tell us what you need</h3>
+                </div>
+                <p class="text-on-surface-variant text-sm">Submit the quick form. Address + phone is enough.</p>
             </div>
-
-            <div class="text-center px-2">
-                <span class="material-symbols-outlined text-3xl text-primary mb-2">support_agent</span>
-                <h3 class="font-headline font-bold text-base text-on-surface mb-1">Real support</h3>
-                <p class="text-on-surface-variant text-sm">WhatsApp us with any issue. We escalate to your local operator if needed.</p>
+            <div class="bg-surface-container-lowest rounded-lg p-5">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">2</span>
+                    <h3 class="font-headline font-bold text-base text-on-surface">We confirm coverage</h3>
+                </div>
+                <p class="text-on-surface-variant text-sm">Our team WhatsApps you within 4 hours with a fixed quote and install date.</p>
             </div>
-
-            <div class="text-center px-2">
-                <span class="material-symbols-outlined text-3xl text-primary mb-2">verified</span>
-                <h3 class="font-headline font-bold text-base text-on-surface mb-1">Honest billing</h3>
-                <p class="text-on-surface-variant text-sm">Transparent prices. No hidden fees. Plan ends when your time or data runs out.</p>
+            <div class="bg-surface-container-lowest rounded-lg p-5">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container font-bold text-sm flex items-center justify-center">3</span>
+                    <h3 class="font-headline font-bold text-base text-on-surface">Pay & get installed</h3>
+                </div>
+                <p class="text-on-surface-variant text-sm">Pay via Paystack link in WhatsApp. Tech arrives the next day.</p>
             </div>
-
         </div>
     </div>
 </section>
@@ -142,67 +172,42 @@
 <section id="faq" class="py-14 max-w-2xl mx-auto px-4">
     <h2 class="font-headline font-bold text-2xl md:text-3xl text-center mb-8 text-on-surface">Frequently asked</h2>
     <div class="space-y-3">
-
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
             <summary class="font-semibold text-on-surface cursor-pointer flex justify-between items-center">
-                <span>What is SabiWiFi?</span>
+                <span>Where do you install?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                SabiWiFi is a WiFi service available at hostels, estates, hotels, cafés, and workspaces. You pay for the time or data you need — no contracts, no monthly bills.
+                We're live in Awka and rolling out to Benin City next. Submit the form even if you're not sure — we'll tell you if you're in coverage and when we'll get to you.
             </p>
         </details>
-
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
             <summary class="font-semibold text-on-surface cursor-pointer flex justify-between items-center">
-                <span>How do I find a SabiWiFi network?</span>
+                <span>How fast can you install?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                If you're in a SabiWiFi-powered location, you'll see a network with a SabiWiFi-style login page when you connect. Ask the building manager if you're unsure.
+                Typical: 24–48 hours from payment for homes. SME and building hotspots get a site survey first.
             </p>
         </details>
-
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
             <summary class="font-semibold text-on-surface cursor-pointer flex justify-between items-center">
-                <span>I forgot my account. How do I recharge?</span>
+                <span>What does it cost?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                Use the <a href="/recharge/" class="text-primary hover:underline">Recharge page</a> — enter your phone number, we send you a code by SMS, you log in.
+                Depends on the package — home, SME, or building hotspot. We'll send a fixed quote in WhatsApp once we confirm your address.
             </p>
         </details>
-
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
             <summary class="font-semibold text-on-surface cursor-pointer flex justify-between items-center">
-                <span>Can I run SabiWiFi at my own location?</span>
+                <span>I'm already a customer — how do I recharge?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                Yes — see our <a href="{% url 'partners' %}" class="text-primary hover:underline">Partners page</a>. You can deploy a SabiWiFi network at your hostel, estate, hotel, or business and earn from it.
+                Use the <a href="/recharge/" class="text-primary hover:underline">Recharge page</a>. Enter your phone number, get a code, top up.
             </p>
         </details>
-
-    </div>
-</section>
-
-<!-- ═══════════════ FINAL CTA ═══════════════ -->
-<section class="bg-primary py-14">
-    <div class="max-w-md mx-auto px-4 text-center">
-        <h2 class="font-headline font-bold text-2xl md:text-3xl text-on-primary mb-3">Ready to recharge?</h2>
-        <p class="text-on-primary/70 text-sm mb-7">Takes under a minute.</p>
-
-        <a href="/recharge/"
-           class="block bg-surface-container-lowest text-primary font-bold text-base py-4 px-8 rounded-xl hover:bg-surface-container-low transition shadow-ambient mb-4">
-            Recharge Your Account
-        </a>
-
-        {% if wa_number %}
-        <a href="https://wa.me/{{ wa_number }}"
-           class="block border border-on-primary/30 text-on-primary font-medium text-sm py-3 px-6 rounded-xl hover:bg-on-primary/10 transition">
-            Need help? WhatsApp us
-        </a>
-        {% endif %}
     </div>
 </section>
 
@@ -217,5 +222,78 @@
         <a href="/recharge/" class="hover:underline">Recharge</a>
     </p>
 </footer>
+
+<script>
+const form = document.getElementById('lead-form');
+const submitBtn = document.getElementById('lead-submit');
+const errEl = document.getElementById('lead-error');
+const cardEl = document.getElementById('lead-form-card');
+const successEl = document.getElementById('lead-success');
+const successMsgEl = document.getElementById('lead-success-msg');
+
+const pinBtn = document.getElementById('pin-location');
+const pinLabel = document.getElementById('pin-label');
+pinBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) { pinLabel.textContent = 'Location not supported on this device'; return; }
+    pinLabel.textContent = 'Getting your location…';
+    navigator.geolocation.getCurrentPosition(pos => {
+        form.querySelector('[name=latitude]').value = pos.coords.latitude.toFixed(6);
+        form.querySelector('[name=longitude]').value = pos.coords.longitude.toFixed(6);
+        pinLabel.textContent = `📍 Location pinned (±${Math.round(pos.coords.accuracy)}m)`;
+        pinBtn.classList.add('text-primary-dim');
+    }, err => {
+        pinLabel.textContent = 'Could not get location — that\'s okay, address is enough';
+    }, {enableHighAccuracy: true, timeout: 10000, maximumAge: 0});
+});
+
+function showError(msg) {
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+}
+function hideError() { errEl.classList.add('hidden'); }
+
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+    submitBtn.disabled = true;
+    const orig = submitBtn.textContent;
+    submitBtn.textContent = 'Sending…';
+
+    const data = Object.fromEntries(new FormData(form));
+    delete data.csrfmiddlewaretoken;
+
+    try {
+        const resp = await fetch('/api/leads/intake/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        });
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            showError(body.error || 'Something went wrong. Please try again.');
+            submitBtn.disabled = false;
+            submitBtn.textContent = orig;
+            return;
+        }
+
+        // Success: swap card for confirmation, fire TikTok pixel
+        successMsgEl.textContent = body.message || "Thanks! We'll WhatsApp you within 4 hours.";
+        cardEl.classList.add('hidden');
+        successEl.classList.remove('hidden');
+        if (window.ttq) {
+            try {
+                window.ttq.track('CompleteRegistration', {
+                    content_type: data.intent,
+                    content_name: 'Lead form',
+                });
+            } catch (_) {}
+        }
+    } catch (err) {
+        showError('Network error. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = orig;
+    }
+});
+</script>
 
 {% endblock %}

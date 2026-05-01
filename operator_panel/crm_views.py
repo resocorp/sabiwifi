@@ -77,6 +77,158 @@ def operator_conversations(request):
 
 @login_required(login_url='/login/')
 @staff_required
+def operator_conversation_detail(request, conversation_id):
+    """Thread view + composer + Paystack quick-quote action."""
+    from django.shortcuts import get_object_or_404
+    convo = get_object_or_404(
+        Conversation.objects.select_related('reseller', 'lead', 'subscriber'),
+        pk=conversation_id,
+    )
+    messages = list(
+        convo.messages.order_by('created_at').select_related('sent_by')
+    )
+    return render(request, 'operator/conversation_detail.html', {
+        'conversation': convo,
+        'messages_thread': messages,
+        'lead': convo.lead,
+        'subscriber': convo.subscriber,
+    })
+
+
+@login_required(login_url='/login/')
+@staff_required
+def operator_send_quote(request, lead_id):
+    """
+    Generate a Paystack link for `lead` and post it as an outbound WhatsApp
+    message in the lead's conversation thread (creating the conversation if
+    absent). One-click action used from the operator inbox.
+
+    Body: {amount_ngn, description?, conversation_id?}
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    from django.shortcuts import get_object_or_404
+    import json
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    lead = get_object_or_404(Lead, pk=lead_id)
+    if not lead.reseller:
+        return JsonResponse({
+            'error': 'This lead has no partner assigned. Assign a partner before quoting (the Paystack split needs a verified subaccount).',
+        }, status=400)
+
+    raw_amount = data.get('amount_ngn') or lead.quoted_amount_ngn
+    if not raw_amount:
+        return JsonResponse({'error': 'amount_ngn required'}, status=400)
+    try:
+        amount = Decimal(str(raw_amount))
+    except (InvalidOperation, TypeError):
+        return JsonResponse({'error': 'Invalid amount'}, status=400)
+    if amount <= 0:
+        return JsonResponse({'error': 'Amount must be positive'}, status=400)
+
+    intent_label = dict(Lead.INTENT_CHOICES).get(lead.intent, 'Service')
+    description = (data.get('description') or f'Installation fee for {intent_label}').strip()
+
+    # Generate Paystack link via existing service
+    from billing.services import create_lead_payment_link
+    try:
+        payment, hosted_url = create_lead_payment_link(
+            lead=lead, amount=amount, description=description,
+        )
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    # Resolve / create conversation for this lead (WhatsApp by default).
+    conversation = None
+    convo_id = data.get('conversation_id')
+    if convo_id:
+        conversation = Conversation.objects.filter(
+            pk=convo_id, lead=lead,
+        ).first()
+    if conversation is None:
+        conversation = lead.conversations.order_by('-last_message_at').first()
+    if conversation is None:
+        # No prior thread — start a WA conversation keyed by phone.
+        conversation = Conversation.objects.create(
+            reseller=lead.reseller,
+            lead=lead,
+            channel=Conversation.CHANNEL_WHATSAPP,
+            external_thread_id=lead.phone,
+            contact_phone=lead.phone,
+            contact_display_name=lead.name or '',
+            state=Conversation.STATE_OPEN,
+        )
+
+    # Compose the WhatsApp message
+    name = lead.name.split()[0] if lead.name else 'there'
+    message_body = (
+        f'Hi {name}, here is your payment link for {description}:\n'
+        f'₦{amount:,} — pay here: {hosted_url}\n\n'
+        f'Once we receive payment, we will schedule your installation.'
+    )
+
+    # Record outbound + send via WA sidecar
+    from conversations.services import record_outbound_message
+    from conversations.models import Message
+    from notifications.notify import send_whatsapp
+
+    msg = record_outbound_message(
+        conversation=conversation,
+        body=message_body,
+        source=Message.SOURCE_HUMAN,
+    )
+    sent_ok = False
+    try:
+        sent_ok = bool(send_whatsapp(lead.reseller.slug, lead.phone, message_body))
+    except Exception:
+        sent_ok = False
+    msg.delivery_status = Message.DELIVERY_QUEUED if sent_ok else Message.DELIVERY_FAILED
+    msg.save(update_fields=['delivery_status'])
+
+    # Update lead status
+    if lead.status in (Lead.STATUS_NEW, Lead.STATUS_QUALIFIED):
+        lead.status = Lead.STATUS_QUOTED
+    lead.quoted_amount_ngn = amount
+    lead.save(update_fields=['status', 'quoted_amount_ngn', 'updated_at'])
+
+    return JsonResponse({
+        'success': True,
+        'payment_id': payment.pk,
+        'hosted_url': hosted_url,
+        'message_id': msg.pk,
+        'conversation_id': conversation.pk,
+        'sent_ok': sent_ok,
+    })
+
+
+@login_required(login_url='/login/')
+@staff_required
+def operator_lead_detail(request, lead_id):
+    """Lead detail page — used when a lead has no conversation yet (fresh
+    intake from the public form). Surfaces the same actions: send a quote,
+    open WhatsApp, view linked conversations."""
+    from django.shortcuts import get_object_or_404
+    lead = get_object_or_404(
+        Lead.objects.select_related('reseller', 'assigned_staff'),
+        pk=lead_id,
+    )
+    convos = list(lead.conversations.all().order_by('-last_message_at'))
+    return render(request, 'operator/lead_detail.html', {
+        'lead': lead,
+        'conversations': convos,
+        'resellers': Reseller.objects.order_by('name'),
+    })
+
+
+@login_required(login_url='/login/')
+@staff_required
 def operator_kpis(request):
     """HTML shell page; data is fetched from /operator/api/kpis/."""
     return render(request, 'operator/kpis.html', {

@@ -28,10 +28,29 @@ def _wa_number():
 
 
 def landing_page(request):
-    """Public landing page — consumer-facing ISP brand. Recharge entry point."""
+    """Public landing page — consumer-facing ISP + TikTok lead-gen funnel."""
     if _has_dashboard_access(request.user):
         return redirect('dashboard-overview')
-    return render(request, 'public/landing.html', {'wa_number': _wa_number()})
+    from django.conf import settings as dj_settings
+
+    utm = {f: request.GET.get(f, '') for f in (
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+    )}
+    click_id = (
+        request.GET.get('ttclid')
+        or request.GET.get('fbclid')
+        or request.GET.get('gclid')
+        or ''
+    )
+    landing_url = request.build_absolute_uri()
+
+    return render(request, 'public/landing.html', {
+        'wa_number': _wa_number(),
+        'utm': utm,
+        'click_id': click_id,
+        'landing_url': landing_url,
+        'tiktok_pixel_id': getattr(dj_settings, 'TIKTOK_PIXEL_ID', ''),
+    })
 
 
 def partners_page(request):

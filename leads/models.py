@@ -47,13 +47,15 @@ class Lead(models.Model):
 
     INTENT_UNKNOWN = 'unknown'
     INTENT_HOME = 'home'
+    INTENT_SME = 'sme'
     INTENT_CLUSTER = 'cluster'
     INTENT_TECHNICAL = 'technical'
     INTENT_OTHER = 'other'
     INTENT_CHOICES = [
         (INTENT_UNKNOWN, 'Unknown'),
-        (INTENT_HOME, 'Home / single-site'),
-        (INTENT_CLUSTER, 'Cluster (hotel, hostel, lodge)'),
+        (INTENT_HOME, 'Home / home-office'),
+        (INTENT_SME, 'SME (hotel, small factory, business)'),
+        (INTENT_CLUSTER, 'Building hotspot (hostel, lodge, 50+ residents)'),
         (INTENT_TECHNICAL, 'Technical question (existing customer)'),
         (INTENT_OTHER, 'Other'),
     ]
@@ -73,13 +75,37 @@ class Lead(models.Model):
         (STATUS_LOST, 'Lost'),
     ]
 
+    # Nullable: platform-direct leads (e.g. from sabiwifi.com TikTok funnel)
+    # have no partner attribution at intake. Ops assigns a partner before
+    # quoting/converting (Paystack split needs a verified subaccount).
     reseller = models.ForeignKey(
         'accounts.Reseller', on_delete=models.CASCADE, related_name='leads',
+        null=True, blank=True,
     )
     phone = models.CharField(max_length=20)
     name = models.CharField(max_length=200, blank=True, default='')
     email = models.EmailField(blank=True, default='')
     address = models.TextField(blank=True, default='')
+
+    # Optional GPS pin from public form. Ops verifies coverage manually.
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+
+    # Marketing attribution — populated from public landing form.
+    utm_source = models.CharField(max_length=128, blank=True, default='')
+    utm_medium = models.CharField(max_length=128, blank=True, default='')
+    utm_campaign = models.CharField(max_length=128, blank=True, default='')
+    utm_term = models.CharField(max_length=128, blank=True, default='')
+    utm_content = models.CharField(max_length=128, blank=True, default='')
+    landing_url = models.URLField(blank=True, default='')
+    click_id = models.CharField(
+        max_length=128, blank=True, default='',
+        help_text='TikTok ttclid / Meta fbclid / Google gclid',
+    )
 
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_MANUAL)
     intent = models.CharField(max_length=20, choices=INTENT_CHOICES, default=INTENT_UNKNOWN)

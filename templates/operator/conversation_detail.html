@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Thread #{{ conversation.pk }} — Operator Inbox{% endblock %}
+
+{% block body %}
+<div class="max-w-6xl mx-auto px-4 py-5">
+
+    <a href="{% url 'operator-conversations' %}" class="text-sm text-primary hover:underline">← All conversations</a>
+
+    <div class="grid md:grid-cols-3 gap-5 mt-3">
+
+        <!-- ═══ LEFT: Lead/Subscriber summary ═══ -->
+        <aside class="bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5">
+            <div class="flex items-baseline justify-between mb-3">
+                <h2 class="font-headline font-bold text-base text-on-surface">Contact</h2>
+                <span class="text-xs uppercase text-on-surface-variant">{{ conversation.get_channel_display }}</span>
+            </div>
+
+            {% if lead %}
+                <div class="space-y-2 text-sm">
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Name</div>
+                        <div class="font-semibold text-on-surface">{{ lead.name|default:"(no name)" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Phone</div>
+                        <a href="https://wa.me/{{ lead.phone }}" target="_blank" class="font-mono text-primary hover:underline">{{ lead.phone }}</a>
+                    </div>
+                    {% if lead.email %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Email</div>
+                        <div class="text-on-surface">{{ lead.email }}</div>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Intent</div>
+                        <div class="text-on-surface">{{ lead.get_intent_display }}</div>
+                    </div>
+                    {% if lead.address %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Address</div>
+                        <div class="text-on-surface">{{ lead.address }}</div>
+                    </div>
+                    {% endif %}
+                    {% if lead.latitude and lead.longitude %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">GPS</div>
+                        <a href="https://maps.google.com/?q={{ lead.latitude }},{{ lead.longitude }}" target="_blank" class="text-primary hover:underline text-sm">View on map</a>
+                    </div>
+                    {% endif %}
+                    {% if lead.utm_source %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Source</div>
+                        <div class="text-on-surface text-xs">
+                            {{ lead.utm_source }}{% if lead.utm_campaign %} / {{ lead.utm_campaign }}{% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="pt-2 border-t border-surface-container">
+                        <span class="inline-block px-2 py-0.5 rounded text-xs
+                            {% if lead.status == 'new' %}bg-primary-container text-on-primary-container
+                            {% elif lead.status == 'quoted' %}bg-secondary-container text-on-secondary-container
+                            {% elif lead.status == 'paid' or lead.status == 'installed' %}bg-tertiary-container text-on-tertiary-container
+                            {% else %}bg-surface-container text-on-surface-variant{% endif %}">
+                            {{ lead.get_status_display }}
+                        </span>
+                    </div>
+                    {% if lead.quoted_amount_ngn %}
+                    <div>
+                        <div class="text-xs text-on-surface-variant">Last quote</div>
+                        <div class="text-on-surface font-mono">₦{{ lead.quoted_amount_ngn|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="pt-3 border-t border-surface-container">
+                        <a href="{% url 'operator-lead-detail' lead.pk %}" class="text-sm text-primary hover:underline">View full lead →</a>
+                    </div>
+                </div>
+            {% elif subscriber %}
+                <div class="space-y-2 text-sm">
+                    <div class="text-xs text-on-surface-variant">Subscriber</div>
+                    <div class="font-semibold text-on-surface">{{ subscriber.phone }}</div>
+                    <div class="text-on-surface-variant">{{ conversation.reseller.name }}</div>
+                </div>
+            {% else %}
+                <div class="text-sm text-on-surface-variant">
+                    Anonymous thread (no Lead or Subscriber linked).
+                </div>
+            {% endif %}
+
+            <!-- ═══ Send Paystack quote action ═══ -->
+            {% if lead %}
+            <div class="mt-5 pt-5 border-t border-surface-container">
+                <h3 class="font-headline font-bold text-sm text-on-surface mb-2">Send Paystack quote</h3>
+                {% if not lead.reseller %}
+                    <p class="text-xs text-on-surface-variant">Assign a partner to this lead first (Paystack split needs a verified subaccount).</p>
+                {% else %}
+                    <form id="quote-form" class="space-y-2">
+                        {% csrf_token %}
+                        <input type="number" min="1" step="100" name="amount_ngn"
+                               value="{{ lead.quoted_amount_ngn|default_if_none:'' }}"
+                               placeholder="Amount (₦)"
+                               class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
+                        <input type="text" name="description"
+                               placeholder="Description (optional)"
+                               class="w-full px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm">
+                        <button type="submit" id="quote-submit"
+                                class="w-full bg-primary text-on-primary px-3 py-2 rounded text-sm font-semibold hover:bg-primary-dim transition disabled:opacity-50">
+                            Generate link & send WhatsApp
+                        </button>
+                        <p id="quote-msg" class="text-xs text-on-surface-variant"></p>
+                    </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- ═══ RIGHT: Message thread + composer ═══ -->
+        <section class="md:col-span-2 bg-surface-container-lowest rounded-xl shadow-ambient-sm p-5 flex flex-col" style="min-height: 70vh">
+            <div class="flex items-baseline justify-between mb-3">
+                <h2 class="font-headline font-bold text-base text-on-surface">Thread</h2>
+                <span class="text-xs text-on-surface-variant">{{ conversation.reseller.name }} · {{ conversation.get_state_display }}</span>
+            </div>
+
+            <div id="messages" class="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+                {% for m in messages_thread %}
+                    <div class="flex {% if m.direction == 'out' %}justify-end{% endif %}">
+                        <div class="max-w-[80%] rounded-lg px-3 py-2 text-sm
+                            {% if m.direction == 'out' %}bg-primary-container text-on-primary-container{% else %}bg-surface-container text-on-surface{% endif %}">
+                            <div class="whitespace-pre-wrap break-words">{{ m.body }}</div>
+                            <div class="text-[10px] mt-1 opacity-60 flex items-center gap-1">
+                                <span>{{ m.created_at|date:'Y-m-d H:i' }}</span>
+                                {% if m.direction == 'out' %}· <span>{{ m.get_delivery_status_display }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="text-sm text-on-surface-variant text-center py-8">No messages yet.</p>
+                {% endfor %}
+            </div>
+
+            <form id="reply-form" class="border-t border-surface-container pt-3 flex gap-2">
+                {% csrf_token %}
+                <textarea id="reply-body" rows="2"
+                          placeholder="Type a message…"
+                          class="flex-1 px-3 py-2 rounded bg-surface-container border border-surface-container-high text-sm resize-none"></textarea>
+                <button type="submit" id="reply-submit"
+                        class="px-4 rounded bg-primary text-on-primary text-sm font-semibold hover:bg-primary-dim transition disabled:opacity-50">
+                    Send
+                </button>
+            </form>
+        </section>
+
+    </div>
+</div>
+
+<script>
+const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+const conversationId = {{ conversation.pk }};
+{% if lead %}const leadId = {{ lead.pk }};{% else %}const leadId = null;{% endif %}
+
+// ─── Send a regular reply ───
+const replyForm = document.getElementById('reply-form');
+const replyBody = document.getElementById('reply-body');
+const replySubmit = document.getElementById('reply-submit');
+replyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = replyBody.value.trim();
+    if (!body) return;
+    replySubmit.disabled = true;
+    try {
+        const resp = await fetch(`/api/conversations/${conversationId}/reply/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+            body: JSON.stringify({body}),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Failed to send.');
+            replySubmit.disabled = false;
+        }
+    } catch (_) {
+        alert('Network error.');
+        replySubmit.disabled = false;
+    }
+});
+
+// ─── Send Paystack quote ───
+{% if lead and lead.reseller %}
+const quoteForm = document.getElementById('quote-form');
+const quoteSubmit = document.getElementById('quote-submit');
+const quoteMsg = document.getElementById('quote-msg');
+quoteForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(quoteForm);
+    const amount = parseFloat(fd.get('amount_ngn'));
+    if (!amount || amount <= 0) { quoteMsg.textContent = 'Enter an amount.'; return; }
+    quoteSubmit.disabled = true;
+    quoteMsg.textContent = 'Sending…';
+    try {
+        const resp = await fetch(`/operator/leads/${leadId}/send-quote/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
+            body: JSON.stringify({
+                amount_ngn: amount,
+                description: fd.get('description') || '',
+                conversation_id: conversationId,
+            }),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            quoteMsg.textContent = data.sent_ok ? 'Sent! Link is in the thread.' : 'Link generated but WA send failed.';
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            quoteMsg.textContent = data.error || 'Failed.';
+            quoteSubmit.disabled = false;
+        }
+    } catch (_) {
+        quoteMsg.textContent = 'Network error.';
+        quoteSubmit.disabled = false;
+    }
+});
+{% endif %}
+
+// Auto-scroll to bottom of messages
+document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+</script>
+{% endblock %}

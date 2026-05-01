@@ -56,6 +56,14 @@ class PlatformSettings(models.Model):
         help_text='UUID of the OpenWISP "pool" organization where unclaimed devices land after first boot',
     )
 
+    # Default partner used to attribute platform-direct leads (e.g. TikTok
+    # funnel on sabiwifi.com). Leave blank to leave such leads unassigned.
+    platform_reseller = models.ForeignKey(
+        'accounts.Reseller', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+',
+        help_text='Default partner for platform-direct leads. Leave blank to land them unassigned.',
+    )
+
     # Operator notifications
     notification_phones = models.JSONField(
         default=list, blank=True,
