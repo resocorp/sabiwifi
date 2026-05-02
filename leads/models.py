@@ -55,6 +55,10 @@ class PricingPlan(models.Model):
         max_length=200, blank=True, default='',
         help_text='Short pitch under the name, e.g. "Reliable WiFi for your home".',
     )
+    best_for = models.CharField(
+        max_length=120, blank=True, default='',
+        help_text='Short "best for" hint shown on the card, e.g. "lodges · hostels · malls".',
+    )
 
     # Upfront fee — installation for home/SME, account opening for hotspot.
     upfront_label = models.CharField(

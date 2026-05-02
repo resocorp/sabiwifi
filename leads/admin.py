@@ -31,9 +31,9 @@ class PricingPlanAdmin(admin.ModelAdmin):
     list_filter = ('category', 'is_active')
     list_editable = ('upfront_price_ngn', 'upfront_discount_price_ngn',
                      'monthly_price_ngn', 'is_active', 'sort_order')
-    search_fields = ('name', 'tagline')
+    search_fields = ('name', 'tagline', 'best_for')
     fieldsets = (
-        (None, {'fields': ('category', 'name', 'tagline', 'is_active', 'sort_order')}),
+        (None, {'fields': ('category', 'name', 'tagline', 'best_for', 'is_active', 'sort_order')}),
         ('Pricing', {'fields': (
             'upfront_label', 'upfront_price_ngn', 'upfront_discount_price_ngn',
             'monthly_price_ngn',

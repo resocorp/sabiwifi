@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% load humanize %}
 {% block title %}SabiWiFi — Reliable internet for your home, business, or building{% endblock %}
 
 {% block extra_head %}
-<meta name="description" content="Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges. Get a free quote in under a minute.">
-<meta property="og:title" content="SabiWiFi — Reliable internet for your home, business, or building">
-<meta property="og:description" content="Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges. Get a free quote in under a minute.">
+<meta name="description" content="Pure FTTH fiber-to-the-home internet in Benin City. Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges. Get a free quote in under a minute.">
+<meta property="og:title" content="SabiWiFi — FTTH fiber internet for your home, business, or building">
+<meta property="og:description" content="Pure FTTH fiber-to-the-home internet in Benin City. Affordable, reliable WiFi for homes, businesses, hostels, hotels and lodges.">
 <meta property="og:type" content="website">
 
 {% if tiktok_pixel_id %}
@@ -54,11 +55,30 @@
 <!-- ═══════════════ HERO ═══════════════ -->
 <section class="max-w-4xl mx-auto px-4 pt-10 pb-6 text-center">
     <h1 class="font-headline font-extrabold text-3xl md:text-5xl leading-tight mb-4 text-on-surface">
-        Reliable internet for your <span class="text-primary">home, business, or building.</span>
+        <span class="text-primary inline-grid align-baseline whitespace-nowrap">
+            <span aria-hidden="true" class="invisible col-start-1 row-start-1">Unlimited</span>
+            <span id="hero-rotator" aria-live="polite" class="col-start-1 row-start-1 text-right transition-opacity duration-300">Reliable</span>
+        </span> internet for your home, business, or building.
     </h1>
     <p class="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
-        Now installing in Awka. Benin coming soon. Pick a plan below — we'll WhatsApp you a quote within 4 hours.
+        Pure <span class="font-semibold text-on-surface">FTTH fiber-to-the-home</span> rolling out in Uselu · Ugbowo · BDPA · Ekosodin · Isiehor. Pick a plan below. Fill the contact form and we will follow up with you.
     </p>
+
+    <!-- Trust strip -->
+    <div class="mt-6 flex flex-wrap justify-center gap-2 text-xs">
+        <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary-container/40 text-on-surface">
+            <span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">cable</span>
+            Pure FTTH fiber
+        </span>
+        <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary-container/40 text-on-surface">
+            <span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">all_inclusive</span>
+            Unlimited data
+        </span>
+        <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary-container/40 text-on-surface">
+            <span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+            Local Benin support
+        </span>
+    </div>
 </section>
 
 <!-- ═══════════════ PRICING CARDS ═══════════════ -->
@@ -81,27 +101,31 @@
 
             <h3 class="font-headline font-bold text-lg text-on-surface mb-1">{{ plan.name }}</h3>
             {% if plan.tagline %}
-            <p class="text-on-surface-variant text-xs mb-4">{{ plan.tagline }}</p>
+            <p class="text-on-surface-variant text-xs mb-2">{{ plan.tagline }}</p>
+            {% endif %}
+            {% if plan.best_for %}
+            <p class="text-xs text-on-surface-variant mb-4"><span class="font-semibold text-on-surface">Best for:</span> {{ plan.best_for }}</p>
             {% endif %}
 
-            <div class="mb-3">
-                <div class="text-xs text-on-surface-variant uppercase tracking-wide">{{ plan.upfront_label }}</div>
-                <div class="flex items-baseline gap-2 flex-wrap">
-                    {% if plan.has_discount %}
-                        <span class="font-headline font-extrabold text-2xl text-primary">₦{{ plan.upfront_discount_price_ngn|floatformat:0 }}</span>
-                        <span class="text-on-surface-variant text-sm line-through">₦{{ plan.upfront_price_ngn|floatformat:0 }}</span>
-                    {% else %}
-                        <span class="font-headline font-extrabold text-2xl text-primary">₦{{ plan.upfront_price_ngn|floatformat:0 }}</span>
-                    {% endif %}
+            <div class="mb-2">
+                <div class="text-xs text-on-surface-variant uppercase tracking-wide">Monthly subscription</div>
+                <div class="flex items-baseline gap-1 flex-wrap">
+                    <span class="font-headline font-extrabold text-3xl text-primary">₦{{ plan.monthly_price_ngn|floatformat:0|intcomma }}</span>
+                    <span class="text-on-surface-variant text-sm">/ month</span>
                 </div>
             </div>
 
             <div class="mb-4 pb-4 border-b border-surface-container">
-                <div class="text-xs text-on-surface-variant uppercase tracking-wide">Then per month</div>
-                <div class="flex items-baseline gap-1">
-                    <span class="font-headline font-bold text-xl text-on-surface">₦{{ plan.monthly_price_ngn|floatformat:0 }}</span>
-                    <span class="text-on-surface-variant text-xs">/ month</span>
-                </div>
+                <p class="text-xs text-on-surface-variant">
+                    {% if plan.has_discount %}
+                        from <span class="font-semibold text-on-surface">₦{{ plan.upfront_discount_price_ngn|floatformat:0|intcomma }}</span>
+                        <span class="line-through ml-1">₦{{ plan.upfront_price_ngn|floatformat:0|intcomma }}</span>
+                        {{ plan.upfront_label|lower }} (one-off)
+                    {% else %}
+                        from <span class="font-semibold text-on-surface">₦{{ plan.upfront_price_ngn|floatformat:0|intcomma }}</span>
+                        {{ plan.upfront_label|lower }} (one-off)
+                    {% endif %}
+                </p>
             </div>
 
             <ul class="space-y-1.5 text-sm text-on-surface flex-1">
@@ -148,10 +172,33 @@
             <div>
                 <input type="text" name="address" placeholder="Your address" required autocomplete="street-address"
                        class="w-full px-4 py-2.5 rounded-lg bg-surface-container border border-surface-container-high text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary text-sm">
-                <button type="button" id="pin-location" class="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
-                    <span class="material-symbols-outlined text-[16px]">my_location</span>
-                    <span id="pin-label">Pin my exact location (optional)</span>
-                </button>
+                <p class="mt-1 text-xs text-on-surface-variant">
+                    Be detailed — include nearby landmarks (e.g. <em>"Ekosodin Market, opposite First Bank, beside blue gate"</em>) so our team can find you fast.
+                </p>
+
+                <div id="pin-card" class="mt-3 p-4 rounded-xl bg-primary-container/40 border-2 border-dashed border-primary/40">
+                    <p class="font-headline font-bold text-on-surface text-base leading-snug mb-1">
+                        Send us the location where you need the internet.
+                    </p>
+                    <p class="text-on-surface-variant text-xs mb-3">
+                        Tap below and allow location — this helps us confirm coverage and plan your installation.
+                    </p>
+                    <button type="button" id="pin-location"
+                            class="w-full bg-primary text-on-primary px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-primary-dim transition flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">my_location</span>
+                        <span id="pin-label">Pin my location <span class="opacity-80">(required)</span></span>
+                    </button>
+                    <button type="button" id="pick-on-map-toggle" class="mt-3 w-full text-xs text-primary hover:underline flex items-center justify-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">map</span>
+                        <span id="pick-on-map-label">Or pick on map →</span>
+                    </button>
+                    <div id="map-wrap" class="hidden mt-3">
+                        <div id="leaflet-map" class="rounded-xl overflow-hidden" style="height: 260px;"></div>
+                        <p class="text-xs text-on-surface-variant mt-2 text-center">
+                            Drag the pin to the exact spot you need internet.
+                        </p>
+                    </div>
+                </div>
                 <input type="hidden" name="latitude">
                 <input type="hidden" name="longitude">
             </div>
@@ -166,7 +213,7 @@
 
             <button type="submit" id="lead-submit"
                     class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-bold hover:bg-primary-dim transition disabled:opacity-50">
-                Get my quote →
+                I am ready to get connected →
             </button>
             <p id="lead-error" class="text-sm text-error hidden"></p>
             <p class="text-xs text-on-surface-variant text-center">Already a customer? <a href="/recharge/" class="text-primary hover:underline">Recharge here</a></p>
@@ -194,21 +241,21 @@
                     <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">1</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">Tell us what you need</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">Submit the quick form. Address + phone is enough.</p>
+                <p class="text-on-surface-variant text-sm">Submit the quick form.</p>
             </div>
             <div class="bg-surface-container-lowest rounded-lg p-5">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">2</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">We confirm coverage</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">Our team WhatsApps you within 4 hours with a fixed quote and install date.</p>
+                <p class="text-on-surface-variant text-sm">We will WhatsApp you with the survey result.</p>
             </div>
             <div class="bg-surface-container-lowest rounded-lg p-5">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container font-bold text-sm flex items-center justify-center">3</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">Pay & get installed</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">Pay via Paystack link in WhatsApp. Tech arrives the next day.</p>
+                <p class="text-on-surface-variant text-sm">Tech arrives as scheduled and runs FTTH fiber straight to your premises.</p>
             </div>
         </div>
     </div>
@@ -224,7 +271,7 @@
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                We're live in Awka and rolling out to Benin City next. Submit the form even if you're not sure — we'll tell you if you're in coverage and when we'll get to you.
+                We're live across Benin City — currently installing in Uselu, Ugbowo, BDPA, Ekosodin and Isiehor. Submit the form even if you're outside these areas — we'll tell you if you're in coverage and when we'll get to you.
             </p>
         </details>
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
@@ -233,7 +280,16 @@
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
             <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
-                Typical: 24–48 hours from payment for homes. SME and building hotspots get a site survey first.
+                Installs can take 24 to 72 hours from payment. SME and building hotspots get a site survey first.
+            </p>
+        </details>
+        <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
+            <summary class="font-semibold text-on-surface cursor-pointer flex justify-between items-center">
+                <span>What technology do you use?</span>
+                <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
+            </summary>
+            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+                Pure <strong>FTTH (fiber-to-the-home)</strong> — actual fiber-optic cable runs to your premises, not a wireless link or shared mesh. You get the speed and stability fiber is known for, with no congestion bottlenecks at the access point.
             </p>
         </details>
         <details class="bg-surface-container-lowest rounded-lg shadow-ambient-sm p-5 group">
@@ -258,15 +314,41 @@
 </section>
 
 <!-- ═══════════════ FOOTER ═══════════════ -->
-<footer class="bg-surface-container-low py-7 text-center text-xs text-on-surface-variant">
-    <p class="mb-2">&copy; 2026 SabiWiFi &nbsp;&middot;&nbsp; Powered by PHSWEB LTD</p>
-    <p class="space-x-3">
-        <a href="{% url 'partners' %}" class="hover:underline">Partners</a>
-        <span>&middot;</span>
-        <a href="{% url 'shop-home' %}" class="hover:underline">Shop</a>
-        <span>&middot;</span>
-        <a href="/recharge/" class="hover:underline">Recharge</a>
-    </p>
+<footer class="bg-surface-container-low py-8 text-center text-xs text-on-surface-variant">
+    <div class="max-w-3xl mx-auto px-4">
+        <!-- Contact row -->
+        <div class="flex flex-wrap justify-center items-center gap-x-5 gap-y-2 mb-4 text-sm">
+            {% if wa_number %}
+            <a href="https://wa.me/{{ wa_number }}" target="_blank" rel="noopener"
+               class="inline-flex items-center gap-1.5 hover:text-primary transition">
+                <span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">chat</span>
+                WhatsApp us
+            </a>
+            {% endif %}
+            <a href="https://www.tiktok.com/@sabiwifi" target="_blank" rel="noopener"
+               class="inline-flex items-center gap-1.5 hover:text-primary transition">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.71a8.16 8.16 0 0 0 4.77 1.52V6.78a4.85 4.85 0 0 1-1.84-.09Z"/>
+                </svg>
+                @sabiwifi on TikTok
+            </a>
+        </div>
+
+        <!-- Address -->
+        <p class="mb-4 inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]">storefront</span>
+            Ekosodin Market, Benin City
+        </p>
+
+        <p class="mb-2">&copy; 2026 SabiWiFi &nbsp;&middot;&nbsp; Powered by PHSWEB LTD</p>
+        <p class="space-x-3">
+            <a href="{% url 'partners' %}" class="hover:underline">Partners</a>
+            <span>&middot;</span>
+            <a href="{% url 'shop-home' %}" class="hover:underline">Shop</a>
+            <span>&middot;</span>
+            <a href="/recharge/" class="hover:underline">Recharge</a>
+        </p>
+    </div>
 </footer>
 
 <script>
@@ -308,15 +390,15 @@ document.getElementById('change-plan-btn').addEventListener('click', () => {
 const pinBtn = document.getElementById('pin-location');
 const pinLabel = document.getElementById('pin-label');
 pinBtn.addEventListener('click', () => {
-    if (!navigator.geolocation) { pinLabel.textContent = 'Location not supported on this device'; return; }
+    if (!navigator.geolocation) { pinLabel.textContent = 'Location not supported on this device — please open in a mobile browser'; return; }
     pinLabel.textContent = 'Getting your location…';
     navigator.geolocation.getCurrentPosition(pos => {
         form.querySelector('[name=latitude]').value = pos.coords.latitude.toFixed(6);
         form.querySelector('[name=longitude]').value = pos.coords.longitude.toFixed(6);
-        pinLabel.textContent = `📍 Location pinned (±${Math.round(pos.coords.accuracy)}m)`;
+        pinLabel.innerHTML = `📍 Location pinned (±${Math.round(pos.coords.accuracy)}m)`;
         pinBtn.classList.add('text-primary-dim');
     }, err => {
-        pinLabel.textContent = 'Could not get location — that\'s okay, address is enough';
+        pinLabel.textContent = 'Location access blocked — tap your browser\'s lock icon → allow location, then try again.';
     }, {enableHighAccuracy: true, timeout: 10000, maximumAge: 0});
 });
 
@@ -332,6 +414,11 @@ form.addEventListener('submit', async (e) => {
     if (!intentInput.value) {
         showError('Pick a plan above before submitting.');
         document.getElementById('plans').scrollIntoView({behavior: 'smooth'});
+        return;
+    }
+    if (!form.querySelector('[name=latitude]').value || !form.querySelector('[name=longitude]').value) {
+        showError('We need your exact location to confirm coverage. Tap "Pin my location" and allow access.');
+        pinBtn.scrollIntoView({behavior: 'smooth', block: 'center'});
         return;
     }
     submitBtn.disabled = true;
@@ -373,6 +460,110 @@ form.addEventListener('submit', async (e) => {
         submitBtn.textContent = orig;
     }
 });
+
+// ─── Hero word rotator (fade swap) ───
+(function () {
+    const rotator = document.getElementById('hero-rotator');
+    if (!rotator) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const words = ['Reliable', 'Unlimited'];
+    const HOLD_MS = 2200;   // time the word stays visible
+    const FADE_MS = 300;    // matches Tailwind duration-300
+
+    let idx = 0;
+
+    function cycle() {
+        rotator.style.opacity = '0';
+        setTimeout(() => {
+            idx = (idx + 1) % words.length;
+            rotator.textContent = words[idx];
+            rotator.style.opacity = '1';
+            setTimeout(cycle, HOLD_MS);
+        }, FADE_MS);
+    }
+
+    setTimeout(cycle, HOLD_MS);
+})();
+
+// ─── Map fallback (Leaflet, lazy-loaded) ───
+(function () {
+    const toggleBtn = document.getElementById('pick-on-map-toggle');
+    const toggleLabel = document.getElementById('pick-on-map-label');
+    const mapWrap = document.getElementById('map-wrap');
+    if (!toggleBtn || !mapWrap) return;
+
+    const BENIN_CENTER = [6.406838, 5.607070];
+    let mapLoaded = false;
+    let map, marker;
+
+    function loadLeaflet() {
+        return new Promise((resolve, reject) => {
+            if (window.L) return resolve();
+            const css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(css);
+            const js = document.createElement('script');
+            js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+            js.onload = resolve;
+            js.onerror = reject;
+            document.head.appendChild(js);
+        });
+    }
+
+    function initMap() {
+        const latVal = parseFloat(form.querySelector('[name=latitude]').value);
+        const lngVal = parseFloat(form.querySelector('[name=longitude]').value);
+        const start = (Number.isFinite(latVal) && Number.isFinite(lngVal)) ? [latVal, lngVal] : BENIN_CENTER;
+
+        map = L.map('leaflet-map').setView(start, 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(map);
+
+        marker = L.marker(start, {draggable: true}).addTo(map);
+        marker.on('dragend', () => {
+            const ll = marker.getLatLng();
+            form.querySelector('[name=latitude]').value = ll.lat.toFixed(6);
+            form.querySelector('[name=longitude]').value = ll.lng.toFixed(6);
+            pinLabel.innerHTML = '📍 Picked on map';
+            pinBtn.classList.add('text-primary-dim');
+        });
+
+        // If the user hasn't touched the marker yet but the GPS path already
+        // populated lat/lng, treat the visible marker as the chosen pin.
+        if (start !== BENIN_CENTER) {
+            marker.fire('dragend');
+        }
+
+        // Leaflet needs a size invalidation after being un-hidden.
+        setTimeout(() => map.invalidateSize(), 50);
+    }
+
+    toggleBtn.addEventListener('click', async () => {
+        const isOpen = !mapWrap.classList.contains('hidden');
+        if (isOpen) {
+            mapWrap.classList.add('hidden');
+            toggleLabel.textContent = 'Or pick on map →';
+            return;
+        }
+        mapWrap.classList.remove('hidden');
+        toggleLabel.textContent = 'Hide map ↑';
+        if (!mapLoaded) {
+            try {
+                await loadLeaflet();
+                initMap();
+                mapLoaded = true;
+            } catch (e) {
+                mapWrap.innerHTML = '<p class="text-xs text-error text-center">Could not load the map. Please use Pin my location instead.</p>';
+            }
+        } else if (map) {
+            setTimeout(() => map.invalidateSize(), 50);
+        }
+    });
+})();
 </script>
 
 {% endblock %}

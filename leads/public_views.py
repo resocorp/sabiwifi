@@ -178,13 +178,14 @@ def lead_intake(request):
     if email and '@' not in email:
         return Response({'error': 'Please enter a valid email or leave it blank.'}, status=400)
 
-    # GPS bounds
+    # GPS — required so ops can confirm coverage before quoting.
     lat = _to_decimal_or_none(data.get('latitude'))
     lng = _to_decimal_or_none(data.get('longitude'))
-    if lat is not None and not (-90 <= lat <= 90):
-        lat = None
-    if lng is not None and not (-180 <= lng <= 180):
-        lng = None
+    if lat is None or lng is None or not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        return Response(
+            {'error': 'We need your pinned location to confirm coverage. Tap "Pin my location" and allow access.'},
+            status=400,
+        )
 
     # Dedup: same phone+intent inside 24h
     cutoff = timezone.now() - timedelta(hours=24)
