@@ -90,7 +90,16 @@ PROVISION_TEMPLATE = """\
 /ip dns set allow-remote-requests=yes servers=8.8.8.8,1.1.1.1
 
 # --- 6. WireGuard tunnel to SabiWiFi server ---
-:do {{ /interface wireguard add name=wg0 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] private-key="{wg_private_key}" }}
+# mtu=1380: RouterOS default 1420 silently blackholes WG traffic on many
+# Nigerian carrier paths (PPPoE backhaul, CGNAT boxes, transparent
+# middleboxes that strip ICMP "frag needed" so PMTU discovery never
+# converges). Small packets like the initial WG handshake and 25s
+# keepalives still fit, so the tunnel APPEARS to come up briefly, then
+# the first sustained traffic dies and the handshake never renews
+# within WG's 180s rekey window. 1380 is the standard conservative
+# value for WG over consumer broadband — covers PPPoE + light IPSec
+# wrapping + CGNAT.
+:do {{ /interface wireguard add name=wg0 mtu=1380 private-key="{wg_private_key}" }} on-error={{ /interface wireguard set [find name=wg0] mtu=1380 private-key="{wg_private_key}" }}
 # Idempotent peer: update if exists, add if not (avoids tearing down active handshake)
 :if ([:len [/interface wireguard peers find interface=wg0 public-key="{server_wg_public_key}"]] > 0) do={{
   /interface wireguard peers set [find interface=wg0 public-key="{server_wg_public_key}"] endpoint-address={server_ip} endpoint-port=51820 allowed-address=10.99.0.0/16 persistent-keepalive=25
