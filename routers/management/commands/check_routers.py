@@ -29,6 +29,7 @@ written at the strike threshold, not at first failure).
 """
 import logging
 
+from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -106,13 +107,19 @@ class Command(BaseCommand):
             # Re-provision trigger: device is reaching us over the public
             # internet but its WG tunnel hasn't handshaked recently. Only
             # set the flag if we haven't just freshly delivered a provision
-            # (the heartbeat view clears it on delivery).
+            # (the heartbeat view clears it on delivery) AND we aren't in
+            # the post-delivery backoff window (the heartbeat view sets a
+            # 10-min cache key after each delivery so we don't hammer a
+            # device that's still trying to bring the tunnel up).
             if (
                 heartbeat_fresh
                 and not handshake_fresh
                 and old_status not in ('pending_provision',)
             ):
-                if not router.needs_reprovision:
+                in_backoff = bool(
+                    cache.get(f'reprov_backoff_{router.serial_number}')
+                )
+                if not router.needs_reprovision and not in_backoff:
                     router.needs_reprovision = True
                     reprovision_flagged += 1
                     logger.info(

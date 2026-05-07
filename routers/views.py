@@ -266,7 +266,7 @@ def router_heartbeat(request, serial):
 
     # Store WireGuard public key when sent by OpenWrt device
     wg_pub = request.META.get('HTTP_X_WG_PUBLIC_KEY', '').strip()
-    update_fields = ['last_seen', 'status', 'offline_since']
+    update_fields = ['last_seen']
     if wg_pub and wg_pub != router.wg_public_key:
         old_wg_pub = router.wg_public_key
         router.wg_public_key = wg_pub
@@ -280,15 +280,32 @@ def router_heartbeat(request, serial):
             except WireGuardError as e:
                 logger.error(f"Failed to update WG peer for {lookup_serial}: {e}")
 
+    # The heartbeat proves the device has internet, but says nothing about
+    # whether the WG management tunnel is up — and the platform NEEDS the
+    # tunnel to actually manage the device. Only flip status to 'online'
+    # when the WG handshake (cached on Router by check_routers) is fresh.
+    # Otherwise leave status alone and let check_routers be the sole source
+    # of truth for online/offline. Without this guard, every heartbeat
+    # overrode check_routers' more accurate judgment, producing a
+    # ~5 min status flap and 200+ thrash health-log rows per router/day.
+    HEARTBEAT_HANDSHAKE_STALE_SECONDS = 300
     was_offline = router.status in ('offline', 'pending_provision')
     router.last_seen = timezone.now()
-    # Don't overwrite pending_provision — the device still needs provisioning
-    if router.status != 'pending_provision':
+    handshake_fresh = (
+        router.wg_last_handshake is not None
+        and (router.last_seen - router.wg_last_handshake).total_seconds()
+        <= HEARTBEAT_HANDSHAKE_STALE_SECONDS
+    )
+    flipped_online = False
+    if router.status != 'pending_provision' and handshake_fresh:
+        if router.status != 'online':
+            flipped_online = True
         router.status = 'online'
-    router.offline_since = None
+        router.offline_since = None
+        update_fields.extend(['status', 'offline_since'])
     router.save(update_fields=update_fields)
 
-    if was_offline and router.status == 'online':
+    if was_offline and flipped_online:
         RouterHealthLog.objects.create(router=router, event='online')
         logger.info(f'Router {lookup_serial} recovered via heartbeat')
 
@@ -326,6 +343,12 @@ def router_heartbeat(request, serial):
             provision_count=F('provision_count') + 1,
             needs_reprovision=False,
         )
+        # Block check_routers from re-flagging this router for the next
+        # 10 min so the device gets a chance to bring the tunnel up before
+        # we hammer it with another full provision script. Aligns with the
+        # device-side WG watchdog reboot interval. See check_routers.py.
+        from django.core.cache import cache
+        cache.set(f'reprov_backoff_{router.serial_number}', '1', timeout=600)
         logger.info(
             f"Re-provision delivered to MikroTik {lookup_serial} via heartbeat "
             f"(was {router.status}, needs_reprovision={router.needs_reprovision})"
