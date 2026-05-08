@@ -183,6 +183,20 @@ def conversation_detail(request, pk):
     ))
     for t in tickets:
         t['assigned_staff_name'] = t.pop('assigned_staff__name', None)
+
+    lead_summary = None
+    if convo.lead_id:
+        lead = convo.lead
+        lead_summary = {
+            'id': lead.pk,
+            'name': lead.name,
+            'phone': lead.phone,
+            'status': lead.status,
+            'intent': lead.intent,
+            'quoted_amount_ngn': str(lead.quoted_amount_ngn) if lead.quoted_amount_ngn else None,
+            'created_at': lead.created_at.isoformat(),
+        }
+
     return Response({
         'conversation': {
             'id': convo.pk,
@@ -198,6 +212,7 @@ def conversation_detail(request, pk):
         },
         'messages': messages,
         'tickets': tickets,
+        'lead': lead_summary,
     })
 
 

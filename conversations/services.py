@@ -33,16 +33,36 @@ def normalise_inbound_phone(raw_phone):
 def _link_existing_contact(conversation):
     """
     Best-effort link conversation.contact_phone to an existing Subscriber
-    (if any). Does NOT create anything — just associates.
+    and/or Lead (if any). Does NOT create anything — just associates.
+
+    Subscriber linkage wins for already-customers; Lead linkage gives the
+    inbox cross-reference into the active sales funnel for prospects who
+    haven't converted yet. A subscriber and a lead can coexist (the lead
+    may still be open during the install window).
     """
-    if conversation.subscriber_id or not conversation.contact_phone:
+    if not conversation.contact_phone:
         return
     from accounts.models import Subscriber
-    subscriber = Subscriber.objects.filter(
-        reseller=conversation.reseller, phone=conversation.contact_phone,
-    ).first()
-    if subscriber:
-        conversation.subscriber = subscriber
+    if not conversation.subscriber_id:
+        subscriber = Subscriber.objects.filter(
+            reseller=conversation.reseller, phone=conversation.contact_phone,
+        ).first()
+        if subscriber:
+            conversation.subscriber = subscriber
+    if not conversation.lead_id:
+        from leads.models import Lead
+        lead_qs = Lead.objects.filter(phone=conversation.contact_phone)
+        if conversation.reseller_id:
+            lead_qs = lead_qs.filter(reseller=conversation.reseller)
+        # Prefer an open (non-terminal) lead so the conversation surfaces the
+        # active funnel record. Fall back to the most recent terminal one.
+        lead = (
+            lead_qs.exclude(status__in=[Lead.STATUS_LOST, Lead.STATUS_INSTALLED])
+            .order_by('-created_at').first()
+            or lead_qs.order_by('-created_at').first()
+        )
+        if lead:
+            conversation.lead = lead
 
 
 @transaction.atomic

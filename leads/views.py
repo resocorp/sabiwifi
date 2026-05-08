@@ -2,14 +2,17 @@
 Lead + InstallationOrder API — reseller dashboard.
 """
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.permissions import can, effective_reseller
 from leads.models import Lead, InstallationOrder
-from leads.services import convert_lead_to_subscriber
+from leads.services import (
+    convert_lead_to_subscriber,
+    complete_installation,
+    InstallationCompletionError,
+)
 
 
 def _require(request, *caps):
@@ -108,7 +111,32 @@ def lead_detail(request, pk):
     reseller = effective_reseller(request.user)
     lead = get_object_or_404(Lead, pk=pk, reseller=reseller)
     orders = [_serialise_installation(o) for o in lead.installation_orders.all()]
-    return Response({'lead': _serialise_lead(lead), 'installations': orders})
+
+    # Cross-link conversations carrying the same phone — operators triage one
+    # human, not two records, so surface recent threads inline.
+    conversations = []
+    if lead.phone:
+        from conversations.models import Conversation
+        convo_qs = (
+            Conversation.objects
+            .filter(reseller=reseller, contact_phone=lead.phone)
+            .order_by('-last_message_at')[:5]
+        )
+        for c in convo_qs:
+            conversations.append({
+                'id': c.pk,
+                'channel': c.channel,
+                'kind': c.kind,
+                'state': c.state,
+                'unread_count': c.unread_count,
+                'last_message_at': c.last_message_at.isoformat() if c.last_message_at else None,
+            })
+
+    return Response({
+        'lead': _serialise_lead(lead),
+        'installations': orders,
+        'conversations': conversations,
+    })
 
 
 @api_view(['POST'])
@@ -235,7 +263,17 @@ def installation_update(request, pk):
     reseller = effective_reseller(request.user)
     order = get_object_or_404(InstallationOrder, pk=pk, reseller=reseller)
     data = request.data
-    for field in ('status', 'service_mode', 'address', 'notes', 'pppoe_username', 'pppoe_password'):
+
+    new_status = data.get('status')
+    completing = (
+        new_status == InstallationOrder.STATUS_COMPLETED
+        and order.status != InstallationOrder.STATUS_COMPLETED
+        and not order.completed_at
+    )
+
+    # Apply non-status mutations first so the completion service sees the
+    # latest pppoe creds, address, etc.
+    for field in ('service_mode', 'address', 'notes', 'pppoe_username', 'pppoe_password'):
         if field in data:
             setattr(order, field, data[field] or '')
     if 'scheduled_for' in data:
@@ -244,12 +282,25 @@ def installation_update(request, pk):
         order.assigned_tech_id = data['assigned_tech_id']
     if 'router_id' in data:
         order.router_id = data['router_id']
-    if order.status == InstallationOrder.STATUS_COMPLETED and not order.completed_at:
-        order.completed_at = timezone.now()
-        # Mark the parent lead as installed
-        lead = order.lead
-        if lead.status != Lead.STATUS_INSTALLED:
-            lead.status = Lead.STATUS_INSTALLED
-            lead.save(update_fields=['status', 'updated_at'])
+    # Apply non-completion status changes directly. COMPLETED runs through the
+    # service to provision the subscriber.
+    if new_status and not completing:
+        order.status = new_status
     order.save()
+
+    if completing:
+        plan_id = data.get('plan_id') or data.get('interested_plan_id')
+        plan = None
+        if plan_id:
+            from plans.models import ServicePlan
+            plan = ServicePlan.objects.filter(pk=plan_id, reseller=reseller).first()
+            if plan and order.lead.interested_plan_id != plan.pk:
+                order.lead.interested_plan = plan
+                order.lead.save(update_fields=['interested_plan', 'updated_at'])
+        try:
+            complete_installation(order, plan=plan, actor=request.user.username or 'staff')
+        except InstallationCompletionError as exc:
+            return Response({'error': str(exc)}, status=400)
+        order.refresh_from_db()
+
     return Response(_serialise_installation(order))

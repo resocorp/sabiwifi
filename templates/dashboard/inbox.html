@@ -215,6 +215,20 @@ async function loadConversation(id) {
                 </div>`).join('')}
         </div>` : '';
 
+    const leadBlock = data.lead ? `
+        <div class="mb-3 p-2 rounded bg-surface-container-low text-xs">
+            <div class="text-on-surface-variant mb-1 font-semibold uppercase tracking-wide">Linked lead</div>
+            <div class="flex items-center gap-2 py-0.5">
+                <a href="/dashboard/leads/?lead=${data.lead.id}" class="font-mono underline hover:text-primary">📋 #${data.lead.id}</a>
+                <span>${escapeHTML(data.lead.name || '(unnamed)')}</span>
+                <span class="text-on-surface-variant">·</span>
+                <span>${escapeHTML(data.lead.intent)}</span>
+                <span class="text-on-surface-variant">·</span>
+                <span>${escapeHTML(data.lead.status)}</span>
+                ${data.lead.quoted_amount_ngn ? '<span class="text-on-surface-variant">· ₦' + escapeHTML(data.lead.quoted_amount_ngn) + '</span>' : ''}
+            </div>
+        </div>` : '';
+
     detail.innerHTML = `
         <div class="flex items-center justify-between mb-3 pb-3 border-b border-surface-container">
             <div class="min-w-0">
@@ -245,6 +259,7 @@ async function loadConversation(id) {
                 `}
             </div>
         </div>
+        ${leadBlock}
         ${ticketBlock}
         <div id="messages-pane" class="max-h-[55vh] overflow-y-auto pr-1 mb-3">${messageHTML}</div>
         <div>
