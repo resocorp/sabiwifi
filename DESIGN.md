@@ -79,8 +79,8 @@
 | Token | Hex | Usage |
 |-------|-----|-------|
 | `--ink` | `#0A0A0B` | Primary text. Warm near-black, never pure `#000`. |
-| `--ink-muted` | `#6B6B6F` | Secondary text, labels, metadata, help text |
-| `--ink-subtle` | `#9A9A9F` | Placeholder text, disabled labels |
+| `--ink-muted` | `#52525B` | Secondary text, labels, metadata, help text. Passes WCAG AA on warm-white surface. |
+| `--ink-subtle` | `#71717A` | Placeholder text, disabled labels. Decorative-only — never required reading. |
 | `--surface` | `#FFFFFF` | Cards, primary surface |
 | `--surface-alt` | `#FAFAF9` | Page background, zebra-free table background |
 | `--surface-subtle` | `#F5F5F4` | Input backgrounds, hover fills |

@@ -60,7 +60,7 @@
             <span id="hero-rotator" aria-live="polite" class="col-start-1 row-start-1 text-right transition-opacity duration-300">Reliable</span>
         </span> internet for your home, business, or building.
     </h1>
-    <p class="text-on-surface-variant text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+    <p class="text-on-surface text-base md:text-lg max-w-xl mx-auto leading-relaxed">
         Pure <span class="font-semibold text-on-surface">FTTH fiber-to-the-home</span> rolling out in Uselu · Ugbowo · BDPA · Ekosodin · Isiehor. Pick a plan below. Fill the contact form and we will follow up with you.
     </p>
 
@@ -90,6 +90,7 @@
              data-category="{{ plan.category }}"
              data-name="{{ plan.name }}"
              data-upfront="{{ plan.effective_upfront_price_ngn }}"
+             data-monthly="{{ plan.monthly_price_ngn }}"
              tabindex="0" role="button"
              aria-label="Select {{ plan.name }}">
 
@@ -213,7 +214,7 @@
 
             <button type="submit" id="lead-submit"
                     class="w-full bg-primary text-on-primary px-6 py-3 rounded-lg font-bold hover:bg-primary-dim transition disabled:opacity-50">
-                I am ready to get connected →
+                I'm interested →
             </button>
             <p id="lead-error" class="text-sm text-error hidden"></p>
             <p class="text-xs text-on-surface-variant text-center">Already a customer? <a href="/recharge/" class="text-primary hover:underline">Recharge here</a></p>
@@ -241,21 +242,21 @@
                     <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">1</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">Tell us what you need</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">Submit the quick form.</p>
+                <p class="text-on-surface text-sm">Submit the quick form.</p>
             </div>
             <div class="bg-surface-container-lowest rounded-lg p-5">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container font-bold text-sm flex items-center justify-center">2</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">We confirm coverage</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">We will WhatsApp you with the survey result.</p>
+                <p class="text-on-surface text-sm">We will WhatsApp you with the survey result.</p>
             </div>
             <div class="bg-surface-container-lowest rounded-lg p-5">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container font-bold text-sm flex items-center justify-center">3</span>
                     <h3 class="font-headline font-bold text-base text-on-surface">Pay & get installed</h3>
                 </div>
-                <p class="text-on-surface-variant text-sm">Tech arrives as scheduled and runs FTTH fiber straight to your premises.</p>
+                <p class="text-on-surface text-sm">Tech arrives as scheduled and runs FTTH fiber straight to your premises.</p>
             </div>
         </div>
     </div>
@@ -270,7 +271,7 @@
                 <span>Where do you install?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
-            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+            <p class="text-on-surface text-sm mt-3 leading-relaxed">
                 We're live across Benin City — currently installing in Uselu, Ugbowo, BDPA, Ekosodin and Isiehor. Submit the form even if you're outside these areas — we'll tell you if you're in coverage and when we'll get to you.
             </p>
         </details>
@@ -279,7 +280,7 @@
                 <span>How fast can you install?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
-            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+            <p class="text-on-surface text-sm mt-3 leading-relaxed">
                 Installs can take 24 to 72 hours from payment. SME and building hotspots get a site survey first.
             </p>
         </details>
@@ -288,7 +289,7 @@
                 <span>What technology do you use?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
-            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+            <p class="text-on-surface text-sm mt-3 leading-relaxed">
                 Pure <strong>FTTH (fiber-to-the-home)</strong> — actual fiber-optic cable runs to your premises, not a wireless link or shared mesh. You get the speed and stability fiber is known for, with no congestion bottlenecks at the access point.
             </p>
         </details>
@@ -297,7 +298,7 @@
                 <span>What does it cost?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
-            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+            <p class="text-on-surface text-sm mt-3 leading-relaxed">
                 Depends on the package — home, SME, or building hotspot. We'll send a fixed quote in WhatsApp once we confirm your address.
             </p>
         </details>
@@ -306,7 +307,7 @@
                 <span>I'm already a customer — how do I recharge?</span>
                 <span class="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition">expand_more</span>
             </summary>
-            <p class="text-on-surface-variant text-sm mt-3 leading-relaxed">
+            <p class="text-on-surface text-sm mt-3 leading-relaxed">
                 Use the <a href="/recharge/" class="text-primary hover:underline">Recharge page</a>. Enter your phone number, get a code, top up.
             </p>
         </details>
@@ -373,7 +374,7 @@ function pickPlan(card) {
     intentInput.value = card.dataset.category;
     chosenPlanInput.value = card.dataset.planId;
     selectedName.textContent = card.dataset.name;
-    selectedPrice.textContent = '₦' + parseFloat(card.dataset.upfront).toLocaleString() + ' upfront';
+    selectedPrice.textContent = '₦' + parseFloat(card.dataset.monthly).toLocaleString() + ' / month';
     selectedBox.classList.remove('hidden');
     document.getElementById('form-section').scrollIntoView({behavior: 'smooth', block: 'start'});
 }
