@@ -36,6 +36,7 @@ BOARDS = {
             {'name': 'ether6', 'caption': '1G',          'default_role': ROLE_HOTSPOT},
             {'name': 'ether7', 'caption': '1G',          'default_role': ROLE_HOTSPOT},
             {'name': 'ether8', 'caption': '1G',          'default_role': ROLE_HOTSPOT},
+            {'name': 'sfp1',   'caption': 'SFP',         'default_role': ROLE_HOTSPOT},
         ],
         'radios': [
             {'name': 'wifi1', 'band': '2.4ghz', 'default_role': ROLE_HOTSPOT},

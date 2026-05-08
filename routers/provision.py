@@ -175,15 +175,15 @@ PROVISION_TEMPLATE = """\
     # channel.band just reflects the last applied config, so it can't be
     # trusted to tell us which bands this radio actually supports.
     #
-    # /interface/wifi/radio get bands returns an ARRAY, not a string.
-    # [:find $array "..."] returns "nothing", and `nothing != -1` is true
-    # in RouterOS — so the old single-expression form ALWAYS chose 5g
-    # even on 2.4GHz-only boards, leaving the radio unable to transmit.
-    # Iterate the array explicitly instead.
+    # /interface/wifi/radio get bands returns an ARRAY of band strings.
+    # Iterating gives us each string; the band check must use :typeof =
+    # "num" because [:find $str "5ghz"] returns "nothing" (not -1) when
+    # absent, and `nothing != -1` evaluates TRUE in RouterOS — which
+    # would always set is5g and brick 2.4GHz-only radios.
     :local is5g false
     :do {{
       :foreach b in=[/interface/wifi/radio get [find interface=$wname] bands] do={{
-        :if ([:find $b "5ghz"] != -1) do={{ :set is5g true }}
+        :if ([:typeof [:find $b "5ghz"]] = "num") do={{ :set is5g true }}
       }}
     }} on-error={{}}
     :local cfg "sabiwifi-2g"
@@ -243,17 +243,25 @@ PROVISION_TEMPLATE = """\
 
 # --- 14. Announce hardware capabilities to platform (one-shot, drives the GUI) ---
 :local board [/system resource get board-name]
-:local ros [/system resource get version]
+# Trim version to the first whitespace — RouterOS reports "7.22 (stable)" but
+# raw spaces in the URL get rejected by nginx with a 400 before Django sees
+# the request, so the platform never learns the real board capabilities.
+:local rosFull [/system resource get version]
+:local rosSp [:find $rosFull " "]
+:local ros $rosFull
+:if ([:typeof $rosSp] = "num") do={{ :set ros [:pick $rosFull 0 $rosSp] }}
 :local wif "no"
 :local fg "no"
 :if ([:len [/interface wifi find]] > 0) do={{
   :set wif "yes"
   # Read the hardware-supported bands from /interface/wifi/radio (channel.band
   # would just reflect whatever config we just applied, not real capability).
+  # Same :typeof = "num" trap as §10: nothing != -1 evaluates TRUE in
+  # RouterOS, so the band check must explicitly assert a numeric position.
   :foreach ra in=[/interface/wifi/radio find] do={{
     :do {{
       :foreach b in=[/interface/wifi/radio get $ra bands] do={{
-        :if ([:find $b "5ghz"] != -1) do={{ :set fg "yes" }}
+        :if ([:typeof [:find $b "5ghz"]] = "num") do={{ :set fg "yes" }}
       }}
     }} on-error={{}}
   }}

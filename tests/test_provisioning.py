@@ -239,6 +239,43 @@ class CapabilityAnnounceTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
 
+class RouterOSPitfallTests(TestCase):
+    """
+    Regression guards for two RouterOS scripting traps that silently broke
+    real devices in production:
+
+    1. `[:find $str $sub]` returns "nothing" when not found, NOT -1.
+       `nothing != -1` evaluates TRUE — so any band check written as
+       `!= -1` always passes and the script forces 5GHz config onto
+       2.4GHz-only radios (no available channels → radio dead).
+
+    2. `/system resource get version` returns "7.22 (stable)" with raw
+       spaces. Concatenated into a /tool fetch URL, nginx rejects the
+       malformed line with HTTP 400 before Django ever sees it, and the
+       capability announcement is silently dropped.
+    """
+
+    def setUp(self):
+        self.reseller = _reseller(email='pitfall@x.com')
+
+    def test_band_detection_uses_typeof_num_check(self):
+        router = _router(self.reseller)
+        rsc = generate_provision_rsc(router, wg_private_key='x' * 44)
+        # Both §10 (per-radio config selection) and §14 (announce) must use
+        # the :typeof = "num" guard. Neither may rely on `!= -1`.
+        self.assertEqual(rsc.count(':typeof [:find $b "5ghz"]'), 2)
+        self.assertNotIn('[:find $b "5ghz"] != -1', rsc)
+
+    def test_announce_url_strips_version_whitespace(self):
+        router = _router(self.reseller)
+        rsc = generate_provision_rsc(router, wg_private_key='x' * 44)
+        # The script must trim the version string to the first whitespace
+        # so a value like "7.22 (stable)" becomes "7.22" before URL build.
+        self.assertIn(':local rosFull [/system resource get version]', rsc)
+        self.assertIn(':local rosSp [:find $rosFull " "]', rsc)
+        self.assertIn(':set ros [:pick $rosFull 0 $rosSp]', rsc)
+
+
 class ExplicitTopologyTests(TestCase):
     """
     Routers with non-empty port_assignments switch to the explicit-topology
