@@ -237,3 +237,159 @@ class CapabilityAnnounceTests(TestCase):
         client = Client()
         resp = client.get(reverse('api-router-announce', args=['NOPE']))
         self.assertEqual(resp.status_code, 200)
+
+
+class ExplicitTopologyTests(TestCase):
+    """
+    Routers with non-empty port_assignments switch to the explicit-topology
+    branch of the provision template. Ports get bridged where the operator
+    placed them; PPPoE server binds to its own bridge when PPPoE ports exist.
+    """
+
+    def setUp(self):
+        self.reseller = _reseller(email='topo@x.com')
+
+    def test_empty_port_assignments_uses_legacy_auto_block(self):
+        """nedu-wifi safety: the AUTO branch must remain byte-identical."""
+        router = _router(self.reseller, port_assignments={})
+        rsc = generate_provision_rsc(router, wg_private_key='x' * 44)
+        # Sentinel strings unique to the AUTO block:
+        self.assertIn('# --- 3. WAN auto-discovery ---', rsc)
+        self.assertIn('/ip dhcp-client find status=bound', rsc)
+        self.assertIn('# --- 4a. Bridge every non-WAN ether port', rsc)
+        # No explicit-block sentinels:
+        self.assertNotIn('# --- 3. WAN explicit assignment', rsc)
+        self.assertNotIn('# --- 4a. Explicit per-port bridge', rsc)
+        self.assertNotIn('pppoe-br', rsc)
+
+    def test_explicit_assignment_replaces_wan_discovery(self):
+        router = _router(
+            self.reseller,
+            board_name='L009UiGS-2HaxD',
+            ether_port_count=8,
+            has_wifi=True, has_5ghz=False,
+            port_assignments={
+                'ether1': 'wan',
+                'ether2': 'hotspot', 'ether3': 'hotspot',
+                'ether4': 'hotspot', 'ether5': 'hotspot',
+                'wifi1':  'hotspot',
+            },
+        )
+        rsc = generate_provision_rsc(router, wg_private_key='x' * 44)
+        self.assertIn('# --- 3. WAN explicit assignment', rsc)
+        self.assertIn(':local wanIface "ether1"', rsc)
+        self.assertIn('# --- 4a. Explicit per-port bridge', rsc)
+        # Hotspot ports get bridged; no DHCP-discovery loop runs
+        self.assertNotIn('/ip dhcp-client find status=bound', rsc)
+        for p in ('ether2', 'ether3', 'ether4', 'ether5'):
+            self.assertIn(f'bridge=hotspot-br interface={p}', rsc)
+        # No PPPoE bridge when no pppoe ports
+        self.assertNotIn('pppoe-br', rsc)
+
+    def test_explicit_pppoe_creates_separate_bridge(self):
+        router = _router(
+            self.reseller,
+            board_name='L009UiGS-2HaxD',
+            ether_port_count=8,
+            has_wifi=True, has_5ghz=False,
+            service_mode='both',
+            port_assignments={
+                'ether1': 'wan',
+                'ether2': 'hotspot', 'ether3': 'hotspot',
+                'ether4': 'pppoe',  'ether5': 'pppoe',
+                'wifi1':  'hotspot',
+            },
+        )
+        rsc = generate_provision_rsc(router, wg_private_key='x' * 44)
+        # pppoe bridge created
+        self.assertIn('/interface bridge add name=pppoe-br', rsc)
+        # PPPoE server now binds to pppoe-br, NOT hotspot-br
+        self.assertIn('interface=pppoe-br default-profile=sabiwifi-pppoe', rsc)
+        self.assertNotIn('interface=hotspot-br default-profile=sabiwifi-pppoe', rsc)
+        # Bridge port assignments split correctly
+        self.assertIn('bridge=hotspot-br interface=ether2', rsc)
+        self.assertIn('bridge=pppoe-br interface=ether4', rsc)
+
+
+class TopologyApiTests(TestCase):
+    def setUp(self):
+        self.reseller = _reseller(email='topapi@x.com')
+        self.router = _router(
+            self.reseller,
+            board_name='L009UiGS-2HaxD',
+            ether_port_count=8,
+            has_wifi=True, has_5ghz=False,
+            detected_wan='ether1',
+        )
+        self.client = Client()
+        self.client.force_login(self.reseller.user)
+
+    def _save(self, payload):
+        return self.client.post(
+            reverse('api-router-topology', args=[self.router.pk]),
+            data=payload, content_type='application/json',
+        )
+
+    def test_get_returns_catalogue_and_default_assignments(self):
+        resp = self.client.get(reverse('api-router-topology', args=[self.router.pk]))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data['catalogue']['label'], 'L009UiGS-2HaxD')
+        # Default mapping: ether1=wan, others hotspot
+        self.assertEqual(data['port_assignments']['ether1'], 'wan')
+        self.assertEqual(data['port_assignments']['ether5'], 'hotspot')
+        self.assertEqual(data['detected_wan'], 'ether1')
+        self.assertFalse(data['has_explicit_topology'])
+
+    def test_save_valid_assignment_persists_and_queues_reprovision(self):
+        import json
+        self.router.needs_reprovision = False
+        self.router.save(update_fields=['needs_reprovision'])
+        payload = {
+            'ether1': 'wan',
+            'ether2': 'hotspot', 'ether3': 'hotspot',
+            'ether4': 'pppoe',  'ether5': 'pppoe',
+            'wifi1':  'hotspot',
+        }
+        resp = self._save(json.dumps({'port_assignments': payload}))
+        self.assertEqual(resp.status_code, 200)
+        self.router.refresh_from_db()
+        self.assertEqual(self.router.port_assignments['ether4'], 'pppoe')
+        self.assertTrue(self.router.needs_reprovision)
+
+    def test_rejects_zero_wan(self):
+        import json
+        resp = self._save(json.dumps({'port_assignments': {
+            'ether1': 'hotspot', 'ether2': 'hotspot', 'wifi1': 'hotspot',
+        }}))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Exactly one port must be WAN', resp.json()['error'])
+
+    def test_rejects_multiple_wan(self):
+        import json
+        resp = self._save(json.dumps({'port_assignments': {
+            'ether1': 'wan', 'ether2': 'wan', 'wifi1': 'hotspot',
+        }}))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_rejects_unknown_port(self):
+        import json
+        resp = self._save(json.dumps({'port_assignments': {
+            'ether99': 'wan', 'ether2': 'hotspot',
+        }}))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Unknown port 'ether99'", resp.json()['error'])
+
+    def test_rejects_radio_as_wan(self):
+        import json
+        resp = self._save(json.dumps({'port_assignments': {
+            'wifi1': 'wan', 'ether2': 'hotspot',
+        }}))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Radios cannot', resp.json()['error'])
+
+    def test_openwrt_router_rejected(self):
+        self.router.device_type = 'openwrt'
+        self.router.save(update_fields=['device_type'])
+        resp = self.client.get(reverse('api-router-topology', args=[self.router.pk]))
+        self.assertEqual(resp.status_code, 400)

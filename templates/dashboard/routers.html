@@ -233,7 +233,13 @@
 
             <!-- Footer actions -->
             <div class="border-t border-surface-container px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 flex-wrap">
+                    {% if router.device_type != 'openwrt' %}
+                    <button type="button" onclick="openTopologyModal({{ router.pk }}, '{{ router.location_name|default:router.serial_number|escapejs }}')"
+                            class="text-sm text-primary hover:underline font-medium">
+                        Configure ports
+                    </button>
+                    {% endif %}
                     <button type="button" onclick="redeployRouter({{ router.pk }})"
                             id="redeploy-btn-{{ router.pk }}"
                             class="text-sm text-primary hover:underline font-medium">
@@ -607,7 +613,181 @@ function showMsg(el, text, cls) {
     el.classList.remove('hidden');
     setTimeout(() => el.classList.add('hidden'), 5000);
 }
+
+// ─── Port topology modal ────────────────────────────────────────────────────
+const ROLE_OPTIONS = [
+    {value: 'wan',     label: 'WAN'},
+    {value: 'hotspot', label: 'Hotspot'},
+    {value: 'pppoe',   label: 'PPPoE'},
+];
+let topologyState = null;  // {pk, catalogue, assignments, detected_wan}
+
+function openTopologyModal(pk, label) {
+    const overlay = document.getElementById('topology-modal');
+    const title = document.getElementById('topology-title');
+    const body = document.getElementById('topology-body');
+    title.textContent = 'Port topology — ' + label;
+    body.innerHTML = '<p class="text-sm text-on-surface-variant">Loading hardware profile…</p>';
+    document.getElementById('topology-error').classList.add('hidden');
+    overlay.classList.remove('hidden');
+    topologyState = {pk};
+
+    fetch('/api/routers/' + pk + '/topology/', {
+        headers: {'X-CSRFToken': CSRF},
+        credentials: 'same-origin',
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (!ok) {
+            body.innerHTML = '<p class="text-sm text-error">' + (data.error || 'Failed to load topology.') + '</p>';
+            return;
+        }
+        topologyState.catalogue = data.catalogue;
+        topologyState.assignments = Object.assign({}, data.port_assignments);
+        topologyState.detected_wan = data.detected_wan;
+        renderPortGrid();
+    })
+    .catch(err => {
+        body.innerHTML = '<p class="text-sm text-error">Network error: ' + err.message + '</p>';
+    });
+}
+
+function closeTopologyModal() {
+    document.getElementById('topology-modal').classList.add('hidden');
+    topologyState = null;
+}
+
+function renderPortGrid() {
+    const body = document.getElementById('topology-body');
+    const cat = topologyState.catalogue;
+    const detected = topologyState.detected_wan || '';
+
+    const renderChip = (port, isRadio) => {
+        const role = topologyState.assignments[port.name] || (isRadio ? 'hotspot' : 'hotspot');
+        const detectedDot = (port.name === detected)
+            ? '<span title="Detected WAN" class="inline-block w-1.5 h-1.5 rounded-full bg-success ml-1 align-middle"></span>'
+            : '';
+        const opts = ROLE_OPTIONS
+            .filter(o => !(isRadio && o.value === 'wan'))   // radios cannot be WAN
+            .map(o => `<option value="${o.value}"${o.value === role ? ' selected' : ''}>${o.label}</option>`)
+            .join('');
+        return `
+            <div class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg bg-surface-container-lowest border border-surface-container min-w-[88px]">
+                <p class="text-xs font-mono text-on-surface">${port.name}${detectedDot}</p>
+                <select data-port="${port.name}" onchange="onTopologyChange()" class="text-xs px-2 py-1 rounded bg-surface-container border border-surface-container focus:border-primary focus:outline-none w-full">
+                    ${opts}
+                </select>
+                <p class="text-[10px] text-on-surface-variant text-center leading-tight">${port.caption || port.band || ''}</p>
+            </div>
+        `;
+    };
+
+    const ethers = cat.ether_ports.map(p => renderChip(p, false)).join('');
+    const radios = cat.radios.map(r => renderChip(r, true)).join('');
+    const detectedLine = detected
+        ? `<p class="text-xs text-on-surface-variant mt-3">Last detected WAN at heartbeat: <span class="font-mono">${detected}</span> <span class="inline-block w-1.5 h-1.5 rounded-full bg-success ml-0.5 align-middle"></span></p>`
+        : '';
+    const synthesizedNote = cat.synthesized
+        ? `<p class="text-[11px] text-warning mt-2">Hardware profile synthesized from announced capabilities — port labels may not match silkscreen. Add an entry to <code class="font-mono">routers/catalogue.py</code> for ${cat.label}.</p>`
+        : '';
+
+    body.innerHTML = `
+        <p class="text-xs text-on-surface-variant mb-3">${cat.label}${cat.notes ? ' — ' + cat.notes : ''}</p>
+        <div class="flex flex-wrap gap-2 items-end">
+            ${ethers}
+            ${radios ? '<div class="w-px self-stretch bg-surface-container mx-1"></div>' + radios : ''}
+        </div>
+        ${detectedLine}
+        ${synthesizedNote}
+        <div class="mt-4 p-3 rounded-lg bg-surface-container-lowest border border-surface-container text-xs text-on-surface-variant leading-relaxed">
+            ⚠ Exactly one port must be WAN. Hotspot and PPPoE ports get separate VLANs and DHCP pools — they can coexist on the same router.
+        </div>
+    `;
+    onTopologyChange();
+}
+
+function onTopologyChange() {
+    const selects = document.querySelectorAll('#topology-body select[data-port]');
+    let wanCount = 0;
+    selects.forEach(s => {
+        topologyState.assignments[s.dataset.port] = s.value;
+        if (s.value === 'wan') wanCount++;
+    });
+    const errEl = document.getElementById('topology-error');
+    const saveBtn = document.getElementById('topology-save');
+    if (wanCount !== 1) {
+        errEl.textContent = wanCount === 0
+            ? 'Pick one port as WAN.'
+            : `Only one port may be WAN (you've picked ${wanCount}).`;
+        errEl.classList.remove('hidden');
+        saveBtn.disabled = true;
+        saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+        errEl.classList.add('hidden');
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+function saveTopology() {
+    if (!topologyState) return;
+    const saveBtn = document.getElementById('topology-save');
+    const errEl = document.getElementById('topology-error');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
+    fetch('/api/routers/' + topologyState.pk + '/topology/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+        credentials: 'same-origin',
+        body: JSON.stringify({port_assignments: topologyState.assignments}),
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (ok) {
+            const pk = topologyState.pk;
+            closeTopologyModal();
+            const msg = document.getElementById('redeploy-msg-' + pk);
+            if (msg) showMsg(msg, data.status || 'Saved.', 'text-primary');
+        } else {
+            errEl.textContent = data.error || 'Save failed.';
+            errEl.classList.remove('hidden');
+        }
+    })
+    .catch(err => {
+        errEl.textContent = 'Network error: ' + err.message;
+        errEl.classList.remove('hidden');
+    })
+    .finally(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save & reprovision';
+    });
+}
 </script>
+
+<!-- Port topology modal -->
+<div id="topology-modal" class="hidden fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
+    <div class="bg-surface-container-lowest rounded-xl shadow-elevation-3 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-surface-container px-5 py-3">
+            <h2 id="topology-title" class="text-base font-semibold text-on-surface">Port topology</h2>
+            <button type="button" onclick="closeTopologyModal()"
+                    class="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
+        </div>
+        <div id="topology-body" class="px-5 py-4"></div>
+        <div class="border-t border-surface-container px-5 py-3 flex items-center justify-between gap-3">
+            <p id="topology-error" class="text-xs text-error hidden"></p>
+            <div class="flex items-center gap-3 ml-auto">
+                <button type="button" onclick="closeTopologyModal()"
+                        class="text-sm text-on-surface-variant hover:text-on-surface">Cancel</button>
+                <button type="button" id="topology-save" onclick="saveTopology()"
+                        class="text-sm bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:bg-primary-dim transition opacity-50 cursor-not-allowed"
+                        disabled>
+                    Save &amp; reprovision
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endwith %}
 {% endblock %}

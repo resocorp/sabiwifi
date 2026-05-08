@@ -1,14 +1,28 @@
 """
 Generate provision.rsc scripts for MikroTik routers (RouterOS v7+ only).
 
-Each variable is templated from the Router model + PlatformSettings.
-The script is hardware-agnostic: it discovers WAN at runtime, bridges
-all non-WAN ether ports, and only configures WiFi if the device has it.
+Two topology modes:
+  - AUTO    : legacy behaviour. WAN auto-discovered via DHCP lease, every
+              other ether port + every WiFi radio dumped into one
+              hotspot-br bridge. Used when Router.port_assignments is empty.
+  - EXPLICIT: operator picked per-port roles in the dashboard. WAN is set
+              from the assignment, hotspot-role ports go into hotspot-br,
+              pppoe-role ports into a dedicated pppoe-br (PPPoE server
+              binds there instead of the hotspot bridge).
+
+The unchanged sections (WG tunnel, RADIUS, walled garden, hotspot profile,
+WiFi block, watchdog, heartbeat, announce) are shared between both modes
+via format-slot parameters. The legacy auto-mode output is verified
+byte-identical against a golden fixture in tests/test_provisioning.py —
+that's what protects already-deployed routers from drift.
 
 Re-provisioning is safe — every command is wrapped in :do/on-error or
 checked for existence first.
 """
 from django.conf import settings
+
+from routers import catalogue
+from routers.vlans import HOTSPOT_VLAN, PPPOE_VLAN
 
 
 PROVISION_TEMPLATE = """\
@@ -40,21 +54,7 @@ PROVISION_TEMPLATE = """\
 /ip service set www address=10.99.0.0/16 disabled=no
 /ip service set www-ssl disabled=yes
 
-# --- 3. WAN auto-discovery ---
-# Customer can plug internet into ANY ether port. Bootstrap already enabled
-# DHCP on every ether port; whichever got a lease becomes WAN. The rest
-# get bridged to the guest network.
-:local wanIface ""
-:foreach c in=[/ip dhcp-client find status=bound] do={{
-  :if ($wanIface = "") do={{ :set wanIface [/ip dhcp-client get $c interface] }}
-}}
-:if ($wanIface = "") do={{
-  # No DHCP lease found — fall back to ether1 so re-provision doesn't dead-end
-  :set wanIface "ether1"
-  :log warning "SabiWiFi: no DHCP lease detected, defaulting WAN to ether1"
-}}
-:log info ("SabiWiFi: WAN detected on " . $wanIface)
-
+{wan_discovery_block}
 # WAN interface-list (used by NAT rule below — survives port changes)
 :do {{ /interface list add name=WAN }} on-error={{}}
 /interface list member remove [find list=WAN]
@@ -67,24 +67,8 @@ PROVISION_TEMPLATE = """\
 :do {{ /ip dhcp-server add name=hotspot-dhcp interface=hotspot-br address-pool=hotspot-pool lease-time=2d }} on-error={{}}
 :do {{ /ip dhcp-server network add address=10.8.0.0/16 gateway=10.8.0.1 dns-server=10.8.0.1 }} on-error={{}}
 
-# --- 4a. Bridge every non-WAN ether port to the guest network ---
-:foreach e in=[/interface ethernet find] do={{
-  :local ename [/interface ethernet get $e name]
-  :if ($ename != $wanIface) do={{
-    # Drop DHCP on this port (it's a LAN port now)
-    :foreach c in=[/ip dhcp-client find interface=$ename] do={{
-      :do {{ /ip dhcp-client remove $c }} on-error={{}}
-    }}
-    # Drop any IP we accidentally have on it
-    :foreach a in=[/ip address find interface=$ename] do={{
-      :do {{ /ip address remove $a }} on-error={{}}
-    }}
-    # Add to bridge (idempotent)
-    :if ([:len [/interface bridge port find interface=$ename]] = 0) do={{
-      :do {{ /interface bridge port add bridge=hotspot-br interface=$ename }} on-error={{}}
-    }}
-  }}
-}}
+{pppoe_bridge_setup_block}
+{port_bridging_block}
 
 # --- 5. DNS (router acts as recursive resolver for hotspot clients) ---
 /ip dns set allow-remote-requests=yes servers=8.8.8.8,1.1.1.1
@@ -281,12 +265,192 @@ PROVISION_TEMPLATE = """\
 """
 
 
+# ---------------------------------------------------------------------------
+# Port topology — chooses AUTO vs EXPLICIT block contents
+# ---------------------------------------------------------------------------
+
+# Verbatim copy of the legacy WAN-discovery section. Substituting this into
+# the {wan_discovery_block} slot reproduces the pre-topology RSC byte-for-byte.
+AUTO_WAN_DISCOVERY_BLOCK = """\
+# --- 3. WAN auto-discovery ---
+# Customer can plug internet into ANY ether port. Bootstrap already enabled
+# DHCP on every ether port; whichever got a lease becomes WAN. The rest
+# get bridged to the guest network.
+:local wanIface ""
+:foreach c in=[/ip dhcp-client find status=bound] do={
+  :if ($wanIface = "") do={ :set wanIface [/ip dhcp-client get $c interface] }
+}
+:if ($wanIface = "") do={
+  # No DHCP lease found — fall back to ether1 so re-provision doesn't dead-end
+  :set wanIface "ether1"
+  :log warning "SabiWiFi: no DHCP lease detected, defaulting WAN to ether1"
+}
+:log info ("SabiWiFi: WAN detected on " . $wanIface)
+"""
+
+# Verbatim copy of the legacy port-bridging section.
+AUTO_PORT_BRIDGING_BLOCK = """\
+# --- 4a. Bridge every non-WAN ether port to the guest network ---
+:foreach e in=[/interface ethernet find] do={
+  :local ename [/interface ethernet get $e name]
+  :if ($ename != $wanIface) do={
+    # Drop DHCP on this port (it's a LAN port now)
+    :foreach c in=[/ip dhcp-client find interface=$ename] do={
+      :do { /ip dhcp-client remove $c } on-error={}
+    }
+    # Drop any IP we accidentally have on it
+    :foreach a in=[/ip address find interface=$ename] do={
+      :do { /ip address remove $a } on-error={}
+    }
+    # Add to bridge (idempotent)
+    :if ([:len [/interface bridge port find interface=$ename]] = 0) do={
+      :do { /interface bridge port add bridge=hotspot-br interface=$ename } on-error={}
+    }
+  }
+}"""
+
+
+def _explicit_wan_block(wan_iface):
+    """Operator picked the WAN port — set it literally and verify it exists."""
+    return f"""\
+# --- 3. WAN explicit assignment ---
+# Operator chose this port as the management/WAN port via the dashboard.
+:local wanIface "{wan_iface}"
+:if ([:len [/interface ethernet find name=$wanIface]] = 0) do={{
+  :log warning ("SabiWiFi: configured WAN port " . $wanIface . " not found, falling back to ether1")
+  :set wanIface "ether1"
+}}
+:log info ("SabiWiFi: WAN set to " . $wanIface)
+"""
+
+
+def _explicit_pppoe_bridge_setup(pppoe_ports):
+    """Bridge for the PPPoE-role ports. Empty when no PPPoE ports."""
+    if not pppoe_ports:
+        return ''
+    return """\
+# --- 4b. PPPoE bridge (separate L2 broadcast domain from hotspot) ---
+:do { /interface bridge add name=pppoe-br } on-error={}
+"""
+
+
+def _explicit_port_bridging_block(hotspot_ports, pppoe_ports):
+    """
+    Strip DHCP/IP from every non-WAN ether port, then explicitly assign each
+    listed port to its bridge. Ports omitted from both lists stay unbridged
+    (operator can still manage them via SSH).
+    """
+    lines = ["# --- 4a. Explicit per-port bridge assignment ---"]
+    lines.append(":foreach e in=[/interface ethernet find] do={")
+    lines.append("  :local ename [/interface ethernet get $e name]")
+    lines.append("  :if ($ename != $wanIface) do={")
+    lines.append("    :foreach c in=[/ip dhcp-client find interface=$ename] do={")
+    lines.append("      :do { /ip dhcp-client remove $c } on-error={}")
+    lines.append("    }")
+    lines.append("    :foreach a in=[/ip address find interface=$ename] do={")
+    lines.append("      :do { /ip address remove $a } on-error={}")
+    lines.append("    }")
+    lines.append("    # Strip any prior bridge membership so role re-assignment is clean")
+    lines.append("    :foreach bp in=[/interface bridge port find interface=$ename] do={")
+    lines.append("      :do { /interface bridge port remove $bp } on-error={}")
+    lines.append("    }")
+    lines.append("  }")
+    lines.append("}")
+    for p in hotspot_ports:
+        lines.append(
+            f':if ([:len [/interface bridge port find interface={p}]] = 0) do={{ '
+            f':do {{ /interface bridge port add bridge=hotspot-br interface={p} }} on-error={{}} }}'
+        )
+    for p in pppoe_ports:
+        lines.append(
+            f':if ([:len [/interface bridge port find interface={p}]] = 0) do={{ '
+            f':do {{ /interface bridge port add bridge=pppoe-br interface={p} }} on-error={{}} }}'
+        )
+    return '\n'.join(lines)
+
+
+def build_port_topology(router):
+    """
+    Resolve a router's per-port topology.
+
+    Returns a dict with:
+      mode:              'auto' | 'explicit'
+      wan_iface:         port name (only meaningful in explicit mode)
+      hotspot_ports:     [str] (ether ports tagged hotspot)
+      pppoe_ports:       [str] (ether ports tagged pppoe)
+      wifi_to_role:      {wifi_name: role}  (radios → role)
+      pppoe_bridge:      'hotspot-br' | 'pppoe-br' — where the PPPoE server binds
+
+    A router with empty `port_assignments` falls into 'auto' mode and the
+    legacy DHCP-discovery RSC sections are emitted unchanged.
+    """
+    assignments = getattr(router, 'port_assignments', None) or {}
+    if not assignments:
+        return {
+            'mode': 'auto',
+            'wan_iface': None,
+            'hotspot_ports': [],
+            'pppoe_ports': [],
+            'wifi_to_role': {},
+            'pppoe_bridge': 'hotspot-br',
+        }
+
+    entry = catalogue.get_catalogue_entry(
+        router.board_name,
+        ether_port_count=router.ether_port_count,
+        has_wifi=router.has_wifi,
+        has_5ghz=router.has_5ghz,
+    )
+    valid_ports = set(catalogue.all_port_names(entry))
+    radio_names = {r['name'] for r in entry['radios']}
+
+    wan_iface = None
+    hotspot_ports = []
+    pppoe_ports = []
+    wifi_to_role = {}
+    for port, role in assignments.items():
+        if port not in valid_ports or role not in catalogue.VALID_ROLES:
+            continue
+        if port in radio_names:
+            wifi_to_role[port] = role
+            continue
+        if role == catalogue.ROLE_WAN:
+            wan_iface = port
+        elif role == catalogue.ROLE_HOTSPOT:
+            hotspot_ports.append(port)
+        elif role == catalogue.ROLE_PPPOE:
+            pppoe_ports.append(port)
+        # ROLE_LAN reserved — silently skipped in v1
+
+    return {
+        'mode': 'explicit',
+        'wan_iface': wan_iface or 'ether1',
+        'hotspot_ports': sorted(hotspot_ports),
+        'pppoe_ports': sorted(pppoe_ports),
+        'wifi_to_role': wifi_to_role,
+        'pppoe_bridge': 'pppoe-br' if pppoe_ports else 'hotspot-br',
+    }
+
+
 def generate_provision_rsc(router, wg_private_key):
     """
     Generate a provision.rsc script for a specific router.
     wg_private_key is passed in (not stored in DB) - generated at assignment time.
     """
     from django.utils import timezone
+
+    topology = build_port_topology(router)
+
+    if topology['mode'] == 'auto':
+        wan_discovery_block = AUTO_WAN_DISCOVERY_BLOCK
+        port_bridging_block = AUTO_PORT_BRIDGING_BLOCK
+        pppoe_bridge_setup_block = ''
+    else:
+        wan_discovery_block = _explicit_wan_block(topology['wan_iface'])
+        port_bridging_block = _explicit_port_bridging_block(
+            topology['hotspot_ports'], topology['pppoe_ports'],
+        )
+        pppoe_bridge_setup_block = _explicit_pppoe_bridge_setup(topology['pppoe_ports'])
 
     # WiFi SSID resolution: explicit Router.wifi_ssid > reseller branding > default
     wifi_ssid = (getattr(router, 'wifi_ssid', '') or '').strip() or 'SabiWiFi'
@@ -325,6 +489,7 @@ def generate_provision_rsc(router, wg_private_key):
     pppoe_block = ''
     if mode in ('pppoe', 'both'):
         pppoe_service_name = wifi_ssid.replace(' ', '-') + '-PPPoE'
+        pppoe_iface = topology['pppoe_bridge']
         pppoe_block = f"""
 # --- 10b. PPPoE Server ---
 # Customers dial PPPoE with username = phone (E.164), password = SabiWiFi PIN.
@@ -337,13 +502,13 @@ def generate_provision_rsc(router, wg_private_key):
 # Tear down the pppoe-server BEFORE the profile, otherwise the profile
 # is still referenced and the remove silently fails — then the bare
 # profile-add halts the whole script.
-:do {{ /interface pppoe-server server remove [find interface=hotspot-br] }} on-error={{}}
+:do {{ /interface pppoe-server server remove [find interface={pppoe_iface}] }} on-error={{}}
 :if ([:len [/ppp profile find name=sabiwifi-pppoe]] = 0) do={{
   /ppp profile add name=sabiwifi-pppoe only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1 local-address=10.9.0.1 remote-address=pppoe-pool
 }} else={{
   /ppp profile set [find name=sabiwifi-pppoe] only-one=yes change-tcp-mss=yes dns-server=8.8.8.8,1.1.1.1 local-address=10.9.0.1 remote-address=pppoe-pool
 }}
-/interface pppoe-server server add service-name="{pppoe_service_name}" interface=hotspot-br default-profile=sabiwifi-pppoe one-session-per-host=yes max-sessions=200 authentication=pap,chap,mschap2 disabled=no
+/interface pppoe-server server add service-name="{pppoe_service_name}" interface={pppoe_iface} default-profile=sabiwifi-pppoe one-session-per-host=yes max-sessions=200 authentication=pap,chap,mschap2 disabled=no
 """
 
     return PROVISION_TEMPLATE.format(
@@ -364,4 +529,7 @@ def generate_provision_rsc(router, wg_private_key):
         wifi_security_attr=wifi_security_attr,
         radius_services=radius_services,
         pppoe_block=pppoe_block,
+        wan_discovery_block=wan_discovery_block,
+        port_bridging_block=port_bridging_block,
+        pppoe_bridge_setup_block=pppoe_bridge_setup_block,
     )

@@ -23,5 +23,6 @@ urlpatterns = [
     path('<int:pk>/health-log/', views.router_health_log, name='api-router-health-log'),
     path('<int:pk>/outages/', views.router_outages, name='api-router-outages'),
     path('<int:pk>/service-mode/', views.router_service_mode, name='api-router-service-mode'),
+    path('<int:pk>/topology/', views.router_topology, name='api-router-topology'),
     path('<int:pk>/redeploy/', views.router_redeploy, name='api-router-redeploy'),
 ]

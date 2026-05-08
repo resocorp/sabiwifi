@@ -974,6 +974,87 @@ def router_wifi_config(request, pk):
     })
 
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def router_topology(request, pk):
+    """
+    GET  → return the catalogue entry, current port_assignments, and the
+           last-detected WAN port so the dashboard modal can render the grid.
+    POST → save a new {port: role} mapping and queue a reprovision.
+
+    Validation:
+      - Every key must be a port present in the catalogue entry
+      - Every value must be in catalogue.VALID_ROLES
+      - Exactly one port has role 'wan'
+      - Radios cannot have role 'wan'
+    """
+    from routers import catalogue as cat
+
+    reseller = request.user.reseller
+    try:
+        router = Router.objects.get(pk=pk, reseller=reseller)
+    except Router.DoesNotExist:
+        return Response({'error': 'Router not found.'}, status=404)
+
+    if router.device_type != 'mikrotik':
+        return Response(
+            {'error': 'Per-port topology is only supported on MikroTik devices in v1.'},
+            status=400,
+        )
+
+    entry = cat.get_catalogue_entry(
+        router.board_name,
+        ether_port_count=router.ether_port_count,
+        has_wifi=router.has_wifi,
+        has_5ghz=router.has_5ghz,
+    )
+
+    if request.method == 'GET':
+        assignments = router.port_assignments or cat.default_assignments(entry)
+        return Response({
+            'catalogue': entry,
+            'port_assignments': assignments,
+            'detected_wan': router.detected_wan,
+            'has_explicit_topology': bool(router.port_assignments),
+        })
+
+    payload = request.data.get('port_assignments')
+    if not isinstance(payload, dict) or not payload:
+        return Response({'error': 'port_assignments must be a non-empty object.'}, status=400)
+
+    valid_ports = set(cat.all_port_names(entry))
+    radio_names = {r['name'] for r in entry['radios']}
+    wan_count = 0
+    for port, role in payload.items():
+        if port not in valid_ports:
+            return Response(
+                {'error': f"Unknown port '{port}' for board '{entry['label']}'."},
+                status=400,
+            )
+        if role not in cat.VALID_ROLES:
+            return Response({'error': f"Invalid role '{role}' for port '{port}'."}, status=400)
+        if role == cat.ROLE_WAN:
+            if port in radio_names:
+                return Response({'error': 'Radios cannot be assigned the WAN role.'}, status=400)
+            wan_count += 1
+
+    if wan_count != 1:
+        return Response(
+            {'error': f'Exactly one port must be WAN (got {wan_count}).'},
+            status=400,
+        )
+
+    router.port_assignments = payload
+    router.needs_reprovision = True
+    router.save(update_fields=['port_assignments', 'needs_reprovision', 'updated_at'])
+    logger.info(f"Port topology saved for {router.serial_number} by {request.user}")
+    return Response({
+        'status': 'Port topology saved. Applying within 2 minutes.',
+        'port_assignments': router.port_assignments,
+        'needs_reprovision': True,
+    })
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def router_redeploy(request, pk):

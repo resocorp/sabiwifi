@@ -81,6 +81,9 @@ class Router(models.Model):
         help_text="RouterOS version reported by /system resource.")
     detected_wan = models.CharField(max_length=16, blank=True, default='',
         help_text="Which ether port currently holds the WAN DHCP lease.")
+    port_assignments = models.JSONField(default=dict, blank=True,
+        help_text="Per-port role map: {'ether1':'wan','ether2':'pppoe',...}. "
+                  "Empty = legacy auto-discover-WAN-bridge-rest behaviour.")
 
     # Health
     last_seen = models.DateTimeField(null=True, blank=True,
