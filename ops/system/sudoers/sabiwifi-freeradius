@@ -1,0 +1,4 @@
+# Allow www-data (Django/Gunicorn) to reload FreeRADIUS after NAS changes.
+# Required: FreeRADIUS 3 reads the SQL `nas` client table only at startup,
+# so every provision / re-key must trigger a restart to take effect.
+www-data ALL=(root) NOPASSWD: /bin/systemctl restart freeradius, /bin/systemctl restart freeradius.service

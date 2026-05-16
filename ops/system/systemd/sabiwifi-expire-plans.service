@@ -1,0 +1,13 @@
+[Unit]
+Description=SabiWiFi — expire overdue subscriptions and remove RADIUS access
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/opt/sabiwifi
+ExecStart=/opt/sabiwifi/venv/bin/python manage.py expire_plans
+Environment=DJANGO_SETTINGS_MODULE=config.settings.prod
+EnvironmentFile=/opt/sabiwifi/.env
+StandardOutput=journal
+StandardError=journal

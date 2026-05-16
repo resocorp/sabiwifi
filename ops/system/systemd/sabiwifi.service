@@ -1,0 +1,13 @@
+[Unit]
+Description=SabiWiFi Django Application
+After=network.target postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/sabiwifi
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+ExecStart=/opt/sabiwifi/venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 2 --worker-class gevent --max-requests 500 --max-requests-jitter 50
+
+[Install]
+WantedBy=multi-user.target

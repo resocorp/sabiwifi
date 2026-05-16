@@ -1,0 +1,22 @@
+[Unit]
+Description=SabiWiFi WhatsApp sidecar (Baileys session manager)
+After=network.target sabiwifi.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/sabiwifi-wa
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=WA_PORT=3001
+Environment=SESSIONS_DIR=/opt/sabiwifi-wa/sessions
+Environment=DJANGO_WEBHOOK_URL=http://127.0.0.1:8000/api/notifications/wa-webhook/
+EnvironmentFile=-/opt/sabiwifi/.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sabiwifi-wa
+
+[Install]
+WantedBy=multi-user.target

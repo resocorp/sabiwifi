@@ -1,0 +1,16 @@
+{
+  "name": "sabiwifi-wa",
+  "version": "1.0.0",
+  "description": "SabiWiFi WhatsApp sidecar — Baileys session manager",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "express": "^4.21.2",
+    "pino": "^9.6.0",
+    "axios": "^1.9.0",
+    "qrcode": "^1.5.4"
+  }
+}

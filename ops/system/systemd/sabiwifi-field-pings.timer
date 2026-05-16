@@ -1,0 +1,11 @@
+[Unit]
+Description=SabiWiFi — run field-ping sweep every 10 minutes
+Requires=sabiwifi-field-pings.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

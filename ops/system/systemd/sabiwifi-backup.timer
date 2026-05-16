@@ -1,0 +1,13 @@
+[Unit]
+Description=Run SabiWiFi Postgres backup nightly
+Requires=sabiwifi-backup.service
+
+[Timer]
+# Nightly at 02:30 local time (Africa/Lagos). Persistent so a missed backup
+# (e.g. host was down at 02:30) runs on next boot.
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+Unit=sabiwifi-backup.service
+
+[Install]
+WantedBy=timers.target

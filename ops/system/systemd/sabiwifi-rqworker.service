@@ -1,0 +1,20 @@
+[Unit]
+Description=SabiWiFi RQ worker (default, ai, low queues)
+After=network.target redis-server.service postgresql.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/sabiwifi
+Environment="DJANGO_SETTINGS_MODULE=config.settings.prod"
+# Two workers in parallel is plenty at current scale; bump `%i` count if
+# queue depth starts growing. Each process handles all three queues in
+# priority order: ai > default > low.
+ExecStart=/opt/sabiwifi/venv/bin/python manage.py rqworker ai default low --with-scheduler
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

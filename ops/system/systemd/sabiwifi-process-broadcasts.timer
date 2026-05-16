@@ -1,0 +1,11 @@
+[Unit]
+Description=SabiWiFi — process broadcast campaigns every minute
+Requires=sabiwifi-process-broadcasts.service
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

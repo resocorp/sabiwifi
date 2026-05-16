@@ -1,0 +1,11 @@
+[Unit]
+Description=SabiWiFi — run plan expiry every 5 minutes
+Requires=sabiwifi-expire-plans.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

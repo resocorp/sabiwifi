@@ -1,0 +1,22 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Expire vouchers every 5 minutes (subscriptions handled by sabiwifi-expire-plans.timer)
+*/5 * * * * www-data cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python manage.py expire_vouchers >> /var/log/sabiwifi-cron.log 2>&1
+
+# check_routers handled by sabiwifi-check-routers.timer
+
+# Send expiry reminders daily at 8am
+0 8 * * * www-data cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python manage.py send_expiry_reminders >> /var/log/sabiwifi-cron.log 2>&1
+
+# Daily summary at 11pm
+0 23 * * * www-data cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python manage.py daily_summary >> /var/log/sabiwifi-cron.log 2>&1
+
+# Cleanup expired OTPs every hour
+0 * * * * www-data cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python manage.py cleanup_otp >> /var/log/sabiwifi-cron.log 2>&1
+
+# Django session cleanup daily at midnight
+0 0 * * * www-data cd /opt/sabiwifi && DJANGO_SETTINGS_MODULE=config.settings.prod venv/bin/python manage.py clearsessions >> /var/log/sabiwifi-cron.log 2>&1
+
+# Postgres backup daily at 02:00 (dumps to /var/backups/sabiwifi, 30d retention)
+0 2 * * * postgres /opt/sabiwifi/scripts/backup_db.sh

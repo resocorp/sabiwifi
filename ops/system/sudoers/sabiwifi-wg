@@ -1,0 +1,1 @@
+www-data ALL=(root) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /bin/mv /tmp/wg0.* /etc/wireguard/wg0.conf, /bin/cat /etc/wireguard/wg0.conf

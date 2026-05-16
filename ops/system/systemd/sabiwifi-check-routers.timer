@@ -1,0 +1,11 @@
+[Unit]
+Description=SabiWiFi — run router health check every 2 minutes
+Requires=sabiwifi-check-routers.service
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

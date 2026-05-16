@@ -1,0 +1,13 @@
+[Unit]
+Description=SabiWiFi — check router health (ping + heartbeat staleness)
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/opt/sabiwifi
+ExecStart=/opt/sabiwifi/venv/bin/python manage.py check_routers
+Environment=DJANGO_SETTINGS_MODULE=config.settings.prod
+EnvironmentFile=/opt/sabiwifi/.env
+StandardOutput=journal
+StandardError=journal
